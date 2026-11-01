@@ -197,6 +197,34 @@ handlers["egg:apron"] = function(player, data)
 	end
 end
 
+-- Big Biscuit, the bronze pibble statue in the hub square. One belly rub a day pays a tiny
+-- tip buff; every rub after that is free emotional support.
+local PIBBLE_LINES = {
+	"Big Biscuit's tail goes thump-thump on the plinth. (It's bronze. It shouldn't do that.)",
+	"His belly is shiny from a thousand rubs. You add one more. He grins wider somehow.",
+	"Somewhere, a brisket is resting easy because Big Biscuit is on duty.",
+	"The plaque says \"Bites: 0.\" The plaque is correct.",
+	"You hear a tiny bronze \"boof.\" Good boy.",
+}
+
+handlers["landmark:pibble"] = function(player, data)
+	local d = today()
+	ctx.Game.fx(player, "pibble", {})
+	local line = PIBBLE_LINES[rng:NextInteger(1, #PIBBLE_LINES)]
+	if data.daily.pibbleDay ~= d then
+		data.daily.pibbleDay = d
+		ctx.Game.addSauce(data, "goodboy")
+		if not data.titles["Good Boy Certified"] then
+			data.titles["Good Boy Certified"] = true
+			ctx.Game.toast(player, "New title: Good Boy Certified", "good")
+		end
+		ctx.Game.markDirty(player)
+		dialog(player, "Big Biscuit", line .. "\n\nHe drops a bottle of Good Boy Glaze at your feet. (+20% tips for 3 serves.) One belly rub reward a day.")
+	else
+		dialog(player, "Big Biscuit", line .. "\n\n(Already got your treat today. The rubs are still free.)")
+	end
+end
+
 function EggService.init(c: any)
 	ctx = c
 end

@@ -170,7 +170,7 @@ function Fx.reveal(meatId: string, rarityId: string, aura: number, smokerPos: Ve
 		-- Texas-size: the cut is so big it crushes the picnic table (camera shake + crunch text)
 		task.delay(0.4, function()
 			shake(0.8, 1.2)
-			Fx.pop("CRUNCH! It broke the table!", Color3.fromHex("#FF7A2F"), 38)
+			Fx.pop("CRUNCH! It broke the table!", Color3.fromHex("#FF5A36"), 38)
 		end)
 	elseif rarityId == "meteorite" then
 		task.delay(0.3, function()

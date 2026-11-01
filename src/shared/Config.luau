@@ -81,11 +81,11 @@ Config.MeatOrder = { "burger", "tomahawk", "hotlink", "yardbird", "turkeyleg", "
 
 -- Rarity of a finished cut. Rolled on the server when the cook starts. Odds are shown in the Index.
 Config.Rarities = {
-	{ id = "common", name = "Common", weight = 70, mult = 1, color = "#D8D2C8", flex = false },
-	{ id = "juicy", name = "Juicy", weight = 22, mult = 1.5, color = "#6FD36F", flex = false },
+	{ id = "common", name = "Common", weight = 70, mult = 1, color = "#D6D0C6", flex = false },
+	{ id = "juicy", name = "Juicy", weight = 22, mult = 1.5, color = "#5AD2FF", flex = false },
 	{ id = "smokering", name = "Smoke Ring Gold", weight = 6, mult = 3, color = "#FFC83C", flex = true },
-	{ id = "texas", name = "Texas-Size", weight = 1.8, mult = 6, color = "#FF7A2F", flex = true },
-	{ id = "meteorite", name = "Meteorite", weight = 0.2, mult = 12, color = "#8A6CFF", flex = true },
+	{ id = "texas", name = "Texas-Size", weight = 1.8, mult = 6, color = "#FF5A36", flex = true },
+	{ id = "meteorite", name = "Meteorite", weight = 0.2, mult = 12, color = "#9B5CFF", flex = true },
 }
 
 -- Pit levels upgrade every smoker and grill at once.
@@ -122,6 +122,7 @@ Config.Sauces = {
 	peachfuzz = { id = "peachfuzz", name = "Peach Fuzz Glaze", effect = "tip", amount = 0.5, charges = 5, price = 600, weight = 10, maxStock = 2, color = "#FFA07A" },
 	hillcountry = { id = "hillcountry", name = "Hill Country Mop", effect = "luck", amount = 0.35, charges = 3, price = 900, weight = 8, maxStock = 1, color = "#5B3A1E" },
 	secretcreek = { id = "secretcreek", name = "Secret Creek Sauce", effect = "luck", amount = 0.5, charges = 5, price = 0, weight = 0, maxStock = 0, color = "#3FA7D6", hidden = true },
+	goodboy = { id = "goodboy", name = "Good Boy Glaze", effect = "tip", amount = 0.2, charges = 3, price = 0, weight = 0, maxStock = 0, color = "#E6B25A", hidden = true },
 	straitshootin = { id = "straitshootin", name = "Strait-Shootin' Sauce", effect = "speed", amount = 0.3, charges = 3, price = 0, weight = 0, maxStock = 0, color = "#C19A6B", hidden = true },
 }
 Config.SauceOrder = { "sweetheat", "rochetfuel", "carolinagold", "peachfuzz", "hillcountry" }

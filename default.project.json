@@ -3,28 +3,101 @@
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
-      "Shared": { "$path": "src/shared" }
+      "Shared": {
+        "$path": "src/shared"
+      }
     },
     "ServerScriptService": {
-      "Server": { "$path": "src/server" }
+      "Server": {
+        "$path": "src/server"
+      }
     },
     "StarterPlayer": {
-      "$properties": { "CharacterWalkSpeed": 20, "CharacterJumpPower": 50 },
+      "$properties": {
+        "CharacterWalkSpeed": 20,
+        "CharacterJumpPower": 50
+      },
       "StarterPlayerScripts": {
-        "Client": { "$path": "src/client" }
+        "Client": {
+          "$path": "src/client"
+        }
       }
     },
     "Lighting": {
       "$properties": {
-        "ClockTime": 14,
-        "Brightness": 2.5,
+        "ClockTime": 14.5,
+        "Brightness": 2.6,
         "GlobalShadows": true,
-        "Ambient": [0.45, 0.42, 0.38],
-        "OutdoorAmbient": [0.55, 0.5, 0.45]
+        "Ambient": [
+          0.47,
+          0.42,
+          0.38
+        ],
+        "OutdoorAmbient": [
+          0.6,
+          0.53,
+          0.46
+        ],
+        "ColorShift_Top": [
+          1.0,
+          0.89,
+          0.72
+        ],
+        "EnvironmentDiffuseScale": 0.4,
+        "EnvironmentSpecularScale": 0.4
+      },
+      "Atmosphere": {
+        "$className": "Atmosphere",
+        "$properties": {
+          "Density": 0.3,
+          "Offset": 0.12,
+          "Color": [
+            1.0,
+            0.89,
+            0.72
+          ],
+          "Decay": [
+            0.89,
+            0.6,
+            0.36
+          ],
+          "Glare": 0.35,
+          "Haze": 1.4
+        }
+      },
+      "GoldenHourGrade": {
+        "$className": "ColorCorrectionEffect",
+        "$properties": {
+          "TintColor": [
+            1.0,
+            0.95,
+            0.86
+          ],
+          "Saturation": 0.15,
+          "Contrast": 0.06,
+          "Brightness": 0.02
+        }
+      },
+      "SoftBloom": {
+        "$className": "BloomEffect",
+        "$properties": {
+          "Intensity": 0.35,
+          "Size": 22,
+          "Threshold": 1.4
+        }
+      },
+      "SunRays": {
+        "$className": "SunRaysEffect",
+        "$properties": {
+          "Intensity": 0.06,
+          "Spread": 0.8
+        }
       }
     },
     "Workspace": {
-      "$properties": { "Gravity": 196.2 }
+      "$properties": {
+        "Gravity": 196.2
+      }
     },
     "SoundService": {},
     "StarterGui": {}

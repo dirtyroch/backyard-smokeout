@@ -100,6 +100,7 @@ Content.Signs = {
 	potluck = "SUNDAY POTLUCK",
 	creek = "(nothing to see here)",
 	welcome = "BACKYARD SMOKEOUT",
+	pibble = "BIG BISCUIT\nCertified Good Boy · Bites: 0 · Belly rubs: ∞",
 }
 
 return Content

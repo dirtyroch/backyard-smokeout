@@ -3,17 +3,20 @@
 local UI = {}
 
 UI.Theme = {
-	bg = Color3.fromHex("#2B1A12"),
+	-- "Smoked Sunset" palette (see the plan page's Color & Look section). Warm, saturated
+	-- action colors on deep smoked-chocolate panels; every button color keeps >= 3:1 with its
+	-- label (WCAG large-text / UI-component minimum) and body text stays above 7:1.
+	bg = Color3.fromHex("#24150E"),
 	panel = Color3.fromHex("#3A2418"),
-	card = Color3.fromHex("#4A2F20"),
-	cardHi = Color3.fromHex("#5C3B28"),
-	accent = Color3.fromHex("#FF7A2F"),
-	gold = Color3.fromHex("#FFC83C"),
-	green = Color3.fromHex("#4CAF50"),
-	red = Color3.fromHex("#E04848"),
-	blue = Color3.fromHex("#3B82C4"),
-	text = Color3.fromHex("#FFF4E0"),
-	dim = Color3.fromHex("#CDB9A0"),
+	card = Color3.fromHex("#4D301F"),
+	cardHi = Color3.fromHex("#643F28"),
+	accent = Color3.fromHex("#E8590C"), -- ember orange (white label 3.6:1)
+	gold = Color3.fromHex("#FFC83C"), -- Robux/premium (dark label 11.8:1)
+	green = Color3.fromHex("#1E9E4A"), -- go / collect (white label 3.5:1)
+	red = Color3.fromHex("#D93636"), -- danger (white label 4.6:1)
+	blue = Color3.fromHex("#2F7BD8"), -- info / social (white label 4.3:1)
+	text = Color3.fromHex("#FFF6E6"), -- 13.5:1 on panel
+	dim = Color3.fromHex("#D9C4A8"), -- 8.6:1 on panel
 	font = Enum.Font.FredokaOne,
 	body = Enum.Font.GothamMedium,
 	bold = Enum.Font.GothamBold,

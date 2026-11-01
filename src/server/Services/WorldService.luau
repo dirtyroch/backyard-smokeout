@@ -21,6 +21,10 @@ local ENV = {
 	Color3 = Color3,
 	Enum = Enum,
 	UDim2 = UDim2,
+	NumberSequence = NumberSequence,
+	NumberRange = NumberRange,
+	ColorSequence = ColorSequence,
+	Vector2 = Vector2,
 }
 WorldService.ENV = ENV
 
@@ -143,6 +147,7 @@ end
 local function colorOf(h: string): Color3
 	return Color3.fromHex(h)
 end
+local LOCKED_COLOR = Color3.fromHex("#1C1A1F")
 
 -- Repaint smokers & meat for one player's plot.
 function WorldService.refreshStations(player: Player)
@@ -172,13 +177,25 @@ function WorldService.refreshStations(player: Player)
 			local chimney = s:FindFirstChild("Chimney") :: BasePart
 			local smoke = chimney:FindFirstChild("Smoke") :: Smoke
 			local label = (barrel:FindFirstChild("SlotGui") :: BillboardGui):FindFirstChild("Text") :: TextLabel
+			-- Locked smokers read as a dark silhouette with a padlock sign (no see-through ghosts).
 			for _, p in ipairs(s:GetChildren()) do
-				if p:IsA("BasePart") and p.Name ~= "MeatSpot" then
-					p.Transparency = unlocked and 0 or 0.75
+				if p:IsA("BasePart") and p.Name ~= "MeatSpot" and p.Name ~= "LockSign" then
+					p.Transparency = 0
+					local base = p:GetAttribute("BaseColor")
+					p.Color = unlocked and (typeof(base) == "string" and colorOf(base) or p.Color) or LOCKED_COLOR
 				end
 			end
-			barrel.Color = bodyColor
-			barrel.Material = material
+			local lockSign = s:FindFirstChild("LockSign") :: BasePart?
+			if lockSign then
+				lockSign.Transparency = unlocked and 1 or 0
+				for _, lg in ipairs(lockSign:GetChildren()) do
+					if lg:IsA("SurfaceGui") then
+						lg.Enabled = not unlocked
+					end
+				end
+			end
+			barrel.Color = unlocked and bodyColor or LOCKED_COLOR
+			barrel.Material = unlocked and material or Enum.Material.SmoothPlastic
 			spot:ClearAllChildren()
 			local cook = data.stations[key]
 			if unlocked and type(cook) == "table" then
@@ -204,7 +221,8 @@ function WorldService.refreshStations(player: Player)
 		local g = grill:FindFirstChild(key) :: BasePart?
 		if g then
 			local unlocked = i <= grillCount
-			g.Transparency = unlocked and 0 or 0.7
+			g.Transparency = 0
+			g.Color = unlocked and colorOf("#333333") or LOCKED_COLOR
 			for _, c in ipairs(g:GetChildren()) do
 				if c.Name == "Meat" then
 					c:Destroy()

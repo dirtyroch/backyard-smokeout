@@ -304,12 +304,12 @@ function WorldBuilder.meat(env, parent, meatDef, rarityDef, cf, doneness)
 			p.Color = hex("#141414")
 			p.Material = E.Enum.Material.Basalt
 			local glow = E.Instance.new("PointLight")
-			glow.Color = hex("#8A6CFF")
+			glow.Color = hex("#9B5CFF")
 			glow.Range = 10
 			glow.Brightness = 2
 			glow.Parent = p
 			local sp = E.Instance.new("Sparkles")
-			sp.SparkleColor = hex("#8A6CFF")
+			sp.SparkleColor = hex("#9B5CFF")
 			sp.Parent = p
 		elseif rarityDef.id == "smokering" then
 			local ring = E.Instance.new("SelectionBox")
@@ -379,6 +379,17 @@ local function smoker(parent, name, cf)
 	local spot = part(m, "MeatSpot", V(1, 0.2, 1), cf * E.CFrame.new(0, 5.15, 0), "#000000", nil, { Transparency = 1, CanCollide = false })
 	local gui = billboard(barrel, "SlotGui", "", 4.2, 70, "#FFFFFF", 180, 44, { 7.5, 2 })
 	gui.Name = "SlotGui"
+	-- padlock sign shown (by WorldService) while this slot is locked; parts remember their base
+	-- color so the dark locked silhouette can be undone.
+	local lock = part(m, "LockSign", V(3.2, 1.5, 0.2), cf * E.CFrame.new(0, 3.5, 1.85), "#FFC83C", E.Enum.Material.SmoothPlastic, { Transparency = 1, CanCollide = false, CastShadow = false })
+	for _, face in ipairs({ E.Enum.NormalId.Front, E.Enum.NormalId.Back }) do
+		surfaceText(lock, face, "🔒 LOCKED", "#1C1A1F", nil).Parent.Enabled = false
+	end
+	for _, c in ipairs(m:GetChildren()) do
+		if c:IsA("BasePart") and c.Name ~= "MeatSpot" and c.Name ~= "LockSign" then
+			c:SetAttribute("BaseColor", "#" .. c.Color:ToHex())
+		end
+	end
 	m:SetAttribute("Slot", name)
 	return m, barrel, spot
 end
@@ -654,11 +665,752 @@ local function buildCreek(root, content)
 	return creek
 end
 
+-- ===================================================================================
+-- Scenery: purely decorative set dressing so the world feels lived-in and Texas-y.
+-- Rules: everything is Anchored; decor has CanCollide/CanQuery/CanTouch off and small
+-- pieces don't cast shadows; it is grouped into Models by area (Horizon, Neighborhood,
+-- HubDecor, CreekDecor, per-plot Decor) so StreamingEnabled can stream it by area, with the
+-- far skyline marked Persistent. Shapes are simple blocks/balls/cylinders (cheap on phones).
+-- Gameplay paths (roads, plot paths, patios, tables, pass windows) are left clear.
+-- ===================================================================================
+local PAL = {
+	grass = "#79C84F",
+	grassFar = "#8CC35E",
+	berm = { "#86C25A", "#7AB852", "#93CB66" },
+	oak = { "#3F8F3A", "#4FA346", "#468F3E" },
+	mesquite = { "#8DB85A", "#7EA84E", "#9CC466" },
+	trunk = "#6B4226",
+	bluebonnet = "#3D6FE0",
+	bonnetTip = "#F4F7FF",
+	paintbrush = "#FF5A3C",
+	susan = "#FFC72C",
+	susanEye = "#4A2B12",
+	hay = "#E2BE62",
+	mesa = { "#D9A07A", "#CF9470", "#E2B08A" },
+	mesaCap = "#B97A58",
+	wood = "#A86B3C",
+	fenceWood = "#8B5A2B",
+	barnRed = "#C8433A",
+	cream = "#FFF2D9",
+	roof = "#5A4A44",
+	metal = "#C7D0D8",
+	water = "#3FB6E8",
+	bronze = "#B8793A",
+	bronzeHi = "#E6B25A",
+	bulbs = { "#FFE9A8", "#FFB347", "#FF8FB1", "#8FD3FF" },
+}
+WorldBuilder.PALETTE = PAL
+
+local seed = 20261101
+local function rnd()
+	seed = (seed * 1103515245 + 12345) % 2147483648
+	return seed / 2147483648
+end
+local function rr(a, b)
+	return a + (b - a) * rnd()
+end
+local function pick(t)
+	return t[1 + math.floor(rnd() * #t) % #t]
+end
+
+local function deco(parent, name, size, cf, color, material, shadow)
+	return part(parent, name, size, cf, color, material, { CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = shadow == true })
+end
+local function dball(parent, name, d, cf, color, material, shadow)
+	local p = deco(parent, name, V(d, d, d), cf, color, material, shadow)
+	p.Shape = E.Enum.PartType.Ball
+	return p
+end
+local function dcyl(parent, name, length, diameter, cf, color, material, shadow)
+	local p = deco(parent, name, V(length, diameter, diameter), cf, color, material, shadow)
+	p.Shape = E.Enum.PartType.Cylinder
+	return p
+end
+local function at(pos)
+	return E.CFrame.new(pos)
+end
+local function yaw(r)
+	return E.CFrame.Angles(0, r, 0)
+end
+local function polar(deg, r, y)
+	local a = math.rad(deg)
+	return V(math.cos(a) * r, y or 0, math.sin(a) * r)
+end
+local function streaming(m, mode)
+	pcall(function()
+		m.ModelStreamingMode = E.Enum.ModelStreamingMode[mode]
+	end)
+end
+local function upright()
+	return E.CFrame.Angles(0, 0, math.pi / 2) -- turns an X-axis cylinder upright
+end
+
+-- ---------- reusable props ----------
+local function liveOak(parent, pos, s, opts)
+	opts = opts or {}
+	local m = model(parent, "LiveOak")
+	local sh = opts.shadow == true
+	deco(m, "Trunk", V(2.2 * s, 8 * s, 2.2 * s), at(pos + V(0, 4 * s, 0)), PAL.trunk, E.Enum.Material.Wood, sh)
+	if not opts.far then
+		deco(m, "Limb", V(8 * s, 1.1 * s, 1.1 * s), at(pos + V(2.5 * s, 7.6 * s, 0)) * E.CFrame.Angles(0, 0, math.rad(18)), PAL.trunk, E.Enum.Material.Wood, false)
+	end
+	local c = pick(PAL.oak)
+	dball(m, "Canopy", 12 * s, at(pos + V(0, 11 * s, 0)), c, E.Enum.Material.Grass, sh)
+	dball(m, "Canopy2", 9.5 * s, at(pos + V(6 * s, 9.6 * s, 1.2 * s)), pick(PAL.oak), E.Enum.Material.Grass, false)
+	if not opts.far then
+		dball(m, "Canopy3", 9 * s, at(pos + V(-5.5 * s, 9.4 * s, -1.5 * s)), pick(PAL.oak), E.Enum.Material.Grass, false)
+	end
+	return m
+end
+
+local function mesquite(parent, pos, s)
+	local m = model(parent, "Mesquite")
+	local lean = rr(-0.25, 0.25)
+	deco(m, "Trunk", V(1 * s, 7 * s, 1 * s), at(pos + V(0, 3.4 * s, 0)) * E.CFrame.Angles(lean, 0, lean * 0.6), "#5A3A22", E.Enum.Material.Wood, false)
+	dball(m, "Leaves", 6.5 * s, at(pos + V(lean * 3 * s, 7.6 * s, 0)), pick(PAL.mesquite), E.Enum.Material.Grass, false)
+	dball(m, "Leaves2", 5 * s, at(pos + V(2.6 * s, 6.6 * s, 1.6 * s)), pick(PAL.mesquite), E.Enum.Material.Grass, false)
+	return m
+end
+
+local function grassClump(parent, pos, s)
+	s = s or 1
+	for k = 1, 3 do
+		local a = k * 2.1 + rr(0, 0.5)
+		deco(parent, "Grass", V(0.25 * s, 2.6 * s, 0.7 * s), at(pos + V(math.cos(a) * 0.4, 1.2 * s, math.sin(a) * 0.4)) * yaw(a) * E.CFrame.Angles(0, 0, rr(-0.35, 0.35)), "#9CC25A", E.Enum.Material.Grass, false)
+	end
+end
+
+-- kind: "bluebonnet" | "paintbrush" | "susan" | "mix"
+local function flowerPatch(parent, pos, radius, n, kind)
+	local m = model(parent, "Wildflowers")
+	for k = 1, n do
+		local a, r = rr(0, math.pi * 2), math.sqrt(rnd()) * radius
+		local p = pos + V(math.cos(a) * r, 0, math.sin(a) * r)
+		local kd = kind == "mix" and pick({ "bluebonnet", "bluebonnet", "paintbrush", "susan" }) or kind
+		if kd == "bluebonnet" then
+			deco(m, "Bonnet", V(0.5, 1.2, 0.5), at(p + V(0, 0.6, 0)), PAL.bluebonnet, E.Enum.Material.SmoothPlastic, false)
+			if k % 2 == 0 then
+				dball(m, "Tip", 0.4, at(p + V(0, 1.3, 0)), PAL.bonnetTip, E.Enum.Material.SmoothPlastic, false)
+			end
+		elseif kd == "paintbrush" then
+			deco(m, "Brush", V(0.45, 1.1, 0.45), at(p + V(0, 0.55, 0)), PAL.paintbrush, E.Enum.Material.SmoothPlastic, false)
+		else
+			dball(m, "Susan", 0.8, at(p + V(0, 0.9, 0)), PAL.susan, E.Enum.Material.SmoothPlastic, false)
+		end
+	end
+	return m
+end
+
+local function hayBale(parent, pos, rot)
+	return dcyl(parent, "HayBale", 4, 4.4, at(pos + V(0, 2.2, 0)) * yaw(rot or 0), PAL.hay, E.Enum.Material.Grass, true)
+end
+
+local function cooler(parent, cf, color)
+	deco(parent, "Cooler", V(3.4, 2, 2), cf * E.CFrame.new(0, 1, 0), color or "#2F7BD8", E.Enum.Material.SmoothPlastic, true)
+	deco(parent, "CoolerLid", V(3.5, 0.35, 2.1), cf * E.CFrame.new(0, 2.15, 0), "#FFFFFF", E.Enum.Material.SmoothPlastic, false)
+end
+
+local function lawnChair(parent, cf, color)
+	deco(parent, "ChairSeat", V(2.2, 0.3, 2), cf * E.CFrame.new(0, 1.1, 0), color, E.Enum.Material.Fabric, true)
+	deco(parent, "ChairBack", V(2.2, 2.4, 0.3), cf * E.CFrame.new(0, 2.2, 1) * E.CFrame.Angles(math.rad(-15), 0, 0), color, E.Enum.Material.Fabric, false)
+	deco(parent, "ChairFrame", V(2.4, 1, 0.2), cf * E.CFrame.new(0, 0.5, -0.9), "#C7D0D8", E.Enum.Material.Metal, false)
+end
+
+local function cornhole(parent, cf, color)
+	deco(parent, "Cornhole", V(2.4, 0.25, 4.4), cf * E.CFrame.new(0, 0.75, 0) * E.CFrame.Angles(math.rad(12), 0, 0), color, E.Enum.Material.WoodPlanks, true)
+	dcyl(parent, "Hole", 0.08, 0.9, cf * E.CFrame.new(0, 1.12, 1.2) * E.CFrame.Angles(math.rad(12), 0, 0) * upright(), "#1C1A1F", E.Enum.Material.SmoothPlastic, false)
+	deco(parent, "Bag", V(0.7, 0.25, 0.7), cf * E.CFrame.new(0.5, 0.9, -0.6) * yaw(0.4), "#D93636", E.Enum.Material.Fabric, false)
+end
+
+local function kiddiePool(parent, cf)
+	dcyl(parent, "Pool", 1.3, 8, cf * E.CFrame.new(0, 0.65, 0) * upright(), "#5AD2FF", E.Enum.Material.SmoothPlastic, false)
+	dcyl(parent, "PoolWater", 0.1, 7.2, cf * E.CFrame.new(0, 1.2, 0) * upright(), "#BFF0FF", E.Enum.Material.Glass, false).Transparency = 0.15
+	dball(parent, "Ducky", 0.9, cf * E.CFrame.new(1.4, 1.5, 0.6), "#FFD23C", E.Enum.Material.SmoothPlastic, false)
+	dball(parent, "DuckyHead", 0.55, cf * E.CFrame.new(1.4, 2.05, 0.3), "#FFD23C", E.Enum.Material.SmoothPlastic, false)
+	deco(parent, "DuckyBeak", V(0.25, 0.12, 0.3), cf * E.CFrame.new(1.4, 2.0, 0.0), "#FF8A1E", E.Enum.Material.SmoothPlastic, false)
+end
+
+local function picnicBlanket(parent, cf)
+	deco(parent, "Blanket", V(6, 0.12, 6), cf * E.CFrame.new(0, 0.08, 0), "#D93636", E.Enum.Material.Fabric, false)
+	for _, o in ipairs({ { -1.5, -1.5 }, { 1.5, 1.5 } }) do
+		deco(parent, "Check", V(3, 0.13, 3), cf * E.CFrame.new(o[1], 0.09, o[2]), "#FFF6E6", E.Enum.Material.Fabric, false)
+	end
+	deco(parent, "Basket", V(1.8, 1.1, 1.2), cf * E.CFrame.new(1.4, 0.65, -1.4), "#C9954C", E.Enum.Material.WoodPlanks, false)
+	dball(parent, "Watermelon", 1.4, cf * E.CFrame.new(-1.4, 0.75, 1.2), "#3E9B4F", E.Enum.Material.SmoothPlastic, false)
+end
+
+local function lantern(parent, cf)
+	deco(parent, "LanternPost", V(0.4, 6, 0.4), cf * E.CFrame.new(0, 3, 0), "#2C2420", E.Enum.Material.Metal, false)
+	deco(parent, "LanternArm", V(1.6, 0.25, 0.25), cf * E.CFrame.new(0.7, 6, 0), "#2C2420", E.Enum.Material.Metal, false)
+	deco(parent, "Lantern", V(0.8, 1, 0.8), cf * E.CFrame.new(1.3, 5.3, 0), "#FFD38A", E.Enum.Material.Neon, false)
+end
+
+-- Sagging string of bulbs between two points (wire + bulbs, no lights: cheap).
+local function stringLights(parent, a, b, n, sag)
+	local m = model(parent, "StringLights")
+	local mid = (a + b) / 2 - V(0, sag * 0.6, 0)
+	local len = (b - a).Magnitude
+	deco(m, "Wire", V(0.08, 0.08, len), lookAt(mid, b - V(0, sag * 0.6, 0)), "#2C2420", E.Enum.Material.SmoothPlastic, false)
+	for k = 1, n do
+		local t = k / (n + 1)
+		local p = a:Lerp(b, t) - V(0, math.sin(t * math.pi) * sag, 0)
+		dball(m, "Bulb", 0.55, at(p - V(0, 0.3, 0)), PAL.bulbs[(k % #PAL.bulbs) + 1], E.Enum.Material.Neon, false)
+	end
+	return m
+end
+
+local function railFence(parent, a, b, spacing)
+	local m = model(parent, "RailFence")
+	local len = (b - a).Magnitude
+	local dir = (b - a).Unit
+	local posts = math.max(1, math.floor(len / spacing))
+	for k = 0, posts do
+		local p = a + dir * (k * len / posts)
+		deco(m, "Post", V(0.7, 4.2, 0.7), at(p + V(0, 2.1, 0)), PAL.fenceWood, E.Enum.Material.Wood, false)
+	end
+	local mid = (a + b) / 2
+	for _, h in ipairs({ 1.6, 3.2 }) do
+		deco(m, "Rail", V(0.3, 0.45, len), lookAt(mid + V(0, h, 0), b + V(0, h, 0)), "#9C6B3E", E.Enum.Material.Wood, false)
+	end
+	return m
+end
+
+local function pickupTruck(parent, cf, color)
+	local m = model(parent, "PickupTruck")
+	local function p(name, size, off, c, mat)
+		return deco(m, name, size, cf * off, c, mat or E.Enum.Material.SmoothPlastic, name == "Body")
+	end
+	p("Body", V(6.4, 2.2, 15), E.CFrame.new(0, 2.5, 0), color, E.Enum.Material.Metal)
+	p("Cab", V(6.2, 2.6, 5), E.CFrame.new(0, 4.9, -1.2), color, E.Enum.Material.Metal)
+	p("Windshield", V(5.6, 2, 0.15), E.CFrame.new(0, 5, -3.75), "#9FD4F0", E.Enum.Material.Glass)
+	p("RearWindow", V(5.4, 1.6, 0.15), E.CFrame.new(0, 5.2, 1.35), "#9FD4F0", E.Enum.Material.Glass)
+	p("BedFloor", V(5.6, 0.2, 6.8), E.CFrame.new(0, 3.65, 4.6), "#3A3A3A", E.Enum.Material.DiamondPlate)
+	p("Tailgate", V(6.2, 0.25, 2.2), E.CFrame.new(0, 3.1, 8.6), color, E.Enum.Material.Metal)
+	p("Bumper", V(6.6, 0.7, 0.6), E.CFrame.new(0, 1.6, -7.6), "#C7D0D8", E.Enum.Material.Metal)
+	p("Grille", V(4.4, 1.2, 0.2), E.CFrame.new(0, 2.6, -7.55), "#2C2420")
+	p("LightL", V(0.9, 0.6, 0.15), E.CFrame.new(-2.5, 3, -7.55), "#FFF6E6", E.Enum.Material.Neon)
+	p("LightR", V(0.9, 0.6, 0.15), E.CFrame.new(2.5, 3, -7.55), "#FFF6E6", E.Enum.Material.Neon)
+	for _, w in ipairs({ { -3.2, -4.6 }, { 3.2, -4.6 }, { -3.2, 4.6 }, { 3.2, 4.6 } }) do
+		dcyl(m, "Wheel", 1.1, 3, cf * E.CFrame.new(w[1], 1.5, w[2]), "#1C1A1F", E.Enum.Material.SmoothPlastic, false)
+	end
+	cooler(m, cf * E.CFrame.new(-1.2, 3.75, 5.2), "#D93636")
+	return m
+end
+
+local function houseBack(parent, cf, wall, trim)
+	-- cf faces the hub (back of the house toward the players)
+	local m = model(parent, "HouseBack")
+	local function p(name, size, off, c, mat, sh)
+		return deco(m, name, size, cf * off, c, mat or E.Enum.Material.SmoothPlastic, sh)
+	end
+	p("Walls", V(34, 13, 20), E.CFrame.new(0, 6.5, 10), wall, E.Enum.Material.WoodPlanks, true)
+	p("RoofL", V(36, 1.2, 12.6), E.CFrame.new(0, 15.4, 4.6) * E.CFrame.Angles(math.rad(-32), 0, 0), PAL.roof, E.Enum.Material.Slate, true)
+	p("RoofR", V(36, 1.2, 12.6), E.CFrame.new(0, 15.4, 15.4) * E.CFrame.Angles(math.rad(32), 0, 0), PAL.roof, E.Enum.Material.Slate, false)
+	p("Chimney", V(2.6, 6, 2.6), E.CFrame.new(10, 17, 12), "#A0523D", E.Enum.Material.Brick, false)
+	p("BackDoor", V(4, 7, 0.3), E.CFrame.new(-6, 3.5, -0.1), trim)
+	p("WindowL", V(5, 3.6, 0.3), E.CFrame.new(4, 7.5, -0.1), "#BFE6FF", E.Enum.Material.Glass)
+	p("WindowR", V(5, 3.6, 0.3), E.CFrame.new(12, 7.5, -0.1), "#BFE6FF", E.Enum.Material.Glass)
+	p("Porch", V(14, 0.6, 6), E.CFrame.new(-6, 0.3, -3), PAL.wood, E.Enum.Material.WoodPlanks)
+	p("ACUnit", V(3, 3, 3), E.CFrame.new(14, 1.5, -2), "#C7D0D8", E.Enum.Material.Metal)
+	-- privacy fence around the backyard
+	local fy, fh = 3, 6
+	p("FenceBack", V(44, fh, 0.5), E.CFrame.new(0, fy, -22), "#B07A48", E.Enum.Material.WoodPlanks)
+	p("FenceL", V(0.5, fh, 22), E.CFrame.new(-22, fy, -11), "#B07A48", E.Enum.Material.WoodPlanks)
+	p("FenceR", V(0.5, fh, 22), E.CFrame.new(22, fy, -11), "#B07A48", E.Enum.Material.WoodPlanks)
+	return m
+end
+
+local function waterTower(parent, pos, label)
+	local m = model(parent, "WaterTower")
+	local legH, tankY = 34, 42
+	for _, o in ipairs({ { -5, -5 }, { 5, -5 }, { -5, 5 }, { 5, 5 } }) do
+		deco(m, "Leg", V(1, legH, 1), at(pos + V(o[1] * 0.8, legH / 2, o[2] * 0.8)) * E.CFrame.Angles(math.rad(o[2] * 0.6), 0, math.rad(-o[1] * 0.6)), PAL.metal, E.Enum.Material.Metal, true)
+	end
+	deco(m, "Brace", V(10, 0.5, 0.5), at(pos + V(0, 16, -4.4)), PAL.metal, E.Enum.Material.Metal, false)
+	deco(m, "Brace2", V(0.5, 0.5, 10), at(pos + V(4.4, 16, 0)), PAL.metal, E.Enum.Material.Metal, false)
+	deco(m, "Catwalk", V(15, 0.5, 15), at(pos + V(0, legH + 0.5, 0)), "#8E9AA6", E.Enum.Material.DiamondPlate, false)
+	dcyl(m, "Tank", 14, 16, at(pos + V(0, tankY, 0)) * upright(), "#F2F5F7", E.Enum.Material.Metal, true)
+	dball(m, "Cap", 16.4, at(pos + V(0, tankY + 4, 0)), "#E1E7EC", E.Enum.Material.Metal, false)
+	deco(m, "Spire", V(0.6, 4, 0.6), at(pos + V(0, tankY + 13.6, 0)), PAL.barnRed, E.Enum.Material.Metal, false)
+	-- the label sits on a band facing the hub, and again on the far side
+	local face = lookAt(pos + V(0, tankY, 0), V(0, tankY, 0))
+	local band = deco(m, "LabelBand", V(12, 5.5, 0.4), face * E.CFrame.new(0, 0, -7.9), "#F2F5F7", E.Enum.Material.Metal, false)
+	surfaceText(band, E.Enum.NormalId.Front, label, PAL.barnRed, nil)
+	local back = deco(m, "LabelBandBack", V(12, 5.5, 0.4), face * E.CFrame.new(0, 0, 7.9) * yaw(math.pi), "#F2F5F7", E.Enum.Material.Metal, false)
+	surfaceText(back, E.Enum.NormalId.Front, label, PAL.barnRed, nil)
+	return m
+end
+
+local function windmill(parent, pos, facing)
+	local m = model(parent, "Windmill")
+	for _, o in ipairs({ { -3, -3 }, { 3, -3 }, { -3, 3 }, { 3, 3 } }) do
+		deco(m, "Leg", V(0.6, 32, 0.6), at(pos + V(o[1] * 0.55, 16, o[2] * 0.55)) * E.CFrame.Angles(math.rad(o[2] * 1.4), 0, math.rad(-o[1] * 1.4)), PAL.metal, E.Enum.Material.Metal, true)
+	end
+	local hubCf = at(pos + V(0, 32.5, 0)) * yaw(facing)
+	deco(m, "Head", V(1.6, 1.6, 3.4), hubCf, "#8E9AA6", E.Enum.Material.Metal, false)
+	deco(m, "TailBoom", V(0.4, 0.4, 7), hubCf * E.CFrame.new(0, 0, 4.5), "#8E9AA6", E.Enum.Material.Metal, false)
+	local vane = deco(m, "TailVane", V(0.2, 4, 4.5), hubCf * E.CFrame.new(0, 0.5, 8.4), PAL.barnRed, E.Enum.Material.Metal, false)
+	surfaceText(vane, E.Enum.NormalId.Right, "ROCH", "#FFF2D9", nil)
+	for k = 0, 11 do
+		local a = k / 12 * math.pi * 2
+		deco(m, "Blade", V(0.15, 5.5, 1.1), hubCf * E.CFrame.new(0, 0, -1.9) * E.CFrame.Angles(0, 0, a) * E.CFrame.new(0, 3.6, 0) * E.CFrame.Angles(0, 0.35, 0), "#E1E7EC", E.Enum.Material.Metal, false)
+	end
+	dcyl(m, "Tank", 3, 9, at(pos + V(7, 1.5, 4)) * upright(), "#9AA5AE", E.Enum.Material.Metal, false)
+	return m
+end
+
+local function mesa(parent, pos, w, h, d, rot)
+	-- stepped butte: wide talus skirt, sloped shoulders, sheer body, darker caprock
+	local m = model(parent, "Mesa")
+	local cf = at(pos) * yaw(rot)
+	local c = pick(PAL.mesa)
+	deco(m, "Talus", V(w * 1.3, h * 0.3, d * 1.25), cf * E.CFrame.new(0, h * 0.15 - 4, 0), PAL.mesa[3], E.Enum.Material.Sandstone, false)
+	deco(m, "ShoulderL", V(w * 0.35, h * 0.55, d * 1.05), cf * E.CFrame.new(-w * 0.5, h * 0.15, 0) * E.CFrame.Angles(0, 0, math.rad(-38)), c, E.Enum.Material.Sandstone, false)
+	deco(m, "ShoulderR", V(w * 0.35, h * 0.55, d * 1.05), cf * E.CFrame.new(w * 0.5, h * 0.15, 0) * E.CFrame.Angles(0, 0, math.rad(38)), c, E.Enum.Material.Sandstone, false)
+	deco(m, "Body", V(w, h, d), cf * E.CFrame.new(0, h / 2 - 4, 0), c, E.Enum.Material.Sandstone, false)
+	deco(m, "Cap", V(w * 1.04, 5, d * 1.04), cf * E.CFrame.new(0, h - 4, 0), PAL.mesaCap, E.Enum.Material.Sandstone, false)
+	return m
+end
+
+local function fireflies(parent, cf, size)
+	local box = deco(parent, "FireflyZone", size, cf, "#000000", nil, false)
+	box.Transparency = 1
+	if E.NumberSequence and E.NumberRange and E.ColorSequence then
+		local pe = E.Instance.new("ParticleEmitter")
+		pe.Name = "Fireflies"
+		pe.Enabled = false -- Ambient (client) turns these on at dusk
+		pe.Rate = 5
+		pe.Lifetime = E.NumberRange.new(4, 7)
+		pe.Speed = E.NumberRange.new(0.3, 1.2)
+		pe.SpreadAngle = E.Vector2 and E.Vector2.new(180, 180) or pe.SpreadAngle
+		pe.LightEmission = 1
+		pe.LightInfluence = 0
+		pe.Size = E.NumberSequence.new(0.22)
+		pe.Color = E.ColorSequence.new(hex("#FFF27A"))
+		pe.Transparency = E.NumberSequence.new(0.1)
+		pe.Parent = box
+		pcall(function()
+			pe.Shape = E.Enum.ParticleEmitterShape.Box
+			pe.ShapeStyle = E.Enum.ParticleEmitterShapeStyle.Volume
+		end)
+	end
+	return box
+end
+
+local function leaves(parentPart)
+	if not (E.NumberSequence and E.NumberRange and E.ColorSequence) then
+		return
+	end
+	local pe = E.Instance.new("ParticleEmitter")
+	pe.Name = "DriftingLeaves"
+	pe.Rate = 0.5
+	pe.Lifetime = E.NumberRange.new(6, 9)
+	pe.Speed = E.NumberRange.new(0.5, 1.5)
+	pe.Acceleration = V(0.6, -1.2, 0.4)
+	pe.RotSpeed = E.NumberRange.new(-90, 90)
+	pe.Rotation = E.NumberRange.new(0, 360)
+	pe.Size = E.NumberSequence.new(0.35)
+	pe.Color = E.ColorSequence.new(hex("#D9A441"), hex("#7FB24A"))
+	pe.LightInfluence = 1
+	pe.Parent = parentPart
+end
+
+local function smokeWisp(parentPart)
+	local s = E.Instance.new("Smoke")
+	s.Name = "Wisp"
+	s.Size = 1.2
+	s.Opacity = 0.08
+	s.RiseVelocity = 2.5
+	s.Color = hex("#E8E2D8")
+	s.Parent = parentPart
+end
+
+-- ---------- the pibble landmark ----------
+-- "Big Biscuit": an original chunky sitting pit-bull statue with a goofy grin, bronze with a
+-- belly polished gold from all the rubs. Faces the spawn (-Z). Prompt kind "landmark:pibble".
+function WorldBuilder.pibble(parent, base, content)
+	local m = model(parent, "BigBiscuit")
+	local s = 1.5
+	local B, Hi = PAL.bronze, PAL.bronzeHi
+	local metal = E.Enum.Material.Metal
+	local function L(x, y, z)
+		return base * E.CFrame.new(x * s, 3.6 + y * s, z * s)
+	end
+	-- plinth (solid)
+	cyl(m, "Plinth", 3, 15, base * E.CFrame.new(0, 1.5, 0) * upright(), "#D9CDB8", E.Enum.Material.Slate)
+	cyl(m, "PlinthTrim", 0.6, 15.8, base * E.CFrame.new(0, 3.2, 0) * upright(), "#BFAF95", E.Enum.Material.Slate)
+	local plaque = part(m, "Plaque", V(7, 2.4, 0.3), base * E.CFrame.new(0, 1.6, -7.35), "#C9A04A", metal)
+	surfaceText(plaque, E.Enum.NormalId.Front, content and content.Signs and content.Signs.pibble or "BIG BISCUIT\nCertified Good Boy · Bites: 0 · Belly rubs: ∞", "#3A2414", nil)
+	-- body
+	local function b(name, d, cf, c)
+		return ball(m, name, d * s, cf, c or B, metal)
+	end
+	local function k(name, size, cf, c, solid)
+		if solid then
+			return part(m, name, size * s, cf, c or B, metal)
+		end
+		return deco(m, name, size * s, cf, c or B, metal, false)
+	end
+	b("Haunch", 6.5, L(0, 3, 1.6))
+	b("ThighL", 3.6, L(-2.6, 1.8, 1.2))
+	b("ThighR", 3.6, L(2.6, 1.8, 1.2))
+	k("BackPawL", V(1.8, 1, 3), L(-2.8, 0.5, -0.4))
+	k("BackPawR", V(1.8, 1, 3), L(2.8, 0.5, -0.4))
+	b("Chest", 5.6, L(0, 6.2, -0.6))
+	local belly = b("Belly", 4.2, L(0, 5.0, -1.6), Hi)
+	k("LegL", V(1.5, 5, 1.5), L(-1.5, 2.6, -2.5), nil, true)
+	k("LegR", V(1.5, 5, 1.5), L(1.5, 2.6, -2.5), nil, true)
+	b("PawL", 2, L(-1.5, 0.6, -3.1))
+	b("PawR", 2, L(1.5, 0.6, -3.1))
+	local collar = cyl(m, "Collar", 0.8 * s, 4.6 * s, L(0, 8.4, -0.8) * upright(), "#F2C14E", E.Enum.Material.Foil)
+	collar.CanCollide = false
+	dball(m, "Tag", 0.9 * s, L(0, 7.8, -3.0), "#FFD86B", E.Enum.Material.Foil, false)
+	-- head: wide, blocky, smiling
+	local head = k("Head", V(5.6, 4.2, 4.6), L(0, 10.6, -1.4), nil, true)
+	b("Dome", 5.2, L(0, 11.6, -1.0))
+	b("CheekL", 2.8, L(-2.0, 9.8, -3.0))
+	b("CheekR", 2.8, L(2.0, 9.8, -3.0))
+	k("Muzzle", V(3.4, 2, 2.2), L(0, 9.6, -4.2))
+	k("Nose", V(1.1, 0.65, 0.5), L(0, 10.45, -5.3), "#3B2414")
+	k("Grin", V(1.6, 0.25, 0.1), L(0, 8.95, -5.33), "#2A1709")
+	k("GrinL", V(0.9, 0.25, 0.1), L(-1.15, 9.2, -5.28) * E.CFrame.Angles(0, 0, math.rad(-28)), "#2A1709")
+	k("GrinR", V(0.9, 0.25, 0.1), L(1.15, 9.2, -5.28) * E.CFrame.Angles(0, 0, math.rad(28)), "#2A1709")
+	k("Tongue", V(0.9, 0.25, 1.3), L(0.35, 8.7, -5.55) * E.CFrame.Angles(math.rad(-35), 0, 0), "#E58A7A")
+	b("EyeL", 1.0, L(-1.2, 11.3, -3.75), "#2A1709")
+	b("EyeR", 1.0, L(1.2, 11.3, -3.75), "#2A1709")
+	dball(m, "ShineL", 0.35 * s, L(-1.05, 11.5, -4.2), "#FFFFFF", E.Enum.Material.Neon, false)
+	dball(m, "ShineR", 0.35 * s, L(1.35, 11.5, -4.2), "#FFFFFF", E.Enum.Material.Neon, false)
+	k("BrowL", V(1.1, 0.3, 0.3), L(-1.2, 12.3, -3.7) * E.CFrame.Angles(0, 0, math.rad(14)))
+	k("BrowR", V(1.1, 0.3, 0.3), L(1.2, 12.5, -3.7) * E.CFrame.Angles(0, 0, math.rad(-22)))
+	k("EarL", V(1.7, 1.9, 0.6), L(-2.9, 12.4, -1.2) * E.CFrame.Angles(0, 0, math.rad(35)))
+	k("EarR", V(1.7, 1.9, 0.6), L(2.9, 12.4, -1.2) * E.CFrame.Angles(0, 0, math.rad(-35)))
+	local tail = cyl(m, "Tail", 3.5 * s, 0.9 * s, L(0.6, 1.8, 4.6) * E.CFrame.Angles(0, math.rad(80), math.rad(35)), B, metal)
+	tail.CanCollide = false
+	-- a bronze bone at his paws
+	cyl(m, "Bone", 2.4 * s, 0.6 * s, L(2.6, 0.3, -3.4) * yaw(0.5), Hi, metal).CanCollide = false
+	-- lights & label
+	local glow = E.Instance.new("PointLight")
+	glow.Range = 16
+	glow.Brightness = 0.9
+	glow.Color = hex("#FFD9A0")
+	glow.Parent = belly
+	billboard(head, "Label", "Big Biscuit 🐶", 4.5 * s, 160, "#FFC83C", 260, 40)
+	prompt(belly, "landmark:pibble", "Rub the belly", "Big Biscuit", 0.6, 14)
+	-- bluebonnet bed around the plinth
+	for i = 0, 7 do
+		local a = i / 8 * math.pi * 2 + math.pi / 8
+		if i == 5 or i == 6 then
+			continue -- keep the plaque side clear
+		end
+		flowerPatch(m, (base * E.CFrame.new(math.cos(a) * 9.2, 0.4, math.sin(a) * 9.2)).Position, 1.4, 5, i % 2 == 0 and "bluebonnet" or "mix")
+	end
+	return m
+end
+
+-- ---------- per-plot dressing (outside every gameplay footprint) ----------
+local function plotDecor(plotModel, cf, i)
+	local m = model(plotModel, "Decor")
+	streaming(m, "Atomic")
+	local y = 0.6
+	local function L(x, z)
+		return cf * E.CFrame.new(x, y, z)
+	end
+	lantern(m, L(-30, 14))
+	lantern(m, L(30, 14) * yaw(math.pi))
+	local v = i % 3
+	if v == 0 then
+		kiddiePool(m, L(-18, -18))
+	elseif v == 1 then
+		cornhole(m, L(-18, -26), "#2F7BD8")
+		cornhole(m, L(-18, -10) * yaw(math.pi), "#D93636")
+	else
+		picnicBlanket(m, L(-18, -17) * yaw(0.3))
+	end
+	flowerPatch(m, L(-26, -27).Position, 2.6, 9, i % 2 == 0 and "bluebonnet" or "mix")
+	flowerPatch(m, L(25, -27).Position, 2.4, 8, "mix")
+	hayBale(m, L(26, -17).Position - V(0, 0, 0), 0.4 + i)
+	grassClump(m, L(29, -9).Position)
+	grassClump(m, L(-29, -4).Position)
+end
+WorldBuilder.plotDecor = plotDecor
+
+-- ---------- the big picture ----------
+local function buildScenery(map, cfg, content)
+	local scenery = model(map, "Scenery")
+	local plots = map:FindFirstChild("Plots")
+	for i = 1, cfg.MAX_PLOTS do
+		local plot = plots and plots:FindFirstChild("Plot" .. i)
+		if plot then
+			local angle = (i - 1) / cfg.MAX_PLOTS * math.pi * 2
+			local center = V(math.cos(angle) * WorldBuilder.PLOT_RADIUS, 0, math.sin(angle) * WorldBuilder.PLOT_RADIUS)
+			plotDecor(plot, lookAt(center, V(0, 0, 0)), i)
+		end
+	end
+
+	-- Horizon: a wide outer field, berms that hide the ground edge, a tree line beyond them
+	-- and a mesa skyline. Persistent so the skyline never pops when streaming.
+	local horizon = model(scenery, "Horizon")
+	streaming(horizon, "Persistent")
+	part(horizon, "OuterField", V(2600, 1, 2600), E.CFrame.new(0, -0.8, 0), PAL.grassFar, E.Enum.Material.Grass, { CastShadow = false })
+	for side = 0, 3 do
+		local rot = side * math.pi / 2
+		local frame = yaw(rot)
+		local t = -500
+		while t <= 500 do
+			local d = rr(105, 150)
+			local p = frame * E.CFrame.new(t, -d * 0.33, -(455 + rr(0, 25)))
+			part(horizon, "Berm", V(d, d, d), p, pick(PAL.berm), E.Enum.Material.Grass, { Shape = E.Enum.PartType.Ball, CastShadow = false })
+			t += rr(50, 62)
+		end
+		-- tree line just past the berms
+		t = -560
+		while t <= 560 do
+			local p = (frame * E.CFrame.new(t, 0, -(540 + rr(0, 70)))).Position
+			if rnd() < 0.62 then
+				liveOak(horizon, p, rr(1.7, 2.5), { far = true })
+			else
+				mesquite(horizon, p, rr(2.2, 3))
+			end
+			t += rr(36, 50)
+		end
+	end
+	local mesas = { { 20, 1050 }, { 62, 1180 }, { 105, 980 }, { 150, 1120 }, { 196, 1040 }, { 238, 1200 }, { 300, 1000 }, { 335, 1150 } }
+	for _, ms in ipairs(mesas) do
+		mesa(horizon, polar(ms[1], ms[2]), rr(240, 360), rr(55, 90), rr(120, 170), math.rad(-ms[1] + 90))
+	end
+
+	-- Landmarks inside the map: ROCH water tower and a windmill, both visible from the hub.
+	local landmarks = model(scenery, "Landmarks")
+	streaming(landmarks, "Persistent")
+	waterTower(landmarks, polar(122, 318), "ROCH")
+	windmill(landmarks, polar(58, 300), math.rad(-30))
+
+	-- Ranch fences around the property line (inside the berms)
+	local fences = model(scenery, "PropertyFence")
+	streaming(fences, "Atomic")
+	local F = 405
+	railFence(fences, V(-F, 0, F), V(F, 0, F), 30)
+	railFence(fences, V(F, 0, -F), V(F, 0, F), 30)
+	railFence(fences, V(-F, 0, -F), V(-F, 0, F), 30)
+	railFence(fences, V(-F, 0, -F), V(-60, 0, -F), 30)
+	railFence(fences, V(60, 0, -F), V(F, 0, -F), 30)
+
+	-- Mid-ground trees between the plot ring and the edge
+	local grove = model(scenery, "Grove")
+	for k = 0, 17 do
+		local a = k / 18 * 360 + 10
+		if not (a > 250 and a < 290) then
+			local p = polar(a, rr(262, 300))
+			if k % 3 == 0 then
+				mesquite(grove, p, rr(1.2, 1.6))
+			else
+				liveOak(grove, p, rr(1.1, 1.5))
+			end
+		end
+	end
+	for k = 0, 23 do
+		local a = k / 24 * 360 + 7
+		if not (a > 255 and a < 285) then
+			local p = polar(a, rr(200, 340))
+			flowerPatch(grove, p, rr(3, 6), 10, pick({ "bluebonnet", "bluebonnet", "mix", "susan" }))
+			grassClump(grove, p + V(rr(-8, 8), 0, rr(-8, 8)), 1.3)
+		end
+	end
+
+	-- Meadow: flat color patches (1 part each) break up the big lawn; some are bluebonnet
+	-- carpets with a few flowers on top.
+	local meadow = model(scenery, "Meadow")
+	for k = 0, 39 do
+		local a = rr(0, 360)
+		local p = polar(a, rr(195, 430))
+		local inCreek = p.Z < -215 and p.Z > -300 and math.abs(p.X) < 115
+		if not inCreek and math.abs(p.X) < 440 and math.abs(p.Z) < 440 then
+			if k % 4 == 0 then
+				local d = rr(8, 14)
+				dcyl(meadow, "BonnetCarpet", 0.1, d, at(p + V(0, 0.06, 0)) * upright(), "#5C7FE0", E.Enum.Material.Grass, false)
+				flowerPatch(meadow, p, d * 0.4, 6, "bluebonnet")
+			else
+				dcyl(meadow, "MeadowPatch", 0.1, rr(18, 40), at(p + V(0, 0.05, 0)) * upright(), pick({ "#6DB843", "#8CCB55", "#A8C960", "#6DB843" }), E.Enum.Material.Grass, false)
+				if k % 3 == 0 then
+					grassClump(meadow, p + V(rr(-5, 5), 0, rr(-5, 5)), 1.4)
+				end
+			end
+		end
+	end
+
+	-- Neighborhood: house backs with privacy fences beyond the tree ring, plus little scenes
+	-- in the gaps between ranches.
+	local hood = model(scenery, "Neighborhood")
+	streaming(hood, "Atomic")
+	local walls = { "#F2E6CF", "#D7E8F0", "#F6D7C3", "#E3EED2" }
+	for k, a in ipairs({ 22.5, 112.5, 202.5, 337.5 }) do
+		local pos = polar(a, 290)
+		houseBack(hood, lookAt(pos, V(0, 0, 0)), walls[k], k % 2 == 0 and "#2F7BD8" or PAL.barnRed)
+	end
+	local function gap(a, r)
+		local pos = polar(a, r)
+		return lookAt(pos, V(0, 0, 0))
+	end
+	-- 67.5: tailgate party
+	do
+		local g = model(hood, "Tailgate")
+		local cf = gap(67.5, 176)
+		pickupTruck(g, cf * yaw(math.rad(100)), "#C8433A")
+		lawnChair(g, cf * E.CFrame.new(-6, 0, -6) * yaw(0.5), "#1E9E4A")
+		lawnChair(g, cf * E.CFrame.new(-2, 0, -8) * yaw(-0.2), "#E8590C")
+		cooler(g, cf * E.CFrame.new(-4, 0, -4.5), "#2F7BD8")
+		cornhole(g, cf * E.CFrame.new(6, 0, -12), "#2F7BD8")
+		cornhole(g, cf * E.CFrame.new(6, 0, 2) * yaw(math.pi), "#D93636")
+	end
+	-- 112.5: the big oak with a tire swing and a picnic
+	do
+		local g = model(hood, "TireSwingOak")
+		local cf = gap(112.5, 182)
+		local oak = liveOak(g, cf.Position, 1.7, { shadow = true })
+		leaves(oak:FindFirstChild("Canopy"))
+		local branch = cf * E.CFrame.new(7, 0, 0)
+		deco(g, "Rope", V(0.2, 7.5, 0.2), branch * E.CFrame.new(0, 9.6, 0), "#D9C4A8", E.Enum.Material.Fabric, false)
+		dcyl(g, "Tire", 1.1, 3.6, branch * E.CFrame.new(0, 5, 0) * yaw(math.pi / 2), "#1C1A1F", E.Enum.Material.SmoothPlastic, false)
+		picnicBlanket(g, cf * E.CFrame.new(-6, 0, -8) * yaw(-0.3))
+	end
+	-- haybales & wildflowers in the other gaps
+	for _, a in ipairs({ 22.5, 157.5, 202.5, 247.5, 292.5, 337.5 }) do
+		local g = model(hood, "Pasture")
+		local cf = gap(a, 170)
+		hayBale(g, (cf * E.CFrame.new(-4, 0, 3)).Position, a)
+		hayBale(g, (cf * E.CFrame.new(1, 0, 6)).Position, a + 1)
+		if a ~= 247.5 and a ~= 292.5 then
+			hayBale(g, (cf * E.CFrame.new(-1.5, 4.4, 4.5)).Position, a + 2)
+		end
+		flowerPatch(g, (cf * E.CFrame.new(6, 0, -4)).Position, 4, 12, a % 45 == 22.5 and "bluebonnet" or "mix")
+		grassClump(g, (cf * E.CFrame.new(-8, 0, -6)).Position, 1.2)
+		grassClump(g, (cf * E.CFrame.new(9, 0, 8)).Position, 1.1)
+	end
+	do -- backyard kiddie pool + lawn chairs at 337.5 house
+		local cf = lookAt(polar(337.5, 290), V(0, 0, 0))
+		kiddiePool(hood, cf * E.CFrame.new(-10, 0, -12))
+		lawnChair(hood, cf * E.CFrame.new(-2, 0, -12) * yaw(1.2), "#FFC83C")
+		local cf2 = lookAt(polar(112.5, 290), V(0, 0, 0))
+		cooler(hood, cf2 * E.CFrame.new(8, 0, -10), "#1E9E4A")
+		lawnChair(hood, cf2 * E.CFrame.new(4, 0, -12) * yaw(0.4), "#2F7BD8")
+	end
+
+	-- Hub dressing: string lights between the lamp posts, hay-bale seats by the stage,
+	-- smoke wisps from the pits, fireflies at dusk.
+	local hubDecor = model(scenery, "HubDecor")
+	for li = 0, 7 do
+		local a0 = li / 8 * math.pi * 2 + math.pi / 8
+		local a1 = (li + 1) / 8 * math.pi * 2 + math.pi / 8
+		local p0 = V(math.cos(a0) * 52, 10.1, math.sin(a0) * 52)
+		local p1 = V(math.cos(a1) * 52, 10.1, math.sin(a1) * 52)
+		stringLights(hubDecor, p0, p1, 7, 1.6)
+	end
+	for _, o in ipairs({ { -24, 30 }, { -28, 36 }, { 32, 27 } }) do
+		hayBale(hubDecor, V(o[1], 0.4, o[2]), o[1] * 0.1)
+	end
+	local hubMap = map:FindFirstChild("Hub")
+	if hubMap then
+		local ks = hubMap:FindFirstChild("KingSmoker")
+		local ch = ks and ks:FindFirstChild("Chimney")
+		if ch then
+			smokeWisp(ch)
+		end
+		local ug = hubMap:FindFirstChild("UncGrill")
+		if ug then
+			smokeWisp(ug)
+		end
+	end
+	fireflies(hubDecor, E.CFrame.new(0, 5, 0), V(100, 8, 100))
+	fireflies(hubDecor, E.CFrame.new(0, 4, -262), V(160, 6, 30))
+	fireflies(hubDecor, E.CFrame.new(0, 5, 230), V(200, 8, 60))
+	-- The landmark itself lives in the hub so it's on the spawn sightline.
+	WorldBuilder.pibble(hubDecor, E.CFrame.new(0, 0.4, 16), content)
+
+	-- Creek dressing: a footbridge, cattails, more rocks, lily pads.
+	local creekDecor = model(scenery, "CreekDecor")
+	streaming(creekDecor, "Atomic")
+	local z = -260
+	local bx = 42
+	part(creekDecor, "BridgeDeck", V(9, 0.6, 26), E.CFrame.new(bx, 1.2, z), PAL.wood, E.Enum.Material.WoodPlanks)
+	part(creekDecor, "BridgeRampN", V(9, 0.6, 6), E.CFrame.new(bx, 0.6, z + 15.5) * E.CFrame.Angles(math.rad(-10), 0, 0), PAL.wood, E.Enum.Material.WoodPlanks)
+	part(creekDecor, "BridgeRampS", V(9, 0.6, 6), E.CFrame.new(bx, 0.6, z - 15.5) * E.CFrame.Angles(math.rad(10), 0, 0), PAL.wood, E.Enum.Material.WoodPlanks)
+	for _, sx in ipairs({ -4.3, 4.3 }) do
+		deco(creekDecor, "Rail", V(0.4, 0.4, 26), E.CFrame.new(bx + sx, 4.2, z), "#8B5A2B", E.Enum.Material.Wood, false)
+		for _, pz in ipairs({ -12, 0, 12 }) do
+			deco(creekDecor, "RailPost", V(0.5, 3, 0.5), E.CFrame.new(bx + sx, 2.8, z + pz), "#8B5A2B", E.Enum.Material.Wood, false)
+		end
+	end
+	for k = 1, 16 do
+		local x = -90 + k * 11 + rr(-3, 3)
+		local zz = z + ((k % 2 == 0) and 9.8 or -9.8) + rr(-0.6, 0.6)
+		if math.abs(x - bx) > 7 then
+			deco(creekDecor, "CattailStem", V(0.2, 4.2, 0.2), E.CFrame.new(x, 2.1, zz) * E.CFrame.Angles(rr(-0.15, 0.15), 0, rr(-0.15, 0.15)), "#6E8F3A", E.Enum.Material.Grass, false)
+			deco(creekDecor, "Cattail", V(0.5, 1.3, 0.5), E.CFrame.new(x, 3.9, zz), "#6B4226", E.Enum.Material.Fabric, false)
+			deco(creekDecor, "CattailLeaf", V(0.15, 3.2, 0.5), E.CFrame.new(x + 0.4, 1.6, zz) * E.CFrame.Angles(0, 0.6, 0.3), "#7FA650", E.Enum.Material.Grass, false)
+		end
+	end
+	for k = 1, 8 do
+		dball(creekDecor, "Rock", rr(1.8, 3.6), E.CFrame.new(-95 + k * 23, 0.3, z + rr(-8, 8)), pick({ "#8C8C8C", "#9C9284", "#7F8C8D" }), E.Enum.Material.Slate, false)
+	end
+	for k = 1, 5 do
+		dcyl(creekDecor, "LilyPad", 0.1, rr(1.6, 2.4), E.CFrame.new(-60 + k * 22, 0.45, z + rr(-5, 5)) * upright(), "#4FA346", E.Enum.Material.Grass, false)
+	end
+	mesquite(creekDecor, V(-62, 0, z - 16), 1.3)
+	liveOak(creekDecor, V(70, 0, z - 18), 1.3)
+
+	-- Ambient critters (moved around by the Ambient client script; purely cosmetic).
+	local critters = folder(scenery, "Critters")
+	local spots = {
+		{ "armadillo", polar(45, 186), 16, 3 },
+		{ "roadrunner", polar(200, 192), 24, 9 },
+		{ "hornedtoad", V(30, 0, -244), 10, 2 },
+		{ "possum", polar(150, 200), 14, 3 },
+		{ "armadillo", polar(318, 195), 14, 3 },
+	}
+	local defs = {}
+	for _, d in ipairs(cfg.Critters or {}) do
+		defs[d.id] = d
+	end
+	for _, sp in ipairs(spots) do
+		local def = defs[sp[1]]
+		if def then
+			local cm = WorldBuilder.critter(E, critters, def, E.CFrame.new(sp[2] + V(0, 0.9 * (def.scale or 1), 0)))
+			for _, d in ipairs(cm:GetDescendants()) do
+				if d:IsA("BasePart") then
+					d.CanCollide = false
+					d.CanQuery = false
+					d.CanTouch = false
+					d.CastShadow = false
+				elseif d:IsA("ProximityPrompt") or d:IsA("BillboardGui") then
+					d:Destroy()
+				end
+			end
+			cm.Name = "Wild_" .. def.id
+			cm:SetAttribute("Range", sp[3])
+			cm:SetAttribute("Speed", sp[4])
+		end
+	end
+
+	-- Clouds (Terrain child) when building inside a real place.
+	pcall(function()
+		local terrain = map.Parent and map.Parent:FindFirstChildOfClass("Terrain")
+		if terrain and not terrain:FindFirstChildOfClass("Clouds") then
+			local clouds = E.Instance.new("Clouds")
+			clouds.Cover = 0.55
+			clouds.Density = 0.55
+			clouds.Color = hex("#FFF6EC")
+			clouds.Parent = terrain
+		end
+	end)
+	return scenery
+end
+WorldBuilder.buildScenery = buildScenery
+
 -- Build everything under `parent` (Workspace). Returns the Map model.
 function WorldBuilder.build(env, parent, cfg, content)
 	E = env
 	local map = model(parent, "Map")
-	part(map, "Ground", V(900, 2, 900), E.CFrame.new(0, -1, 0), "#7CC35A", E.Enum.Material.Grass)
+	part(map, "Ground", V(900, 2, 900), E.CFrame.new(0, -1, 0), "#79C84F", E.Enum.Material.Grass)
 	local plots = folder(map, "Plots")
 	for i = 1, cfg.MAX_PLOTS do
 		buildPlot(plots, i, cfg)
@@ -673,6 +1425,7 @@ function WorldBuilder.build(env, parent, cfg, content)
 			tree(map, V(math.cos(a) * r, 0, math.sin(a) * r), 1 + (i % 2) * 0.3)
 		end
 	end
+	buildScenery(map, cfg, content)
 	return map
 end
 

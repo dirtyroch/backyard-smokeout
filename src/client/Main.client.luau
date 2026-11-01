@@ -10,6 +10,7 @@ local Fx = require(script.Parent.Fx)
 local Hud = require(script.Parent.Hud)
 local Panels = require(script.Parent.Panels)
 local WorldClient = require(script.Parent.WorldClient)
+local Ambient = require(script.Parent.Ambient)
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Content = require(Shared.Content)
@@ -38,6 +39,7 @@ Panels.mount(root)
 Hud.mount(root, Panels)
 Net.notify = Fx.toast
 WorldClient.start(Panels)
+task.spawn(Ambient.start)
 
 pcall(function()
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
@@ -71,6 +73,8 @@ Net.on("fx", function(p)
 		end
 	elseif p.kind == "snagged" then
 		Fx.pop(Content.Slang.snagged .. " Tag " .. tostring(d.by) .. " back!", UI.Theme.red, 34)
+	elseif p.kind == "pibble" then
+		Fx.pop("♥ GOOD BOY ♥", Color3.fromHex("#FF8FB1"), 40)
 	elseif p.kind == "swat" then
 		Fx.pop(d.queen and "👑 QUEEN DOWN!" or "SWAT!", UI.Theme.gold, d.queen and 44 or 26)
 	end

@@ -30,6 +30,10 @@ local env = {
 	Color3 = roblox.Color3,
 	Enum = roblox.Enum,
 	UDim2 = roblox.UDim2,
+	NumberSequence = roblox.NumberSequence,
+	NumberRange = roblox.NumberRange,
+	ColorSequence = roblox.ColorSequence,
+	Vector2 = roblox.Vector2,
 }
 local map = WorldBuilder.build(env, workspace, Config, Content)
 
