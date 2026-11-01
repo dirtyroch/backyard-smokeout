@@ -2,7 +2,7 @@
 --[[
 	Hype.luau — pure logic for the social / clip moments (no Roblox APIs, unit-tested in Lune).
 
-	  * pileOn:   Big Biscuit "Zoomies". When `need` different players rub his belly within
+	  * pileOn:   Big Bertha's Dinner Bell. When `need` different players ring the bell within
 	              `window` seconds, the whole server gets a short free tip bonus.
 	  * rushStep: the Lunch Rush. Time is cut into fixed windows; serve `need` plates inside one
 	              window for a bonus. Gives a 1-3 minute goal at every stage of the game.

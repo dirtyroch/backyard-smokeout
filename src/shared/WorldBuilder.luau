@@ -155,105 +155,336 @@ local function billboard(adornee, name, text, offsetY, maxDist, color, w, h, stu
 end
 WorldBuilder.billboard = billboard
 
--- A blocky NPC person.
+-- Decorative parts: no collision, query or touch (shadow is opt-in).
+local function deco(parent, name, size, cf, color, material, shadow)
+	return part(parent, name, size, cf, color, material, { CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = shadow == true })
+end
+local function dball(parent, name, d, cf, color, material, shadow)
+	local p = deco(parent, name, V(d, d, d), cf, color, material, shadow)
+	p.Shape = E.Enum.PartType.Ball
+	return p
+end
+local function dcyl(parent, name, length, diameter, cf, color, material, shadow)
+	local p = deco(parent, name, V(length, diameter, diameter), cf, color, material, shadow)
+	p.Shape = E.Enum.PartType.Cylinder
+	return p
+end
+
+local function upright()
+	return E.CFrame.Angles(0, 0, math.pi / 2) -- turns an X-axis cylinder upright
+end
+
+-- Ellipsoid part (a Part with a Sphere SpecialMesh) for soft, round shapes.
+local function sph(parent, name, size, cf, color, material, props)
+	local p = part(parent, name, size, cf, color, material, props)
+	local mesh = E.Instance.new("SpecialMesh")
+	mesh.MeshType = E.Enum.MeshType.Sphere
+	mesh.Parent = p
+	return p
+end
+
+-- A round, chibi-proportioned NPC: a big head, a soft pear-shaped body, mitten hands, and
+-- shiny eyes with rosy cheeks. Feet at `cf`, facing -Z. Part names Head and Torso are what
+-- the game looks up (prompts and name tags hang off them).
+-- Options: skin, shirt, pants, shoes, hair, hat ("cowboy" | "cap" | "bun"), hatColor, apron,
+-- apronText, glasses, mustache, beard, belly, brows, label, labelColor, scale.
 function WorldBuilder.npc(parent, name, cf, o)
 	o = o or {}
 	local m = model(parent, name)
 	local skin = o.skin or "#E0AC69"
 	local shirt = o.shirt or "#4A6FA5"
 	local pants = o.pants or "#3B3B3B"
+	local shoes = o.shoes or "#3A2A1E"
+	local dark = "#2A1E1A"
 	local s = o.scale or 1
-	local function at(x, y, z)
-		return cf * E.CFrame.new(x * s, y * s, z * s)
+	local function at(x, y, z, rx, ry, rz)
+		return cf * E.CFrame.new(x * s, y * s, z * s) * E.CFrame.Angles(math.rad(rx or 0), math.rad(ry or 0), math.rad(rz or 0))
 	end
-	part(m, "LeftLeg", V(1 * s, 2 * s, 1 * s), at(-0.5, 1, 0), pants)
-	part(m, "RightLeg", V(1 * s, 2 * s, 1 * s), at(0.5, 1, 0), pants)
-	local torso = part(m, "Torso", V(2 * s, 2 * s, 1 * s), at(0, 3, 0), shirt)
-	part(m, "LeftArm", V(1 * s, 2 * s, 1 * s), at(-1.5, 3, 0), skin)
-	part(m, "RightArm", V(1 * s, 2 * s, 1 * s), at(1.5, 3, 0), skin)
-	local head = part(m, "Head", V(1.6 * s, 1.6 * s, 1.6 * s), at(0, 4.8, 0), skin)
-	part(m, "EyeL", V(0.25 * s, 0.25 * s, 0.1 * s), at(-0.35, 5, -0.81), "#111111")
-	part(m, "EyeR", V(0.25 * s, 0.25 * s, 0.1 * s), at(0.35, 5, -0.81), "#111111")
-	part(m, "Smile", V(0.7 * s, 0.12 * s, 0.1 * s), at(0, 4.5, -0.81), "#5A2E1E")
-	if o.hat == "cowboy" then
-		cyl(m, "HatBrim", 0.2 * s, 3 * s, at(0, 5.7, 0) * E.CFrame.Angles(0, 0, math.pi / 2), o.hatColor or "#3B2A1A")
-		part(m, "HatCrown", V(1.6 * s, 0.9 * s, 1.6 * s), at(0, 6.2, 0), o.hatColor or "#3B2A1A")
-	elseif o.hat == "cap" then
-		part(m, "Cap", V(1.7 * s, 0.5 * s, 1.7 * s), at(0, 5.75, 0), o.hatColor or "#B22222")
-		part(m, "Bill", V(1.6 * s, 0.15 * s, 0.9 * s), at(0, 5.55, -1.1), o.hatColor or "#B22222")
-	elseif o.hat == "bun" then
-		ball(m, "Bun", 0.9 * s, at(0, 5.9, 0.3), o.hatColor or "#DDDDDD")
+	local function e(n, sx, sy, sz, c, x, y, z, rx, ry, rz, mat)
+		return sph(m, n, V(sx * s, sy * s, sz * s), at(x, y, z, rx, ry, rz), c, mat)
 	end
+	-- legs and shoes
+	local legL = cyl(m, "LeftLeg", 1.3 * s, 0.8 * s, at(-0.45, 1.0, 0) * E.CFrame.Angles(0, 0, math.pi / 2), pants)
+	local legR = cyl(m, "RightLeg", 1.3 * s, 0.8 * s, at(0.45, 1.0, 0) * E.CFrame.Angles(0, 0, math.pi / 2), pants)
+	if o.sandals then
+		-- socks with sandals: white socks on a brown sole with a strap
+		for _, side in { -1, 1 } do
+			e("Sock", 0.85, 0.75, 1.2, "#F7F7F2", side * 0.47, 0.42, -0.12)
+			e("Sole", 1.0, 0.22, 1.45, "#7A4A2A", side * 0.47, 0.1, -0.15)
+			deco(m, "Strap", V(0.9 * s, 0.16 * s, 0.25 * s), at(side * 0.47, 0.55, -0.55), "#7A4A2A", E.Enum.Material.SmoothPlastic, false)
+		end
+	else
+		e("ShoeL", 0.95, 0.6, 1.35, shoes, -0.47, 0.3, -0.15)
+		e("ShoeR", 0.95, 0.6, 1.35, shoes, 0.47, 0.3, -0.15)
+	end
+	-- body: hips + a soft torso (rounder for a belly)
+	e("Hips", 2.0, 1.1, 1.6, pants, 0, 1.75, 0)
+	if o.buckle then
+		e("Belt", 2.05, 0.3, 1.65, "#3A2414", 0, 2.05, 0)
+		e("Buckle", 0.6, 0.42, 0.2, o.buckle, 0, 2.05, -0.82, 0, 0, 0, E.Enum.Material.Foil)
+	end
+	local bw, bd = o.belly and 2.6 or 2.2, o.belly and 2.3 or 1.75
+	local torso = sph(m, "Torso", V(bw * s, 2.5 * s, bd * s), at(0, 2.75, 0), shirt)
 	if o.apron then
-		part(m, "Apron", V(1.8 * s, 2.2 * s, 0.1 * s), at(0, 2.9, -0.55), o.apron)
+		-- a soft bib that hugs the front of the torso, with a flat name patch on it
+		e("ApronBib", bw * 0.78, 2.3, bd * 1.0, o.apron, 0, 2.6, -bd * 0.12, 0, 0, 0)
+		local ap = part(m, "Apron", V(1.25 * s, 0.6 * s, 0.05 * s), at(0, 2.55, -bd * 0.62 - 0.01), o.apron, E.Enum.Material.Fabric)
+		ap.CanCollide = false
+		if o.apronText then
+			surfaceText(ap, E.Enum.NormalId.Front, o.apronText, "#FFFFFF", nil)
+		end
+	end
+	-- arms: sleeves angled out a little, mitten hands
+	for _, side in { -1, 1 } do
+		local ax = side * (bw / 2 + 0.2)
+		e(side < 0 and "LeftArm" or "RightArm", 0.75, 1.7, 0.75, shirt, ax, 2.85, 0, 0, 0, side * 16)
+		e(side < 0 and "HandL" or "HandR", 0.7, 0.7, 0.7, skin, ax + side * 0.25, 1.95, -0.05)
+	end
+	-- head: a big round face
+	local head = sph(m, "Head", V(2.5 * s, 2.4 * s, 2.35 * s), at(0, 4.85, 0), skin)
+	e("EarL", 0.38, 0.6, 0.35, skin, -1.24, 4.85, 0.05)
+	e("EarR", 0.38, 0.6, 0.35, skin, 1.24, 4.85, 0.05)
+	for _, side in { -1, 1 } do
+		e(side < 0 and "EyeL" or "EyeR", 0.34, 0.5, 0.2, dark, side * 0.45, 5.0, -1.08)
+		e(side < 0 and "ShineL" or "ShineR", 0.13, 0.13, 0.08, "#FFFFFF", side * 0.45 - 0.07, 5.12, -1.18, 0, 0, 0, E.Enum.Material.Neon)
+		e(side < 0 and "CheekL" or "CheekR", 0.5, 0.3, 0.12, "#F28B82", side * 0.78, 4.6, -0.98)
+		if o.brows ~= false then
+			deco(m, "Brow", V(0.5 * s, 0.12 * s, 0.1 * s), at(side * 0.45, 5.42, -1.06, 0, 0, side * -8), o.hair or dark, E.Enum.Material.SmoothPlastic, false)
+		end
+	end
+	e("Nose", 0.4, 0.34, 0.3, skin, 0, 4.68, -1.18)
+	if o.mustache then
+		e("Mustache", 1.25, 0.36, 0.4, o.mustache, 0, 4.42, -1.12)
+		e("Smile", 0.5, 0.16, 0.12, "#7A2E2E", 0, 4.18, -1.13)
+	else
+		e("Smile", 0.66, 0.2, 0.12, "#7A2E2E", 0, 4.32, -1.14)
+	end
+	if o.beard then
+		e("Beard", 1.7, 0.9, 1.0, o.beard, 0, 3.9, -0.75)
 	end
 	if o.glasses then
-		part(m, "Glasses", V(1.3 * s, 0.25 * s, 0.1 * s), at(0, 5, -0.85), "#222222")
+		for _, side in { -1, 1 } do
+			local lens = cyl(m, "Glasses", 0.08 * s, 0.75 * s, at(side * 0.45, 5.0, -1.2) * E.CFrame.Angles(0, math.pi / 2, 0), "#BFE3FF", E.Enum.Material.Glass, { Transparency = 0.55 })
+			lens.CanCollide = false
+			deco(m, "GlassesRim", V(0.8 * s, 0.08 * s, 0.06 * s), at(side * 0.45, 5.38, -1.2), "#3A2A1E", E.Enum.Material.SmoothPlastic, false)
+		end
+		deco(m, "GlassesBridge", V(0.2 * s, 0.07 * s, 0.06 * s), at(0, 5.1, -1.22), "#3A2A1E", E.Enum.Material.SmoothPlastic, false)
 	end
-	for _, c in ipairs(m:GetChildren()) do
-		c.CanCollide = c.Name == "Torso" or c.Name == "LeftLeg" or c.Name == "RightLeg"
+	-- hair and hats
+	if o.hair and o.hat ~= "cowboy" then
+		e("Hair", 2.6, 1.35, 2.5, o.hair, 0, 5.55, 0.12)
+	end
+	if o.hat == "cowboy" then
+		local hc = o.hatColor or "#3B2A1A"
+		cyl(m, "HatBrim", 0.18 * s, 4.3 * s, at(0, 5.75, 0) * E.CFrame.Angles(0, 0, math.pi / 2), hc)
+		e("HatBrimCurlL", 0.9, 0.5, 3.6, hc, -1.85, 5.95, 0)
+		e("HatBrimCurlR", 0.9, 0.5, 3.6, hc, 1.85, 5.95, 0)
+		e("HatCrown", 2.3, 1.6, 2.1, hc, 0, 6.4, 0)
+		cyl(m, "HatBand", 0.3 * s, 2.32 * s, at(0, 6.0, 0) * E.CFrame.Angles(0, 0, math.pi / 2), o.hatBand or "#8B5A2B")
+	elseif o.hat == "cap" then
+		local hc = o.hatColor or "#B22222"
+		e("Cap", 2.6, 1.5, 2.5, hc, 0, 5.6, 0.05)
+		e("Bill", 1.8, 0.2, 1.3, hc, 0, 5.4, -1.2)
+		e("CapButton", 0.3, 0.2, 0.3, "#FFFFFF", 0, 6.33, 0.05)
+	elseif o.hat == "bun" then
+		e("Hair", 2.6, 1.35, 2.5, o.hatColor or "#DDDDDD", 0, 5.55, 0.12)
+		e("Bun", 1.15, 1.05, 1.15, o.hatColor or "#DDDDDD", 0, 6.25, 0.45)
+		if o.pearls then
+			for k = -2, 2 do
+				dball(m, "Pearl", 0.22 * s, at(k * 0.32, 3.95 - math.abs(k) * 0.05, -0.82 + math.abs(k) * 0.08), "#FFF8E7", E.Enum.Material.SmoothPlastic, false)
+			end
+		end
+	end
+	for _, c in ipairs(m:GetDescendants()) do
+		if c:IsA("BasePart") then
+			c.CanCollide = c == torso or c == legL or c == legR
+		end
 	end
 	m.PrimaryPart = torso
 	if o.label then
-		billboard(head, "NameTag", o.label, 2.5, 60, o.labelColor or "#FFE9A8", 200, 36)
+		billboard(head, "NameTag", o.label, 2.8, 60, o.labelColor or "#FFE9A8", 200, 36)
 	end
 	return m, head, torso
 end
 
--- A critter customer. Built at `cf` (feet on the ground).
+-- A critter customer: round, plush-toy shapes (ellipsoids) with big shiny eyes and rosy
+-- cheeks. Built at `cf` (feet on the ground), facing -Z. The game looks up the parts named
+-- Body and Head (prompts, order bubbles, mud spots).
+local function lighten(c, t)
+	return "#" .. hex(c):Lerp(E.Color3.new(1, 1, 1), t):ToHex()
+end
+
 function WorldBuilder.critter(env, parent, def, cf)
 	E = env
 	local m = model(parent, def.id)
 	local s = def.scale or 1
-	local function at(x, y, z)
-		return cf * E.CFrame.new(x * s, y * s, z * s)
+	local id = def.id
+	local function at(x, y, z, rx, ry, rz)
+		return cf * E.CFrame.new(x * s, y * s, z * s) * E.CFrame.Angles(math.rad(rx or 0), math.rad(ry or 0), math.rad(rz or 0))
 	end
+	local function e(n, sx, sy, sz, c, x, y, z, rx, ry, rz, mat)
+		return sph(m, n, V(sx * s, sy * s, sz * s), at(x, y, z, rx, ry, rz), c, mat)
+	end
+	local BC, HC = def.body, def.head
+	local DARK, PINK = "#1E1614", "#F59BB0"
 	local body, head
+	-- eye placement (head-relative), filled in per body plan
+	local eyeY, eyeZ, eyeX, eyeSize = 2.55, -2.0, 0.38, 1
 	if def.rex then
-		body = part(m, "Body", V(2.2 * s, 2.4 * s, 2.6 * s), at(0, 2.2, 0.3), def.body)
-		head = part(m, "Head", V(2 * s, 1.8 * s, 2.2 * s), at(0, 4.2, -0.6), def.head)
-		part(m, "Belly", V(1.6 * s, 1.8 * s, 0.2 * s), at(0, 2.1, -1), "#E8F5C8")
-		part(m, "ArmL", V(0.4 * s, 0.9 * s, 0.4 * s), at(-0.9, 2.8, -1.1), def.body)
-		part(m, "ArmR", V(0.4 * s, 0.9 * s, 0.4 * s), at(0.9, 2.8, -1.1), def.body)
-		part(m, "Tail", V(1 * s, 1 * s, 2.4 * s), at(0, 1.6, 2.6), def.body)
-		part(m, "LegL", V(0.8 * s, 1 * s, 0.9 * s), at(-0.6, 0.5, 0.3), def.body)
-		part(m, "LegR", V(0.8 * s, 1 * s, 0.9 * s), at(0.6, 0.5, 0.3), def.body)
-		part(m, "Ribbon", V(2.4 * s, 0.35 * s, 0.4 * s), at(0, 3.45, -0.95), "#FF5C8A")
+		body = e("Body", 2.4, 2.6, 2.6, BC, 0, 2.2, 0.3)
+		e("Belly", 1.7, 2.0, 1.2, "#E8F5C8", 0, 2.0, -0.55)
+		head = e("Head", 2.2, 1.9, 2.4, HC, 0, 4.3, -0.7)
+		e("Snout", 1.7, 1.1, 1.5, HC, 0, 3.95, -1.55)
+		for k = -2, 2 do
+			e("Tooth", 0.18, 0.22, 0.12, "#FFFFFF", k * 0.3, 3.45, -2.25)
+		end
+		e("NostrilL", 0.16, 0.1, 0.1, DARK, -0.3, 4.3, -2.28)
+		e("NostrilR", 0.16, 0.1, 0.1, DARK, 0.3, 4.3, -2.28)
+		e("ArmL", 0.4, 0.8, 0.4, BC, -0.95, 2.75, -0.9, 40, 0, 10)
+		e("ArmR", 0.4, 0.8, 0.4, BC, 0.95, 2.75, -0.9, 40, 0, -10)
+		e("Tail", 1.1, 1.0, 3.0, BC, 0, 1.5, 2.6, -15, 0, 0)
+		e("LegL", 1.0, 1.4, 1.2, BC, -0.75, 0.6, 0.4)
+		e("LegR", 1.0, 1.4, 1.2, BC, 0.75, 0.6, 0.4)
+		e("FootL", 1.0, 0.45, 1.4, BC, -0.75, 0.2, 0.05)
+		e("FootR", 1.0, 0.45, 1.4, BC, 0.75, 0.2, 0.05)
+		for k = 0, 3 do
+			e("Spike", 0.25, 0.55, 0.55, "#4E9E35", 0, 3.6 - k * 0.55 + (k == 0 and 1.6 or 0), 0.2 + k * 0.7 - (k == 0 and 1.2 or 0))
+		end
+		part(m, "Ribbon", V(1.9 * s, 0.3 * s, 0.25 * s), at(0, 3.45, -1.05), "#FF5C8A")
+		e("BowL", 0.6, 0.45, 0.25, "#FF5C8A", -0.45, 3.45, -1.25, 0, 0, 20)
+		e("BowR", 0.6, 0.45, 0.25, "#FF5C8A", 0.45, 3.45, -1.25, 0, 0, -20)
 		billboard(head, "Ribbon", def.ribbon or "RAWR means I love you ♥", 2.6, 70, "#FF8FB1", 260, 34)
+		eyeY, eyeZ, eyeX, eyeSize = 4.75, -1.62, 0.5, 1.3
+	elseif id == "roadrunner" or id == "hummingbird" then
+		local hb = id == "hummingbird"
+		body = e("Body", 1.5, 1.5, 2.1, BC, 0, 1.7, 0, hb and -10 or -15, 0, 0)
+		e("Chest", 1.1, 1.1, 1.0, lighten(BC, 0.45), 0, 1.6, -0.7)
+		head = e("Head", 1.3, 1.3, 1.3, HC, 0, 2.85, -0.9)
+		e("Beak", 0.28, 0.28, hb and 1.8 or 1.2, hb and "#2A2A2A" or "#5A4A3A", 0, 2.75, hb and -2.2 or -1.9)
+		if hb then
+			e("WingL", 0.15, 1.7, 1.0, lighten(BC, 0.2), -0.85, 2.3, 0.1, 0, 0, 30, E.Enum.Material.Glass)
+			e("WingR", 0.15, 1.7, 1.0, lighten(BC, 0.2), 0.85, 2.3, 0.1, 0, 0, -30, E.Enum.Material.Glass)
+			e("Tail", 0.6, 0.2, 1.0, BC, 0, 1.4, 1.3, 20, 0, 0)
+		else
+			e("Crest", 0.3, 1.0, 1.0, "#24456B", 0, 3.55, -0.6, -20, 0, 0)
+			e("Tail", 0.5, 0.45, 2.4, BC, 0, 2.2, 1.6, -28, 0, 0)
+			e("CheekPatch", 0.9, 0.3, 0.2, "#E2572E", 0, 2.85, -0.25)
+		end
+		for _, side in { -1, 1 } do
+			cyl(m, "Leg", 1.0 * s, 0.2 * s, at(side * 0.35, 0.55, 0.1) * E.CFrame.Angles(0, 0, math.pi / 2), "#C9A060")
+			e("Foot", 0.4, 0.15, 0.6, "#C9A060", side * 0.35, 0.08, -0.05)
+		end
+		eyeY, eyeZ, eyeX, eyeSize = 3.0, -1.45, 0.33, 0.85
 	else
-		body = part(m, "Body", V(1.8 * s, 1.4 * s, 2.4 * s), at(0, 1.3, 0), def.body)
-		head = part(m, "Head", V(1.4 * s, 1.3 * s, 1.3 * s), at(0, 2.3, -1.3), def.head)
-		part(m, "LegFL", V(0.4 * s, 0.7 * s, 0.4 * s), at(-0.6, 0.35, -0.8), def.body)
-		part(m, "LegFR", V(0.4 * s, 0.7 * s, 0.4 * s), at(0.6, 0.35, -0.8), def.body)
-		part(m, "LegBL", V(0.4 * s, 0.7 * s, 0.4 * s), at(-0.6, 0.35, 0.8), def.body)
-		part(m, "LegBR", V(0.4 * s, 0.7 * s, 0.4 * s), at(0.6, 0.35, 0.8), def.body)
-		part(m, "Tail", V(0.3 * s, 0.3 * s, 1 * s), at(0, 1.6, 1.6), def.body)
+		local flat = id == "hornedtoad"
+		local bodyH = flat and 1.0 or 1.6
+		local by = flat and 0.75 or 1.25
+		body = e("Body", flat and 2.4 or 2.0, bodyH, flat and 2.4 or 2.5, BC, 0, by, 0)
+		e("BellyPatch", 1.4, bodyH * 0.6, 1.8, def.bellyRub and PINK or lighten(BC, 0.35), 0, by - bodyH * 0.28, -0.1)
+		local hy = flat and 1.35 or 2.35
+		head = e("Head", flat and 1.7 or 1.75, flat and 1.1 or 1.6, flat and 1.4 or 1.6, HC, 0, hy, flat and -1.45 or -1.3)
+		-- muzzle and nose
+		local muzzleColor = (id == "possum" or id == "clapcat") and HC or lighten(HC, 0.35)
+		if id == "armadillo" then
+			e("Muzzle", 0.75, 0.6, 1.2, lighten(HC, 0.2), 0, hy - 0.35, -2.25)
+			e("Nose", 0.35, 0.3, 0.25, DARK, 0, hy - 0.3, -2.85)
+		elseif id == "possum" then
+			e("Muzzle", 0.8, 0.6, 1.0, HC, 0, hy - 0.3, -2.15)
+			e("Nose", 0.32, 0.26, 0.24, "#F48FB1", 0, hy - 0.22, -2.65)
+		elseif def.bellyRub then
+			e("Muzzle", 1.15, 0.65, 0.45, lighten(HC, 0.15), 0, hy - 0.4, -2.0)
+			e("Nose", 0.45, 0.3, 0.25, DARK, 0, hy - 0.15, -2.18)
+			e("Tongue", 0.32, 0.4, 0.12, "#FF6F8E", 0.12, hy - 0.72, -2.15)
+		elseif not flat then
+			e("Muzzle", 0.95, 0.65, 0.7, muzzleColor, 0, hy - 0.3, -2.0)
+			e("Nose", 0.32, 0.24, 0.2, id == "clapcat" and "#F48FB1" or DARK, 0, hy - 0.12, -2.33)
+		else
+			e("Smile", 0.7, 0.12, 0.1, DARK, 0, hy - 0.25, -2.12)
+		end
+		if not flat then
+			e("CheekL", 0.32, 0.18, 0.1, "#F7A1A9", -0.62, hy - 0.2, -1.95)
+			e("CheekR", 0.32, 0.18, 0.1, "#F7A1A9", 0.62, hy - 0.2, -1.95)
+		end
+		-- legs
+		for _, lx in { -0.62, 0.62 } do
+			for _, lz in { -0.75, 0.75 } do
+				e("Leg", flat and 0.6 or 0.55, flat and 0.5 or 0.8, flat and 0.6 or 0.55, BC, lx * (flat and 1.25 or 1), flat and 0.25 or 0.4, lz)
+			end
+		end
+		-- ears
 		if def.ears then
-			part(m, "EarL", V(0.35 * s, 0.6 * s, 0.2 * s), at(-0.45, 3.1, -1.3), def.head)
-			part(m, "EarR", V(0.35 * s, 0.6 * s, 0.2 * s), at(0.45, 3.1, -1.3), def.head)
+			if id == "possum" then
+				e("EarL", 0.7, 0.7, 0.18, "#F4B6C2", -0.62, hy + 0.7, -1.2)
+				e("EarR", 0.7, 0.7, 0.18, "#F4B6C2", 0.62, hy + 0.7, -1.2)
+			elseif def.bellyRub then
+				e("EarL", 0.6, 1.0, 0.25, HC, -0.55, hy + 0.85, -1.2, 0, 0, 18)
+				e("EarR", 0.6, 1.0, 0.25, HC, 0.55, hy + 0.85, -1.2, 0, 0, -18)
+				e("EarInL", 0.35, 0.7, 0.1, PINK, -0.55, hy + 0.82, -1.33, 0, 0, 18)
+				e("EarInR", 0.35, 0.7, 0.1, PINK, 0.55, hy + 0.82, -1.33, 0, 0, -18)
+			elseif id == "clapcat" or id == "raccoon" then
+				e("EarL", 0.5, 0.85, 0.25, HC, -0.5, hy + 0.75, -1.2, 0, 0, 14)
+				e("EarR", 0.5, 0.85, 0.25, HC, 0.5, hy + 0.75, -1.2, 0, 0, -14)
+				e("EarInL", 0.25, 0.5, 0.1, id == "clapcat" and "#F48FB1" or "#EDEDED", -0.5, hy + 0.7, -1.33, 0, 0, 14)
+				e("EarInR", 0.25, 0.5, 0.1, id == "clapcat" and "#F48FB1" or "#EDEDED", 0.5, hy + 0.7, -1.33, 0, 0, -14)
+			else
+				e("EarL", 0.55, 0.4, 0.3, HC, -0.85, hy + 0.35, -1.2, 0, 0, 25)
+				e("EarR", 0.55, 0.4, 0.3, HC, 0.85, hy + 0.35, -1.2, 0, 0, -25)
+			end
+		end
+		-- tails
+		if id == "raccoon" then
+			for k = 0, 3 do
+				e("Tail", 0.65, 0.65, 0.6, k % 2 == 0 and "#3A3A3A" or "#9A9A9A", 0, 1.35 + k * 0.18, 1.35 + k * 0.45)
+			end
+		elseif id == "possum" then
+			e("Tail", 0.25, 0.25, 2.2, "#F4B6C2", 0, 0.9, 2.0, 15, 0, 0)
+		elseif id == "clapcat" then
+			e("Tail", 0.3, 2.0, 0.3, BC, 0, 2.2, 1.35, -15, 0, 0)
+		elseif id == "armadillo" then
+			e("Tail", 0.35, 0.35, 1.6, BC, 0, 0.8, 1.7, 12, 0, 0)
+			for k = -1, 2 do
+				e("ShellBand", 2.12, 1.5, 0.35, lighten(BC, 0.12), 0, 1.3, k * 0.5)
+			end
+		elseif not flat then
+			e("Tail", 0.4, 0.4, 0.9, BC, 0, 1.65, 1.35, -35, 0, 0)
+		else
+			e("Tail", 0.5, 0.3, 1.4, BC, 0, 0.55, 1.6)
 		end
 		if def.horns then
-			part(m, "Horns", V(3 * s, 0.25 * s, 0.25 * s), at(0, 2.9, -1.3), "#F5F0E1")
+			for _, side in { -1, 1 } do
+				e("Horn", 1.7, 0.36, 0.36, "#F5F0E1", side * 1.35, hy + 0.55, -1.2, 0, 0, side * -22)
+				e("HornTip", 0.5, 0.3, 0.3, "#3A2A1E", side * 2.1, hy + 0.9, -1.2, 0, 0, side * -40)
+			end
 		end
-		if def.id == "raccoon" then
-			part(m, "Mask", V(1.42 * s, 0.35 * s, 0.1 * s), at(0, 2.45, -1.96), "#1A1A1A")
+		if flat then
+			for k = 0, 4 do
+				local a = math.rad(-60 + k * 30)
+				e("Horns", 0.22, 0.22, 0.6, "#F5F0E1", math.sin(a) * 0.65, hy + 0.45, -1.2 + math.cos(a) * 0.2, 35, 0, 0)
+			end
+			for k = 1, 6 do
+				e("Spike", 0.22, 0.22, 0.22, lighten(BC, 0.3), (k % 3 - 1) * 0.6, by + 0.48, -0.6 + math.floor((k - 1) / 3) * 0.9)
+			end
+			eyeY, eyeZ, eyeX, eyeSize = hy + 0.15, -2.05, 0.45, 0.95
+		else
+			eyeY, eyeZ = hy + 0.2, -1.99
 		end
-		if def.bellyRub then
-			-- pudgy original pup with a little underbite and a pink belly
-			part(m, "Belly", V(1.4 * s, 0.2 * s, 1.6 * s), at(0, 0.62, 0), "#F7B7C3")
-			part(m, "Snout", V(0.8 * s, 0.5 * s, 0.3 * s), at(0, 2.05, -2.05), "#C9AE8F")
+		if id == "raccoon" then
+			e("Mask", 1.6, 0.55, 0.3, "#1A1A1A", 0, eyeY, -1.88)
 		end
-		if def.id == "clapcat" then
-			part(m, "PawL", V(0.35 * s, 0.35 * s, 0.35 * s), at(-0.35, 1.9, -2.1), "#151515")
-			part(m, "PawR", V(0.35 * s, 0.35 * s, 0.35 * s), at(0.35, 1.9, -2.1), "#151515")
+		if id == "clapcat" then
+			part(m, "PawL", V(0.45 * s, 0.45 * s, 0.45 * s), at(-0.32, 1.85, -2.05), BC).Shape = E.Enum.PartType.Ball
+			part(m, "PawR", V(0.45 * s, 0.45 * s, 0.45 * s), at(0.32, 1.85, -2.05), BC).Shape = E.Enum.PartType.Ball
 		end
 	end
-	local eyeY = def.rex and 4.5 or 2.5
-	local eyeZ = def.rex and -1.72 or -1.96
-	part(m, "EyeL", V(0.25 * s, 0.3 * s, 0.1 * s), at(-0.35, eyeY, eyeZ), "#111111")
-	part(m, "EyeR", V(0.25 * s, 0.3 * s, 0.1 * s), at(0.35, eyeY, eyeZ), "#111111")
-	part(m, "ShineL", V(0.1 * s, 0.1 * s, 0.05 * s), at(-0.3, eyeY + 0.07, eyeZ - 0.06), "#FFFFFF")
-	part(m, "ShineR", V(0.1 * s, 0.1 * s, 0.05 * s), at(0.4, eyeY + 0.07, eyeZ - 0.06), "#FFFFFF")
+	-- big shiny eyes
+	for _, side in { -1, 1 } do
+		local eyeColor = id == "clapcat" and "#E8D44D" or DARK
+		e(side < 0 and "EyeL" or "EyeR", 0.32 * eyeSize, 0.44 * eyeSize, 0.16, eyeColor, side * eyeX, eyeY, eyeZ)
+		if id == "clapcat" then
+			e("Pupil", 0.12, 0.34, 0.1, DARK, side * eyeX, eyeY, eyeZ - 0.06)
+		end
+		e(side < 0 and "ShineL" or "ShineR", 0.12 * eyeSize, 0.12 * eyeSize, 0.06, "#FFFFFF", side * eyeX - 0.06, eyeY + 0.1 * eyeSize, eyeZ - 0.08, 0, 0, 0, E.Enum.Material.Neon)
+	end
 	for _, c in ipairs(m:GetChildren()) do
 		if c:IsA("BasePart") then
 			c.CanCollide = false
@@ -556,37 +787,69 @@ local function buildHub(root, cfg, content)
 	surfaceText(banner, E.Enum.NormalId.Front, "🏆 " .. content.Signs.cookoff .. " 🏆", "#FFFFFF", nil).Name = "BannerText"
 	part(stage, "BannerPoleL", V(0.6, 14, 0.6), E.CFrame.new(-15.5, 7, 41.2), "#6B4226", E.Enum.Material.Wood)
 	part(stage, "BannerPoleR", V(0.6, 14, 0.6), E.CFrame.new(15.5, 7, 41.2), "#6B4226", E.Enum.Material.Wood)
-	WorldBuilder.npc(stage, "Granny", E.CFrame.new(-4, 1.8, 39.5) * E.CFrame.Angles(0, math.pi, 0), { skin = "#C68642", shirt = "#9B59B6", pants = "#5B2C6F", hat = "bun", hatColor = "#DDDDDD", glasses = true, label = "Granny Pecan (Head Judge)", labelColor = "#F5B7B1" })
-	WorldBuilder.npc(stage, "JudgeBob", E.CFrame.new(4, 1.8, 39.5) * E.CFrame.Angles(0, math.pi, 0), { skin = "#8D5524", shirt = "#27AE60", hat = "cap", hatColor = "#1E8449", label = "Judge Big Earl" })
+	WorldBuilder.npc(stage, "Granny", E.CFrame.new(-4.5, 1.8, 39.2), { skin = "#C68642", shirt = "#9B59B6", pants = "#5B2C6F", shoes = "#5B2C6F", hat = "bun", hatColor = "#E4E4E4", glasses = true, pearls = true, brows = false, label = "Granny Pecan (Head Judge)", labelColor = "#F5B7B1" })
+	WorldBuilder.npc(stage, "JudgeBob", E.CFrame.new(4.5, 1.8, 39.2), { skin = "#8D5524", shirt = "#27AE60", hat = "cap", hatColor = "#1E8449", beard = "#2A1E1A", belly = true, label = "Judge Big Earl" })
 	local catDef = { id = "clapcat", body = "#151515", head = "#1E1E1E", scale = 0.9, ears = true }
-	local cat = WorldBuilder.critter(E, stage, catDef, E.CFrame.new(0, 5, 37.5) * E.CFrame.Angles(0, math.pi, 0))
+	local cat = WorldBuilder.critter(E, stage, catDef, E.CFrame.new(0, 5, 37.3))
 	cat.Name = "ClapCatJudge"
 	-- leaderboard
-	local lb = part(stage, "Leaderboard", V(14, 16, 0.6), E.CFrame.new(26, 9, 36) * E.CFrame.Angles(0, math.rad(200), 0), "#1A1A1A", E.Enum.Material.SmoothPlastic)
+	-- faces the square (it used to show its blank back to players), in a wood frame
+	local lbCf = lookAt(V(26, 9, 36), V(4, 9, 8))
+	local lb = part(stage, "Leaderboard", V(14, 16, 0.6), lbCf, "#1F2A1F", E.Enum.Material.SmoothPlastic)
+	deco(stage, "LBFrame", V(15.2, 17.2, 0.5), lbCf * E.CFrame.new(0, 0, 0.45), "#6B4226", E.Enum.Material.Wood, true)
+	local lbHead = deco(stage, "LBHeader", V(15.6, 1.8, 0.9), lbCf * E.CFrame.new(0, 9.0, 0), "#B22222", E.Enum.Material.SmoothPlastic, true)
+	surfaceText(lbHead, E.Enum.NormalId.Front, "🏆 COOK-OFF LEADERBOARD", "#FFFFFF", nil)
 	surfaceText(lb, E.Enum.NormalId.Front, "This week's Cook-Off\n(Saturday)\n\nNo entries yet", "#FFE9A8", nil).Name = "BoardText"
 	part(stage, "LBLegL", V(0.6, 2, 0.6), E.CFrame.new(21, 1, 36.5), "#333333", E.Enum.Material.Metal)
 
 	-- Unc Hank: dad jokes
-	local unc = WorldBuilder.npc(hub, "UncHank", E.CFrame.new(-18, 0.4, 10) * E.CFrame.Angles(0, math.rad(130), 0), { skin = "#D1A27A", shirt = "#F39C12", pants = "#2C3E50", hat = "cap", hatColor = "#2C3E50", label = "Unc Hank", apron = "#B22222" })
+	local unc = WorldBuilder.npc(hub, "UncHank", lookAt(V(-18, 0.4, 10), V(-8, 0.4, -12)), { skin = "#D1A27A", shirt = "#F39C12", pants = "#2C3E50", hat = "cap", hatColor = "#2C3E50", label = "Unc Hank", apron = "#B22222", apronText = "UNC", mustache = "#6B4A2E", belly = true, sandals = true })
 	prompt(unc.Torso, "npc:unc", "Hear today's joke", "Unc Hank", 0, 10)
-	part(hub, "UncSocks", V(2.1, 0.4, 1.1), E.CFrame.new(-18, 0.8, 10) * E.CFrame.Angles(0, math.rad(130), 0), "#FFFFFF")
-	part(hub, "UncGrill", V(3, 3, 3), E.CFrame.new(-22, 1.9, 13), "#1A1A1A", E.Enum.Material.Metal)
+	-- Unc's kettle grill (the bowl keeps the UncGrill name; the scenery adds a smoke wisp to it)
+	local kettle = E.CFrame.new(-22.5, 0.4, 13)
+	for k = 0, 2 do
+		local a = k / 3 * math.pi * 2
+		part(hub, "UncGrillLeg", V(0.25, 2.6, 0.25), kettle * E.CFrame.new(math.cos(a) * 0.9, 1.3, math.sin(a) * 0.9) * E.CFrame.Angles(math.sin(a) * 0.25, 0, -math.cos(a) * 0.25), "#2A2A2A", E.Enum.Material.Metal)
+	end
+	local bowl = sph(hub, "UncGrill", V(3.2, 2.0, 3.2), kettle * E.CFrame.new(0, 3.0, 0), "#1A1A1A", E.Enum.Material.Metal)
+	bowl.CanCollide = true
+	sph(hub, "UncGrillLid", V(3.1, 1.6, 3.1), kettle * E.CFrame.new(0.3, 3.9, 0.2) * E.CFrame.Angles(0, 0, math.rad(-18)), "#B22222", E.Enum.Material.Metal)
+	ball(hub, "UncGrillKnob", 0.45, kettle * E.CFrame.new(0.55, 4.75, 0.2), "#C0C0C0", E.Enum.Material.Metal)
 
 	-- The King of the Pit (cowboy hat pitmaster, hums original tunes)
-	local king = WorldBuilder.npc(hub, "KingOfThePit", E.CFrame.new(18, 0.4, 10) * E.CFrame.Angles(0, math.rad(230), 0), { skin = "#E0AC69", shirt = "#ECF0F1", pants = "#1F3A93", hat = "cowboy", hatColor = "#F5F0E1", label = "The King of the Pit", labelColor = "#F5D76E" })
+	local king = WorldBuilder.npc(hub, "KingOfThePit", lookAt(V(18, 0.4, 10), V(8, 0.4, -12)), { skin = "#E0AC69", shirt = "#ECF0F1", pants = "#1F3A93", shoes = "#6B3A1E", hat = "cowboy", hatColor = "#F5F0E1", mustache = "#8A6A4A", buckle = "#F2C14E", scale = 1.05, label = "The King of the Pit", labelColor = "#F5D76E" })
 	prompt(king.Torso, "npc:king", "Say howdy", "The King of the Pit", 0, 10)
 	smoker(hub, "KingSmoker", E.CFrame.new(23, 0.4, 14) * E.CFrame.Angles(0, math.rad(230), 0))
 
-	-- Temp the talking thermometer
+	-- Temp the talking thermometer: a round red bulb with a face, a glass stem, chrome legs
 	local temp = model(hub, "Temp")
-	local stem = cyl(temp, "Stem", 9, 1.2, E.CFrame.new(0, 5.4, -6) * E.CFrame.Angles(0, 0, math.pi / 2), "#ECF0F1", E.Enum.Material.Glass)
-	cyl(temp, "Mercury", 6, 0.6, E.CFrame.new(0, 4.4, -6) * E.CFrame.Angles(0, 0, math.pi / 2), "#E74C3C", E.Enum.Material.Neon)
-	ball(temp, "Bulb", 2.4, E.CFrame.new(0, 1.6, -6), "#E74C3C", E.Enum.Material.Neon)
-	local face = part(temp, "Face", V(2.2, 2.2, 0.2), E.CFrame.new(0, 8, -6.7), "#ECF0F1", E.Enum.Material.SmoothPlastic)
-	surfaceText(face, E.Enum.NormalId.Front, "◕‿◕", "#111111", nil).Name = "FaceText"
-	local faceBack = part(temp, "FaceBack", V(2.2, 2.2, 0.2), E.CFrame.new(0, 8, -5.3) * E.CFrame.Angles(0, math.pi, 0), "#ECF0F1", E.Enum.Material.SmoothPlastic)
-	surfaceText(faceBack, E.Enum.NormalId.Front, "◕‿◕", "#111111", nil).Name = "FaceText"
-	billboard(stem, "NameTag", "Temp", 6, 60, "#FFFFFF", 120, 30)
+	local tc = E.CFrame.new(0, 0.4, -6)
+	local function tp(x, y, z, rz)
+		return tc * E.CFrame.new(x, y, z) * E.CFrame.Angles(0, 0, math.rad(rz or 0))
+	end
+	for _, side in { -1, 1 } do
+		cyl(temp, "Leg", 1.3, 0.3, tp(side * 0.6, 1.15, 0) * upright(), "#C9CED4", E.Enum.Material.Metal)
+		sph(temp, "Shoe", V(0.9, 0.55, 1.3), tp(side * 0.62, 0.3, -0.25), "#D93636")
+		sph(temp, "Arm", V(0.35, 1.5, 0.35), tp(side * 1.75, 2.7, -0.2, side * 38), "#C9CED4", E.Enum.Material.Metal)
+		ball(temp, "Glove", 0.7, tp(side * 2.2, 2.05, -0.3), "#FFFFFF")
+	end
+	ball(temp, "Bulb", 3.2, tp(0, 2.7, 0), "#E74C3C")
+	sph(temp, "BulbShine", V(0.4, 0.22, 0.1), tp(-0.72, 3.5, -1.3) * E.CFrame.Angles(math.rad(-30), math.rad(25), math.rad(35)), "#FF9C8C", E.Enum.Material.SmoothPlastic)
+	for _, side in { -1, 1 } do
+		sph(temp, "EyeWhite", V(0.75, 0.9, 0.3), tp(side * 0.55, 3.05, -1.4), "#FFFFFF")
+		sph(temp, "Pupil", V(0.42, 0.55, 0.2), tp(side * 0.5, 3.0, -1.55), "#1E1614")
+		sph(temp, "Shine", V(0.15, 0.15, 0.1), tp(side * 0.5 - 0.08, 3.15, -1.65), "#FFFFFF", E.Enum.Material.Neon)
+		sph(temp, "Cheek", V(0.5, 0.28, 0.15), tp(side * 1.0, 2.45, -1.28), "#FF8FA3")
+	end
+	sph(temp, "Smile", V(1.0, 0.36, 0.2), tp(0, 2.2, -1.5), "#5A1F2E")
+	sph(temp, "Tongue", V(0.4, 0.18, 0.12), tp(0.1, 2.1, -1.58), "#FF8FA3")
+	local stem = cyl(temp, "Stem", 7, 1.4, tp(0, 7.5, 0) * upright(), "#ECF0F1", E.Enum.Material.Glass, { Transparency = 0.55 })
+	cyl(temp, "Mercury", 5.4, 0.7, tp(0, 6.8, 0) * upright(), "#D7261E", E.Enum.Material.SmoothPlastic)
+	for k = 0, 5 do
+		part(temp, "Tick", V(k % 2 == 0 and 0.5 or 0.3, 0.08, 0.06), tp(0.25, 5.2 + k, -0.72), "#2A2A2A")
+	end
+	ball(temp, "Cap", 1.45, tp(0, 11.0, 0), "#C9CED4", E.Enum.Material.Metal)
+	billboard(stem, "NameTag", "Temp", 4.6, 60, "#FFFFFF", 120, 30)
 	prompt(stem, "npc:temp", "Talk to Temp", "Temp", 0, 10)
 
 	-- Sunday potluck table with the tiny "Jesus loves you" figure (Mike's egg)
@@ -713,19 +976,6 @@ local function pick(t)
 	return t[1 + math.floor(rnd() * #t) % #t]
 end
 
-local function deco(parent, name, size, cf, color, material, shadow)
-	return part(parent, name, size, cf, color, material, { CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = shadow == true })
-end
-local function dball(parent, name, d, cf, color, material, shadow)
-	local p = deco(parent, name, V(d, d, d), cf, color, material, shadow)
-	p.Shape = E.Enum.PartType.Ball
-	return p
-end
-local function dcyl(parent, name, length, diameter, cf, color, material, shadow)
-	local p = deco(parent, name, V(length, diameter, diameter), cf, color, material, shadow)
-	p.Shape = E.Enum.PartType.Cylinder
-	return p
-end
 local function at(pos)
 	return E.CFrame.new(pos)
 end
@@ -740,9 +990,6 @@ local function streaming(m, mode)
 	pcall(function()
 		m.ModelStreamingMode = E.Enum.ModelStreamingMode[mode]
 	end)
-end
-local function upright()
-	return E.CFrame.Angles(0, 0, math.pi / 2) -- turns an X-axis cylinder upright
 end
 
 -- ---------- reusable props ----------
@@ -1025,12 +1272,11 @@ local function smokeWisp(parentPart)
 	s.Parent = parentPart
 end
 
--- ---------- the pibble landmark ----------
--- "Big Biscuit": an original belly-up pibble statue. Blue-gray coat, white blaze and paws,
--- a big pink belly in the air, a wide round head with a cheek-to-cheek grin. Built from
--- SpecialMesh spheres (ellipsoids) so the curves stay smooth with few parts. The head is at
--- -X, the belly faces up, the face is turned toward the spawn (-Z). Prompt kind
--- "landmark:pibble".
+-- ---------- Big Bertha, the hub landmark ----------
+-- The King of the Pit's 1,000-gallon trailer smoker: a huge riveted barrel with a glowing
+-- firebox, a tall smokestack, and a ranch dinner bell on an A-frame. Ringing the bell is the
+-- "landmark:bell" prompt (daily glaze plus the 3-player Dinner Bell pile-on). The "Say
+-- Brisket!" photo spot stands in front. The front faces the spawn (-Z).
 local function ell(parent, name, size, cf, color, material)
 	local p = deco(parent, name, size, cf, color, material or E.Enum.Material.SmoothPlastic, false)
 	local mesh = E.Instance.new("SpecialMesh")
@@ -1040,90 +1286,98 @@ local function ell(parent, name, size, cf, color, material)
 end
 WorldBuilder.ellipsoid = ell
 
-function WorldBuilder.pibble(parent, base, content)
-	local m = model(parent, "BigBiscuit")
-	local S = 1.3
-	local COAT, COAT_D, MUZ = "#7C8590", "#5E6772", "#8D96A1"
-	local WHITE, PINK, NOSE = "#F4F1EC", "#F59BB0", "#2A2B30"
-	local MOUTH, TONGUE = "#5A1F2E", "#FF6F8E"
-	local top = base * E.CFrame.new(1.6, 2.6, 0) -- plinth top, nudged so the head sits on it
-	local function T(x, y, z, rx, ry, rz)
-		return top * E.CFrame.new(x * S, y * S, z * S) * E.CFrame.Angles(math.rad(rx or 0), math.rad(ry or 0), math.rad(rz or 0))
+function WorldBuilder.bertha(parent, base, content)
+	local m = model(parent, "BigBertha")
+	local IRON, IRON_D, RUST, STEEL = "#3A3536", "#262223", "#7A3B22", "#B9BEC4"
+	local function B(x, y, z, rx, ry, rz)
+		return base * E.CFrame.new(x, y, z) * E.CFrame.Angles(math.rad(rx or 0), math.rad(ry or 0), math.rad(rz or 0))
 	end
-	local function e(name, sx, sy, sz, cf, c, mat)
-		return ell(m, name, V(sx * S, sy * S, sz * S), cf, c, mat)
-	end
-	-- plinth (solid)
-	cyl(m, "Plinth", 2, 25, base * E.CFrame.new(0, 1.0, 0) * upright(), "#D9CDB8", E.Enum.Material.Slate)
-	cyl(m, "PlinthTrim", 0.6, 25.8, base * E.CFrame.new(0, 2.2, 0) * upright(), "#BFAF95", E.Enum.Material.Slate)
-	local plaque = part(m, "Plaque", V(9, 1.9, 0.3), base * E.CFrame.new(0, 1.1, -12.55), "#C9A04A", E.Enum.Material.Metal)
-	surfaceText(plaque, E.Enum.NormalId.Front, content and content.Signs and content.Signs.pibble or "BIG BISCUIT\nCertified Good Boy · Bites: 0 · Belly rubs: ∞", "#3A2414", nil)
-	-- a cushion so he lies on something soft
-	e("Cushion", 17, 1.4, 9.5, T(-0.5, 0.5, 0.3), "#D93636", E.Enum.Material.Fabric)
+	-- brick pad
+	cyl(m, "Pad", 1, 25, B(0, 0.5, 0) * upright(), "#B5654A", E.Enum.Material.Brick)
+	cyl(m, "PadTrim", 0.4, 25.8, B(0, 1.05, 0) * upright(), "#D9CDB8", E.Enum.Material.Slate)
+	local plaque = part(m, "Plaque", V(9, 1.6, 0.3), B(0, 0.8, -12.55), "#C9A04A", E.Enum.Material.Metal)
+	surfaceText(plaque, E.Enum.NormalId.Front, content and content.Signs and content.Signs.bertha or "BIG BERTHA", "#3A2414", nil)
 
-	-- body: a stocky barrel lying on its back
-	e("Torso", 11, 6.4, 7.2, T(0.4, 3.4, 0), COAT)
-	local belly = e("Belly", 8.2, 3.2, 5.4, T(0.9, 5.7, -0.4), PINK)
-	e("ChestBlaze", 4.2, 3.6, 5.2, T(-3.6, 5.0, -0.4), WHITE)
-	e("Neck", 4.2, 5.6, 6.2, T(-5.2, 3.9, -0.2), COAT)
-	local collar = cyl(m, "Collar", 1.0 * S, 6.9 * S, T(-5.3, 4.0, -0.2, 0, 0, 0), "#F2C14E", E.Enum.Material.Foil)
-	collar.CanCollide = false
-	dball(m, "Tag", 1.1 * S, T(-5.8, 3.4, -3.4), "#FFD86B", E.Enum.Material.Foil, false)
-
-	-- legs in the air: short, sturdy, a little bent, white socks
-	for _, side in { -1, 1 } do
-		local z = side * 2.2 - 0.3
-		e("FrontLeg" .. side, 2.2, 4.2, 2.2, T(-3.0, 7.0, z, 0, 0, 28), COAT)
-		e("FrontPaw" .. side, 2.6, 1.8, 2.5, T(-4.1, 8.9, z, 0, 0, 40), WHITE)
-		e("Haunch" .. side, 4.4, 4.0, 3.2, T(3.9, 4.8, side * 2.6 - 0.3), COAT)
-		e("BackLeg" .. side, 2.1, 4.0, 2.1, T(4.8, 7.3, side * 2.6 - 0.3, 0, 0, -22), COAT)
-		e("BackPaw" .. side, 2.6, 1.8, 2.5, T(5.6, 9.1, side * 2.6 - 0.3, 0, 0, -30), WHITE)
-	end
-	e("Tail", 4, 1.1, 1.1, T(7.4, 2.6, 0.2, 0, 0, 25), COAT)
-
-	-- head: wide and round, rolled toward the viewer with a cheek-to-cheek grin
-	local H = top * E.CFrame.new(-7.6 * S, 4.4 * S, -0.9 * S) * E.CFrame.Angles(math.rad(-8), math.rad(-10), math.rad(-10))
-	local function h(x, y, z, rx, ry, rz)
-		return H * E.CFrame.new(x * S, y * S, z * S) * E.CFrame.Angles(math.rad(rx or 0), math.rad(ry or 0), math.rad(rz or 0))
-	end
-	local head = e("Skull", 8.4, 5.2, 5.8, h(0, 0.6, 0), COAT)
-	e("CheekL", 4.0, 3.6, 3.8, h(-2.6, -0.8, -1.25), COAT)
-	e("CheekR", 4.0, 3.6, 3.8, h(2.6, -0.8, -1.25), COAT)
-	e("Muzzle", 4.6, 2.6, 3.0, h(0, -0.5, -2.5), MUZ)
-	e("Blaze", 0.9, 3.4, 0.6, h(0, 1.15, -2.85, -28, 0, 0), WHITE)
-	e("Nose", 2.0, 1.2, 1.1, h(0, 0.3, -3.85), NOSE)
-	dball(m, "NoseShine", 0.4 * S, h(-0.45, 0.6, -4.3), "#FFFFFF", E.Enum.Material.SmoothPlastic, false)
-	e("Mouth", 5.0, 1.9, 1.2, h(0, -1.5, -3.15), MOUTH)
-	e("SmileL", 1.2, 0.55, 0.6, h(-2.55, -0.95, -2.85, 0, 0, 35), MOUTH)
-	e("SmileR", 1.2, 0.55, 0.6, h(2.55, -0.95, -2.85, 0, 0, -35), MOUTH)
-	e("Chin", 3.0, 1.0, 2.2, h(0, -2.45, -2.4), MUZ)
-	e("Tongue", 1.8, 0.7, 2.0, h(0.3, -2.0, -3.55, 25, 0, 0), TONGUE)
-	-- happy squinty eyes (^ ^), set wide
-	for _, side in { -1, 1 } do
-		local x = side * 1.95
-		e("EyeA" .. side, 0.95, 0.38, 0.4, h(x - 0.35, 1.25, -2.62, 0, 0, 32), NOSE)
-		e("EyeB" .. side, 0.95, 0.38, 0.4, h(x + 0.35, 1.25, -2.62, 0, 0, -32), NOSE)
-		-- folded rose ears, low on the sides
-		e("Ear" .. side, 2.5, 1.15, 0.7, h(side * 4.15, 0.7, -1.0, 0, side * -30, side * -78), COAT_D)
-	end
-
-	-- a bone by his head
-	local bone = T(-1.0, 1.4, -5.0) * yaw(0.4)
-	dcyl(m, "Bone", 2.8 * S, 0.7 * S, bone, WHITE, E.Enum.Material.SmoothPlastic, false)
-	for _, bx in { -1.4, 1.4 } do
-		for _, bz in { -0.35, 0.35 } do
-			dball(m, "BoneKnob", 0.85 * S, bone * E.CFrame.new(bx * S, 0, bz * S), WHITE, E.Enum.Material.SmoothPlastic, false)
+	-- trailer: frame, axle, two big wheels each side, tongue
+	part(m, "Frame", V(20, 0.7, 6.4), B(-1, 3.4, 0), IRON_D, E.Enum.Material.Metal)
+	part(m, "Tongue", V(4, 0.5, 0.6), B(10.5, 3.2, 0), IRON_D, E.Enum.Material.Metal)
+	dball(m, "Hitch", 0.9, B(12.4, 3.2, 0), STEEL, E.Enum.Material.Metal, false)
+	part(m, "Jack", V(0.4, 2.2, 0.4), B(11.8, 2.1, 0), STEEL, E.Enum.Material.Metal)
+	for _, wx in { -4.8, -1.2 } do
+		for _, wz in { -3.6, 3.6 } do
+			dcyl(m, "Tire", 1.1, 3.6, B(wx, 2.8, wz, 0, 90, 0), "#1C1C1C", E.Enum.Material.SmoothPlastic, true)
+			dcyl(m, "Hub", 1.2, 1.5, B(wx, 2.8, wz, 0, 90, 0), STEEL, E.Enum.Material.Metal, false)
 		end
 	end
-	-- lights & label
-	local glow = E.Instance.new("PointLight")
-	glow.Range = 16
-	glow.Brightness = 0.8
-	glow.Color = hex("#FFD9E2")
-	glow.Parent = belly
-	billboard(head, "Label", "Big Biscuit 🐶", 8, 160, "#FFC83C", 260, 40)
-	prompt(belly, "landmark:pibble", "Rub the belly", "Big Biscuit", 0.6, 16)
-	-- "Say Brisket!" photo spot: a camera on a tripod facing his face (opens the share sheet)
+	-- the barrel: 16 long, 7 across, with riveted bands and a lid seam
+	local barrel = cyl(m, "Barrel", 16, 7, B(0, 7.4, 0), IRON, E.Enum.Material.Metal)
+	for _, bx in { -7.3, -2.5, 2.5, 7.3 } do
+		dcyl(m, "Band", 0.45, 7.25, B(bx, 7.4, 0), IRON_D, E.Enum.Material.Metal, false)
+	end
+	dcyl(m, "EndCapL", 0.3, 6.4, B(-8.05, 7.4, 0), RUST, E.Enum.Material.Metal, false)
+	dcyl(m, "EndCapR", 0.3, 6.4, B(8.05, 7.4, 0), RUST, E.Enum.Material.Metal, false)
+	deco(m, "LidSeam", V(15.2, 0.18, 0.2), B(0, 7.7, -3.55), IRON_D, E.Enum.Material.Metal, false)
+	-- lid handle: a long steel bar on standoffs
+	dcyl(m, "LidHandle", 10, 0.45, B(0, 7.0, -4.3), STEEL, E.Enum.Material.Metal, false)
+	for _, hx in { -4.6, 4.6 } do
+		deco(m, "HandlePost", V(0.3, 0.3, 0.9), B(hx, 7.0, -3.85), STEEL, E.Enum.Material.Metal, false)
+	end
+	-- name plate on the lid
+	local nameplate = part(m, "NamePlate", V(7.4, 1.5, 0.2), B(0, 9.6, -2.82, 38, 0, 0), "#E8B04A", E.Enum.Material.Metal)
+	surfaceText(nameplate, E.Enum.NormalId.Front, "BIG BERTHA", "#2A1A10", nil)
+	-- dial thermometer on the lid
+	dcyl(m, "Gauge", 0.35, 1.5, B(5.4, 9.6, -2.85, 38, 0, 0) * E.CFrame.Angles(0, math.rad(90), 0), "#F4F1EC", E.Enum.Material.SmoothPlastic, false)
+	deco(m, "GaugeNeedle", V(0.1, 0.6, 0.08), B(5.4, 9.62, -3.04, 38, 0, 0) * E.CFrame.Angles(0, 0, math.rad(-35)), "#D93636", E.Enum.Material.SmoothPlastic, false)
+	-- firebox with a glowing door
+	part(m, "Firebox", V(5.2, 5.2, 5.2), B(-10.6, 6.4, 0), IRON, E.Enum.Material.Metal)
+	local door = part(m, "FireDoor", V(3.2, 2.2, 0.2), B(-10.6, 5.8, -2.65), "#FF7A1A", E.Enum.Material.Neon)
+	door.CanCollide = false
+	for k = -1, 1 do
+		deco(m, "DoorGrate", V(0.18, 2.2, 0.12), B(-10.6 + k * 0.9, 5.8, -2.78), IRON_D, E.Enum.Material.Metal, false)
+	end
+	dcyl(m, "Damper", 0.3, 1.6, B(-10.6, 7.9, -2.65, 0, 90, 0), STEEL, E.Enum.Material.Metal, false)
+	local fire = E.Instance.new("PointLight")
+	fire.Color = hex("#FF8A3D")
+	fire.Range = 18
+	fire.Brightness = 1.6
+	fire.Parent = door
+	-- logs stacked under the firebox end
+	for k = 0, 2 do
+		dcyl(m, "Log", 3.4, 1.0, B(-10.6, 1.6 + k * 0.85, -1.2 + (k % 2) * 1.1, 0, 90, 0), "#7A4A2A", E.Enum.Material.Wood, false)
+	end
+	-- smokestack with a cap and a steady plume
+	local chimney = cyl(m, "Chimney", 10, 1.5, B(7.2, 15.0, 0) * upright(), IRON_D, E.Enum.Material.Metal)
+	dcyl(m, "StackCap", 0.4, 2.6, B(7.2, 20.3, 0) * upright(), IRON_D, E.Enum.Material.Metal, false)
+	local smoke = E.Instance.new("Smoke")
+	smoke.Name = "Plume"
+	smoke.Size = 5
+	smoke.RiseVelocity = 6
+	smoke.Opacity = 0.25
+	smoke.Color = hex("#E8E8E8")
+	smoke.Parent = chimney
+	-- a giant brisket resting on the work shelf (it's always ready for a photo)
+	part(m, "Shelf", V(5, 0.4, 2.6), B(3.5, 4.8, -4.4), "#8B5A2B", E.Enum.Material.WoodPlanks)
+	ell(m, "ShowBrisket", V(3.8, 1.3, 2.0), B(3.5, 5.55, -4.4), "#4A2418", E.Enum.Material.SmoothPlastic)
+	ell(m, "ShowBrisketFat", V(3.0, 0.5, 1.6), B(3.5, 6.05, -4.4), "#6E3A22", E.Enum.Material.SmoothPlastic)
+
+	-- the dinner bell: a brass ranch bell on a wooden A-frame (the bell itself swings in Fx)
+	local frameCf = B(9.5, 0, -7.5, 0, -25, 0)
+	for _, sx in { -2.2, 2.2 } do
+		part(m, "BellPost", V(0.8, 9.5, 0.8), frameCf * E.CFrame.new(sx, 5.5, 0), "#6B4226", E.Enum.Material.Wood)
+	end
+	part(m, "BellBeam", V(5.6, 0.8, 0.9), frameCf * E.CFrame.new(0, 10.4, 0), "#8B5A2B", E.Enum.Material.Wood)
+	local bellModel = model(m, "DinnerBell")
+	local yoke = part(bellModel, "Yoke", V(1.8, 0.5, 0.6), frameCf * E.CFrame.new(0, 9.75, 0), "#3A2414", E.Enum.Material.Wood)
+	yoke.CanCollide = false
+	local bell = ell(bellModel, "Bell", V(2.6, 3.0, 2.6), frameCf * E.CFrame.new(0, 8.3, 0), "#E0B040", E.Enum.Material.Foil)
+	dcyl(bellModel, "BellLip", 0.45, 3.2, frameCf * E.CFrame.new(0, 7.05, 0) * upright(), "#C9962E", E.Enum.Material.Foil, false)
+	dball(bellModel, "Clapper", 0.7, frameCf * E.CFrame.new(0, 6.6, 0), "#5A4520", E.Enum.Material.Metal, false)
+	deco(bellModel, "Rope", V(0.15, 4.8, 0.15), frameCf * E.CFrame.new(0.9, 5.0, 0), "#D9C29A", E.Enum.Material.Fabric, false)
+	bellModel.PrimaryPart = yoke
+	billboard(bell, "Label", "🔔 Big Bertha's Dinner Bell", 4.2, 160, "#FFC83C", 300, 40)
+	prompt(bell, "landmark:bell", "Ring the bell", "Big Bertha's Dinner Bell", 0, 14)
+
+	-- "Say Brisket!" photo spot: a camera on a tripod aimed at Bertha (opens the share sheet)
 	local cam = base * E.CFrame.new(-6, 0, -17) * E.CFrame.Angles(0, math.rad(200), 0)
 	for i = 0, 2 do
 		local a2 = i / 3 * math.pi * 2
@@ -1139,7 +1393,7 @@ function WorldBuilder.pibble(parent, base, content)
 	surfaceText(board, E.Enum.NormalId.Back, "📸 SAY BRISKET!", "#3A2414", nil)
 	surfaceText(board, E.Enum.NormalId.Front, "📸 SAY BRISKET!", "#3A2414", nil)
 	prompt(body, "ui:photo", "Snap & share", "Say Brisket! photo spot", 0, 10)
-	-- bluebonnet bed around the plinth
+	-- bluebonnet bed around the pad
 	for i = 0, 7 do
 		local a = i / 8 * math.pi * 2 + math.pi / 8
 		if i == 5 or i == 6 then
@@ -1147,7 +1401,7 @@ function WorldBuilder.pibble(parent, base, content)
 		end
 		flowerPatch(m, (base * E.CFrame.new(math.cos(a) * 14.2, 0.4, math.sin(a) * 14.2)).Position, 1.4, 5, i % 2 == 0 and "bluebonnet" or "mix")
 	end
-	return m
+	return m, barrel
 end
 
 -- ---------- per-plot dressing (outside every gameplay footprint) ----------
@@ -1367,7 +1621,7 @@ local function buildScenery(map, cfg, content)
 	fireflies(hubDecor, E.CFrame.new(0, 4, -262), V(160, 6, 30))
 	fireflies(hubDecor, E.CFrame.new(0, 5, 230), V(200, 8, 60))
 	-- The landmark itself lives in the hub so it's on the spawn sightline.
-	WorldBuilder.pibble(hubDecor, E.CFrame.new(0, 0.4, 14), content)
+	WorldBuilder.bertha(hubDecor, E.CFrame.new(0, 0.4, 14), content)
 
 	-- Creek dressing: a footbridge, cattails, more rocks, lily pads.
 	local creekDecor = model(scenery, "CreekDecor")

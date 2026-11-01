@@ -484,8 +484,8 @@ test("Unc has a month of daily jokes", function()
 end)
 
 print("Hype (social + clip moments)")
-test("Zoomies need 3 different rubbers inside the window, then respect the cooldown", function()
-	local Z = Config.Zoomies
+test("Dinner Bell needs 3 different ringers inside the window, then respects the cooldown", function()
+	local Z = Config.DinnerBell
 	local rubs = {}
 	rubs[1] = 100
 	rubs[1] = 105 -- same player twice still counts once
@@ -497,7 +497,7 @@ test("Zoomies need 3 different rubbers inside the window, then respect the coold
 	n, go = Hype.pileOn(rubs, 118, Z.window, Z.need, -1e9, Z.cooldown)
 	eq(n, 3)
 	eq(go, true)
-	-- stale rubs fall out of the window
+	-- stale rings fall out of the window
 	n = Hype.pileOn(rubs, 140, Z.window, Z.need, 118, Z.cooldown)
 	eq(n, 0)
 	-- cooldown blocks a second trigger right away

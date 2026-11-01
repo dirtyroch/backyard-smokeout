@@ -125,10 +125,10 @@ local function awardBadge(player: Player, key: string)
 end
 GameService.awardBadge = awardBadge
 
--- Big Biscuit Zoomies: a free server-wide tip bonus (set by EggService).
-GameService.zoomiesUntil = 0
-function GameService.zoomiesBonus(): number
-	return workspace:GetServerTimeNow() < GameService.zoomiesUntil and Config.Zoomies.tipBonus or 0
+-- Big Bertha's Dinner Bell: a free server-wide tip bonus (set by EggService).
+GameService.dinnerUntil = 0
+function GameService.dinnerBonus(): number
+	return workspace:GetServerTimeNow() < GameService.dinnerUntil and Config.DinnerBell.tipBonus or 0
 end
 
 function GameService.hasPass(player: Player, key: string): boolean
@@ -287,7 +287,7 @@ local function plateValue(player: Player, data: any, plate: any, critter: any?, 
 		rankMult = rankMult(data),
 		crewMult = Economy.crewMult(r and r.crew or 0, Config.Crew.perFriend, Config.Crew.maxFriends),
 		tipMult = critter and critter.tip or 1,
-		sauceTip = (consumeTip and useSauce(data, "tip") or 0) + GameService.zoomiesBonus(),
+		sauceTip = (consumeTip and useSauce(data, "tip") or 0) + GameService.dinnerBonus(),
 		flipMult = flipMult,
 		comboMult = 1 + combo * Config.Flip.comboStep,
 		orderBonus = orderMatch and Config.MATCH_ORDER_BONUS or 1,
@@ -996,7 +996,7 @@ local function snapshot(player: Player, data: any): any
 			local cur = (r.rush and r.rush.w == w) and r.rush or nil
 			return { n = cur and cur.n or 0, need = Config.Rush.need, done = cur ~= nil and cur.done, ends = Hype.rushEnds(w, Config.Rush.period) }
 		end)(),
-		zoomiesUntil = GameService.zoomiesUntil,
+		dinnerUntil = GameService.dinnerUntil,
 		season = GameService.currentSeason(),
 		saturday = GameService.isSaturday(),
 		suds = GameService.isSudsWeekend(),

@@ -41,7 +41,7 @@ local EGGS = {
 	{ id = "meteorite", hint = "Cook the rarest cut there is." },
 	{ id = "cooked", hint = "Make Granny Pecan say you COOKED." },
 	{ id = "sixseven", hint = "Some tips just hit different. Watch the last two digits." },
-	{ id = "zoomies", hint = "Big Biscuit loves a crowd. Bring two friends to the belly." },
+	{ id = "dinnerbell", hint = "Big Bertha's bell is loudest with a crowd. Bring two friends and ring it together." },
 }
 
 local function S(): any
@@ -112,8 +112,8 @@ function Panels.invite()
 	if ok and can then
 		pcall(function()
 			local opts = Instance.new("ExperienceInviteOptions")
-			opts.PromptMessage = "Come rub Big Biscuit's belly with me! 3 rubs = ZOOMIES 🐶"
-			opts.LaunchData = "biscuit"
+			opts.PromptMessage = "Help me ring Big Bertha's dinner bell! 3 rings = bonus tips for the whole server 🔔"
+			opts.LaunchData = "bertha"
 			SocialService:PromptGameInvite(player, opts)
 		end)
 	else

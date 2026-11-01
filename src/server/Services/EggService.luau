@@ -15,7 +15,7 @@
 	  meteorite- cook a Meteorite cut
 	  cooked   - get a "Cooked" rating from Granny Pecan
 	  sixseven - serve a plate worth ...67 coins ("6-7!")
-	  zoomies  - be part of a 3-player Big Biscuit belly-rub pile-on (server-wide Zoomies)
+	  dinnerbell - be one of 3 players who ring Big Bertha's dinner bell together (server-wide tip bonus)
 ]]
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local Players = game:GetService("Players")
@@ -32,10 +32,10 @@ local ctx: any = nil
 local rng = Random.new()
 local tempPokes: { [Player]: number } = {}
 
-EggService.EGGS = { "blessed", "roof", "creek", "apron", "king", "temp", "rex", "meteorite", "cooked", "sixseven", "zoomies" }
+EggService.EGGS = { "blessed", "roof", "creek", "apron", "king", "temp", "rex", "meteorite", "cooked", "sixseven", "dinnerbell" }
 
-local bellyRubs: { [number]: number } = {}
-local lastZoomies = -1e9
+local bellRings: { [number]: number } = {}
+local lastDinner = -1e9
 
 local function today(): number
 	return TimeUtil.dayNumber(os.time(), Config.TIMEZONE_OFFSET_HOURS)
@@ -204,59 +204,59 @@ handlers["egg:apron"] = function(player, data)
 	end
 end
 
--- Big Biscuit, the bronze pibble statue in the hub square. One belly rub a day pays a tiny
--- tip buff; every rub after that is free emotional support.
-local PIBBLE_LINES = {
-	"Big Biscuit's tail goes thump-thump on the plinth. (It's bronze. It shouldn't do that.)",
-	"His belly is shiny from a thousand rubs. You add one more. He grins wider somehow.",
-	"Somewhere, a brisket is resting easy because Big Biscuit is on duty.",
-	"The plaque says \"Bites: 0.\" The plaque is correct.",
-	"You hear a tiny bronze \"boof.\" Good boy.",
+-- Big Bertha's dinner bell, by the King of the Pit's 1,000-gallon smoker in the hub square.
+-- One ring a day pays a small tip buff; every ring after that is free noise.
+local BELL_LINES = {
+	"CLANG! Somewhere across the county, a brisket sits up a little straighter.",
+	"The bell rings out over the square. Big Bertha answers with a big puff of smoke.",
+	"The King of the Pit tips his hat without looking up. \"That's the sound of supper.\"",
+	"You ring it. A roadrunner stops, listens, and starts walking toward the food.",
+	"Big Bertha's firebox crackles. She heard you.",
 }
 
--- Zoomies: enough different players rub the belly inside the window -> free server-wide tips.
-local function checkZoomies(player: Player)
-	local Z = Config.Zoomies
+-- Dinner Bell pile-on: enough different players ring inside the window -> free server-wide tips.
+local function checkDinnerBell(player: Player)
+	local B = Config.DinnerBell
 	local now = workspace:GetServerTimeNow()
-	bellyRubs[player.UserId] = now
-	local n, go = Hype.pileOn(bellyRubs, now, Z.window, Z.need, lastZoomies, Z.cooldown)
+	bellRings[player.UserId] = now
+	local n, go = Hype.pileOn(bellRings, now, B.window, B.need, lastDinner, B.cooldown)
 	if go then
-		lastZoomies = now
-		ctx.Game.zoomiesUntil = now + Z.minutes * 60
-		ctx.Game.announce(string.format("🐶 ZOOMIES! %d pitmasters rubbed Big Biscuit's belly. Everyone gets +%d%% tips for %d min!", n, math.floor(Z.tipBonus * 100 + 0.5), Z.minutes), "#FF8FB1")
-		ctx.Remotes.Push:FireAllClients("fx", { kind = "zoomies", data = { n = n } })
-		for id in pairs(bellyRubs) do
+		lastDinner = now
+		ctx.Game.dinnerUntil = now + B.minutes * 60
+		ctx.Game.announce(string.format("🔔 DINNER'S ON! %d pitmasters rang Big Bertha's bell. Everyone gets +%d%% tips for %d min!", n, math.floor(B.tipBonus * 100 + 0.5), B.minutes), "#FFC83C")
+		ctx.Remotes.Push:FireAllClients("fx", { kind = "dinnerbell", data = { n = n } })
+		for id in pairs(bellRings) do
 			local p = Players:GetPlayerByUserId(id)
 			local pd = p and ctx.Game.dataOf(p)
 			if p and pd then
-				EggService.found(p, pd, "zoomies")
+				EggService.found(p, pd, "dinnerbell")
 			end
 		end
-		table.clear(bellyRubs)
+		table.clear(bellRings)
 		for p in pairs(ctx.Game.runtime) do
 			ctx.Game.markDirty(p)
 		end
-	elseif now - lastZoomies >= Z.cooldown then
-		ctx.Game.toast(player, string.format("🐾 Belly-rub pile-on: %d/%d. Get %d more to rub within %ds for server-wide ZOOMIES!", n, Z.need, Z.need - n, Z.window), "info")
+	elseif now - lastDinner >= B.cooldown then
+		ctx.Game.toast(player, string.format("🔔 Dinner bell: %d/%d. Get %d more pitmasters to ring it within %ds and the whole server gets bonus tips!", n, B.need, B.need - n, B.window), "info")
 	end
 end
 
-handlers["landmark:pibble"] = function(player, data)
+handlers["landmark:bell"] = function(player, data)
 	local d = today()
-	ctx.Game.fx(player, "pibble", {})
-	checkZoomies(player)
-	local line = PIBBLE_LINES[rng:NextInteger(1, #PIBBLE_LINES)]
-	if data.daily.pibbleDay ~= d then
-		data.daily.pibbleDay = d
-		ctx.Game.addSauce(data, "goodboy")
-		if not data.titles["Good Boy Certified"] then
-			data.titles["Good Boy Certified"] = true
-			ctx.Game.toast(player, "New title: Good Boy Certified", "good")
+	ctx.Game.fx(player, "bell", {})
+	checkDinnerBell(player)
+	local line = BELL_LINES[rng:NextInteger(1, #BELL_LINES)]
+	if data.daily.bellDay ~= d then
+		data.daily.bellDay = d
+		ctx.Game.addSauce(data, "burntend")
+		if not data.titles["Dinner Bell Ringer"] then
+			data.titles["Dinner Bell Ringer"] = true
+			ctx.Game.toast(player, "New title: Dinner Bell Ringer", "good")
 		end
 		ctx.Game.markDirty(player)
-		dialog(player, "Big Biscuit", line .. "\n\nHe drops a bottle of Good Boy Glaze at your feet. (+20% tips for 3 serves.) One belly rub reward a day.")
+		dialog(player, "Big Bertha", line .. "\n\nThe King of the Pit slides you a jar of Burnt-End Glaze. (+20% tips for 3 serves.) You get one jar a day.")
 	else
-		dialog(player, "Big Biscuit", line .. "\n\n(Already got your treat today. The rubs are still free.)")
+		dialog(player, "Big Bertha", line .. "\n\n(You already got today's glaze. Ringing is still free.)")
 	end
 end
 

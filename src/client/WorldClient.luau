@@ -26,7 +26,7 @@ function WorldClient.photo()
 			(CaptureService :: any):TakeScreenshotCaptureAsync(function(_result: any, capture: any)
 				if capture then
 					pcall(function()
-						(CaptureService :: any):PromptShareCapture(Content.fromObject(capture), "biscuit", function() end, function() end)
+						(CaptureService :: any):PromptShareCapture(Content.fromObject(capture), "bertha", function() end, function() end)
 					end)
 				end
 			end, {})

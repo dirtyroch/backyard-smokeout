@@ -132,7 +132,7 @@ On the Creator Dashboard, open your game, then **Publish settings > Content rati
 | Sensitive issues | Primary theme a sensitive issue? | **No** | The small "Jesus loves you" potluck figure is a minor detail, not the theme. Roblox says not to disclose minor details like this. |
 | Paid random items | Paid random items? | **No** | Every Robux item shows exactly what you get. Rarities, restocks and bandanas are free to play. |
 | Paid item trading | Trade paid items? | **No** | There's no trading. Snagged plates are earned food, can't be bought, and snagging is opt-in. |
-| Media | Share media from gameplay that others can see? | **Yes** | The "Say Brisket!" photo spot opens Roblox's own Captures share sheet (CaptureService). The game never shows other players' images in game. |
+| Media | Share media from gameplay that others can see? | **Yes** | The "Say Brisket!" photo spot (in front of Big Bertha) opens Roblox's own Captures share sheet (CaptureService). The game never shows other players' images in game. |
 | Media | Content feeds or autoplay video? | **No** | |
 | Media | View captures from other games? | **No** | |
 | AI interaction | Users interact with generative AI? | **No** | All NPC lines are pre-written. |
@@ -147,8 +147,8 @@ Draft files are rendered from the actual map:
 
 | File | Use | Notes |
 |---|---|---|
-| `marketing/icon-512.png` | Game icon (512×512) | Big Biscuit belly-up, grinning, with the gold collar. One big readable character and no text, as Roblox recommends. |
-| `marketing/thumb-1-zoomies.png` | Thumbnail 1 (1920×1080) | "RUB THE BELLY = ZOOMIES!" Big Biscuit and the photo spot. |
+| `marketing/icon-512.png` | Game icon (512×512) | Temp, the round thermometer mascot, grinning in front of Big Bertha. One big readable character and no text, as Roblox recommends. |
+| `marketing/thumb-1-dinnerbell.png` | Thumbnail 1 (1920×1080) | "RING THE BELL = BONUS TIPS!" Big Bertha's dinner bell, the King of the Pit and Unc Hank. |
 | `marketing/thumb-2-temp.png` | Thumbnail 2 | "TEMP IS ALWAYS WATCHING... YOUR BRISKET" |
 | `marketing/thumb-3-ranches.png` | Thumbnail 3 | "8 RANCHES. 1 KING OF THE PIT." Shows the whole map. |
 | `marketing/thumb-4-sleep.png` | Thumbnail 4 | "SMOKE IT WHILE YOU SLEEP" Shows the smoker row and grill. |

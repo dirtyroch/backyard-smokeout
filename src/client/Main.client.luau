@@ -73,10 +73,11 @@ Net.on("fx", function(p)
 		end
 	elseif p.kind == "snagged" then
 		Fx.pop(Content.Slang.snagged .. " Tag " .. tostring(d.by) .. " back!", UI.Theme.red, 34)
-	elseif p.kind == "pibble" then
-		Fx.pop("♥ GOOD BOY ♥", Color3.fromHex("#FF8FB1"), 40)
-	elseif p.kind == "zoomies" then
-		Fx.zoomies()
+	elseif p.kind == "bell" then
+		Fx.pop("🔔 CLANG!", Color3.fromHex("#FFC83C"), 40)
+		Fx.ringBell()
+	elseif p.kind == "dinnerbell" then
+		Fx.dinnerBell()
 	elseif p.kind == "sixseven" then
 		task.delay(0.5, function()
 			Fx.pop(Content.Slang.sixSeven, Color3.fromHex("#FFC83C"), 54)

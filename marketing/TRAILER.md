@@ -10,7 +10,7 @@ Record in Studio with **View > Video Record**, or use the Roblox client's record
 | 2 | 0:02–0:05 | A Texas-Size brisket grows until the table cracks. The camera shakes on "CRUNCH! It broke the table!" | "TEXAS-SIZE?!" | Crunch SFX |
 | 3 | 0:05–0:08 | A burger spatula flip lands Perfect. "+1000 AURA" pops, then the "LOCKED IN 🔒 x3" combo (UI on). | "+1000 AURA" | Whoosh |
 | 4 | 0:08–0:11 | Critters line up at the tables: Dilly, Bandit, Possum Pete, then Rex says "RAWR means I love you ♥". | "CUTE CUSTOMERS" | Original upbeat loop |
-| 5 | 0:11–0:15 | Three avatars run to Big Biscuit and rub his belly. "🐶 ZOOMIES!!" plays: the statue wiggles, confetti bursts and the server banner appears. | "RUB THE BELLY = ZOOMIES" | Bark-style SFX (original) |
+| 5 | 0:11–0:15 | Three avatars run to Big Bertha and ring the dinner bell. "🔔 DINNER'S ON!" plays: the bell swings, the smokestack puffs, confetti bursts and the server banner appears. | "RING THE BELL = BONUS TIPS" | Bell clang SFX (original) |
 | 6 | 0:15–0:18 | Temp at night, slowly turning: "I see your brisket... I always see your brisket." | "TEMP IS WATCHING" | A music sting drops out |
 | 7 | 0:18–0:21 | Saturday Cook-Off. Granny Pecan: "Child, you COOKED." The cat claps. | "YOU COOKED." | Crowd cheer (original) |
 | 8 | 0:21–0:24 | The mosquito swarm at dusk: 4 players swat, and the purple Queen pops. | "SQUAD UP AT DUSK" | Swat pops |
@@ -22,7 +22,7 @@ Rules: use only original or Roblox-licensed audio from the Creator Store, no rea
 ## Short clips (TikTok, YouTube Shorts and Roblox video ads, 6–10 s each)
 
 1. **"It broke the table"**: a Texas-Size reveal with the crunch. The payoff lands in under 3 s.
-2. **"ZOOMIES"**: friends pile on Big Biscuit's belly. Caption: "bring 2 friends."
+2. **"DINNER'S ON!"**: friends pile on Big Bertha's dinner bell. Caption: "bring 2 friends."
 3. **"6-7"**: a tip lands on ...67, and the "6-7! 🤷" pop plays with a player emote.
 4. **"Temp at 3 AM"**: Temp's night lines with a slow zoom.
 5. **"You COOKED"**: Granny's verdict and the clapping cat.

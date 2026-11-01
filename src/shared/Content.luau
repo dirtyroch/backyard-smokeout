@@ -93,7 +93,7 @@ Content.Slang = {
 	skipYap = "Skip the yap",
 	sixSeven = "6-7! 🤷 (that tip ended in 67)",
 	rush = "🍽️ LUNCH RUSH CLEARED!",
-	zoomies = "🐶 ZOOMIES!! 🐶",
+	dinnerBell = "🔔 DINNER'S ON! 🔔",
 }
 
 Content.Signs = {
@@ -103,7 +103,7 @@ Content.Signs = {
 	potluck = "SUNDAY POTLUCK",
 	creek = "(nothing to see here)",
 	welcome = "BACKYARD SMOKEOUT",
-	pibble = "BIG BISCUIT\nCertified Good Boy · Bites: 0 · Belly rubs: ∞",
+	bertha = "BIG BERTHA\nThe King of the Pit's 1,000-gallon smoker · Ring the bell when supper's on",
 }
 
 return Content

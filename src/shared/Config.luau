@@ -122,7 +122,7 @@ Config.Sauces = {
 	peachfuzz = { id = "peachfuzz", name = "Peach Fuzz Glaze", effect = "tip", amount = 0.5, charges = 5, price = 600, weight = 10, maxStock = 2, color = "#FFA07A" },
 	hillcountry = { id = "hillcountry", name = "Hill Country Mop", effect = "luck", amount = 0.35, charges = 3, price = 900, weight = 8, maxStock = 1, color = "#5B3A1E" },
 	secretcreek = { id = "secretcreek", name = "Secret Creek Sauce", effect = "luck", amount = 0.5, charges = 5, price = 0, weight = 0, maxStock = 0, color = "#3FA7D6", hidden = true },
-	goodboy = { id = "goodboy", name = "Good Boy Glaze", effect = "tip", amount = 0.2, charges = 3, price = 0, weight = 0, maxStock = 0, color = "#E6B25A", hidden = true },
+	burntend = { id = "burntend", name = "Burnt-End Glaze", effect = "tip", amount = 0.2, charges = 3, price = 0, weight = 0, maxStock = 0, color = "#E6B25A", hidden = true },
 	straitshootin = { id = "straitshootin", name = "Strait-Shootin' Sauce", effect = "speed", amount = 0.3, charges = 3, price = 0, weight = 0, maxStock = 0, color = "#C19A6B", hidden = true },
 }
 Config.SauceOrder = { "sweetheat", "rochetfuel", "carolinagold", "peachfuzz", "hillcountry" }
@@ -271,9 +271,9 @@ Config.Crew = { perFriend = 0.10, maxFriends = 3 }
 --   * snagging is opt-in: new players start in Peace Mode
 Config.FairPlay = { passTipMult = 1.5, passTipCap = 1.5, showerMinutes = 5, showerMult = 1.25 }
 
--- Big Biscuit Zoomies: 3 different players rub his belly within 20 s -> the whole server gets
--- +25% tips for 5 minutes (free). Server-wide cooldown 10 minutes.
-Config.Zoomies = { window = 20, need = 3, cooldown = 600, minutes = 5, tipBonus = 0.25 }
+-- Big Bertha's Dinner Bell: 3 different players ring the bell within 20 s, and the whole server
+-- gets +25% tips for 5 minutes (free, with a 10 minute cooldown).
+Config.DinnerBell = { window = 20, need = 3, cooldown = 600, minutes = 5, tipBonus = 0.25 }
 
 -- Lunch Rush: every 150 s window, serve 4 plates for +50% of what those plates earned.
 Config.Rush = { period = 150, need = 4, bonusFrac = 0.5 }

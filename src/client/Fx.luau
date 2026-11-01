@@ -82,32 +82,57 @@ function Fx.announce(text: string, color: string?)
 	end)
 end
 
--- Big center-screen pop text.
--- Big Biscuit Zoomies: the statue wiggles and kicks (client-side only), confetti pops, and
--- a big banner shows. Built for clips: the payoff lands inside 2 seconds.
-function Fx.zoomies()
-	Fx.pop(Content.Slang.zoomies, Color3.fromHex("#FF8FB1"), 64)
-	local statue = workspace:FindFirstChild("BigBiscuit", true)
-	if not statue or not statue:IsA("Model") then
+-- Big Bertha's bell swings (client-side only) whenever someone rings it.
+local function bertha(): Model?
+	local m = workspace:FindFirstChild("BigBertha", true)
+	return if m and m:IsA("Model") then m else nil
+end
+
+function Fx.ringBell()
+	local m = bertha()
+	local bell = m and m:FindFirstChild("DinnerBell")
+	if not bell or not bell:IsA("Model") then
 		return
 	end
-	local home = statue:GetPivot()
+	local home = bell:GetPivot()
 	task.spawn(function()
-		for i = 1, 16 do
-			local a = math.rad(7) * (i % 2 == 0 and 1 or -1)
-			statue:PivotTo(home * CFrame.new(0, math.abs(math.sin(i)) * 0.8, 0) * CFrame.Angles(0, a, a * 0.5))
-			task.wait(0.09)
+		for i = 1, 8 do
+			bell:PivotTo(home * CFrame.Angles(0, 0, math.rad(22) * math.sin(i * 1.4) * (1 - i / 9)))
+			task.wait(0.07)
 		end
-		statue:PivotTo(home)
+		bell:PivotTo(home)
 	end)
+end
+
+-- Dinner Bell pile-on: the bell swings, Big Bertha's chimney blows a huge puff, confetti pops,
+-- and a big banner shows. Built for clips, so the payoff lands inside 2 seconds.
+function Fx.dinnerBell()
+	Fx.pop(Content.Slang.dinnerBell, Color3.fromHex("#FFC83C"), 64)
+	Fx.ringBell()
+	local m = bertha()
+	if not m then
+		return
+	end
+	local chimney = m:FindFirstChild("Chimney", true)
+	if chimney and chimney:IsA("BasePart") then
+		local puff = Instance.new("Smoke")
+		puff.Color = Color3.fromRGB(235, 235, 235)
+		puff.Size = 14
+		puff.Opacity = 0.6
+		puff.RiseVelocity = 14
+		puff.Parent = chimney
+		task.delay(4, function()
+			puff:Destroy()
+		end)
+	end
 	local burst = Instance.new("Part")
 	burst.Anchored, burst.CanCollide, burst.CanQuery, burst.CanTouch = true, false, false, false
 	burst.Transparency = 1
 	burst.Size = Vector3.new(1, 1, 1)
-	burst.CFrame = home * CFrame.new(0, 10, 0)
+	burst.CFrame = m:GetPivot() * CFrame.new(0, 14, 0)
 	burst.Parent = workspace
 	local pe = Instance.new("ParticleEmitter")
-	pe.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.fromHex("#FF8FB1")), ColorSequenceKeypoint.new(0.5, Color3.fromHex("#FFC83C")), ColorSequenceKeypoint.new(1, Color3.fromHex("#5AD2FF")) })
+	pe.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.fromHex("#FFC83C")), ColorSequenceKeypoint.new(0.5, Color3.fromHex("#FF7A3D")), ColorSequenceKeypoint.new(1, Color3.fromHex("#5AD2FF")) })
 	pe.Speed = NumberRange.new(18, 30)
 	pe.SpreadAngle = Vector2.new(70, 70)
 	pe.Lifetime = NumberRange.new(1.5, 2.5)
@@ -121,6 +146,7 @@ function Fx.zoomies()
 	end)
 end
 
+-- Big center-screen pop text.
 function Fx.pop(text: string, color: Color3, size: number?)
 	local l = UI.label(text, {
 		AnchorPoint = Vector2.new(0.5, 0.5),
