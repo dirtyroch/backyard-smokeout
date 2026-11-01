@@ -22,6 +22,8 @@
 	  * Calm shop copy: "See item", "Buy for R$ X". No "LAST CHANCE", no countdowns on Robux items.
 	  * Every advantage you can buy (speed, slots, premium cuts) can also be earned by playing.
 	  * Paid perks never affect the Cook-Off leaderboard or plate snagging.
+	  * Fair Play caps (Config.FairPlay): the tip pass is +50% (not x2), and buying a speed boost
+	    gives everyone else in the server a free 5-minute Smoke Shower.
 ]]
 
 export type Pass = { id: number, name: string, price: number, desc: string, icon: string }
@@ -48,7 +50,7 @@ local Monetization = {}
 Monetization.Passes = {
 	ExtraSmokers = { id = 0, name = "Extra Smoker Slots", price = 249, icon = "🔥", desc = "+2 smoker slots on your ranch, forever." },
 	AutoServe = { id = 0, name = "Possum Pete Waiter", price = 299, icon = "🦝", desc = "Possum Pete serves your waiting customers for you while you're in the game." },
-	DoubleTips = { id = 0, name = "Double Tips", price = 399, icon = "💰", desc = "Every plate you serve earns 2x coins, forever. Does not affect the Cook-Off." },
+	DoubleTips = { id = 0, name = "Big Tipper", price = 299, icon = "💰", desc = "Every plate you serve earns +50% coins, forever. Capped for Fair Play; does not affect the Cook-Off or snagging." },
 	PremiumCuts = { id = 0, name = "Premium Cuts", price = 349, icon = "🥩", desc = "Cook Wagyu Brisket and Tomahawk Steaks any time. (Both can also be earned on the Pitmaster Path.)" },
 	VIPPatio = { id = 0, name = "VIP Patio", price = 149, icon = "✨", desc = "String lights over your ranch, a VIP sign and a gold name tag. Looks only." },
 } :: { [string]: Pass }

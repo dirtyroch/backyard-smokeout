@@ -265,6 +265,19 @@ Config.Snag = {
 
 Config.Crew = { perFriend = 0.10, maxFriends = 3 }
 
+-- Fair Play: paid perks are capped so they never wall off free players.
+--   * the tip pass is +50% (not x2) and never applies to the Cook-Off or snagging
+--   * buying a speed boost gives everyone else in the server a free "Smoke Shower"
+--   * snagging is opt-in: new players start in Peace Mode
+Config.FairPlay = { passTipMult = 1.5, passTipCap = 1.5, showerMinutes = 5, showerMult = 1.25 }
+
+-- Big Biscuit Zoomies: 3 different players rub his belly within 20 s -> the whole server gets
+-- +25% tips for 5 minutes (free). Server-wide cooldown 10 minutes.
+Config.Zoomies = { window = 20, need = 3, cooldown = 600, minutes = 5, tipBonus = 0.25 }
+
+-- Lunch Rush: every 150 s window, serve 4 plates for +50% of what those plates earned.
+Config.Rush = { period = 150, need = 4, bonusFrac = 0.5 }
+
 -- Season themes: the Cook-Off template reskins by month.
 Config.Seasons = {
 	{ months = { 10 }, id = "spooky", name = "Spooky Smoke-Off", color = "#FF7518" },

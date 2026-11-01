@@ -17,6 +17,7 @@ local Monetization = require(Shared.Monetization)
 local CookLogic = require(Shared.Logic.CookLogic)
 local Rarity = require(Shared.Logic.Rarity)
 local Economy = require(Shared.Logic.Economy)
+local Hype = require(Shared.Logic.Hype)
 local Streak = require(Shared.Logic.Streak)
 local PitmasterPath = require(Shared.Logic.PitmasterPath)
 local Restock = require(Shared.Logic.Restock)
@@ -47,6 +48,7 @@ type Runtime = {
 	resting: boolean,
 	cookoffReadyAt: number,
 	announcedDone: { [string]: boolean },
+	rush: any,
 }
 
 GameService.runtime = {} :: { [Player]: Runtime }
@@ -122,6 +124,12 @@ local function awardBadge(player: Player, key: string)
 	end
 end
 GameService.awardBadge = awardBadge
+
+-- Big Biscuit Zoomies: a free server-wide tip bonus (set by EggService).
+GameService.zoomiesUntil = 0
+function GameService.zoomiesBonus(): number
+	return workspace:GetServerTimeNow() < GameService.zoomiesUntil and Config.Zoomies.tipBonus or 0
+end
 
 function GameService.hasPass(player: Player, key: string): boolean
 	local r = rt(player)
@@ -279,11 +287,12 @@ local function plateValue(player: Player, data: any, plate: any, critter: any?, 
 		rankMult = rankMult(data),
 		crewMult = Economy.crewMult(r and r.crew or 0, Config.Crew.perFriend, Config.Crew.maxFriends),
 		tipMult = critter and critter.tip or 1,
-		sauceTip = consumeTip and useSauce(data, "tip") or 0,
+		sauceTip = (consumeTip and useSauce(data, "tip") or 0) + GameService.zoomiesBonus(),
 		flipMult = flipMult,
 		comboMult = 1 + combo * Config.Flip.comboStep,
 		orderBonus = orderMatch and Config.MATCH_ORDER_BONUS or 1,
 		doubleTips = GameService.hasPass(player, "DoubleTips"),
+		passTipMult = Hype.passTip(true, Config.FairPlay.passTipMult, Config.FairPlay.passTipCap),
 	})
 end
 
@@ -563,6 +572,22 @@ function GameService.serveCustomer(player: Player, customer: any): (boolean, str
 		ctx.World.effect(player, "clap", customer)
 	end
 	GameService.fx(player, "served", { value = value, matched = matched, critter = critter.id, aura = plate.f == "perfect" and Config.Flip.perfectAura or 0 })
+	-- 6-7!
+	if Hype.isSixSeven(value) then
+		GameService.fx(player, "sixseven", { value = value })
+		ctx.Egg.found(player, data, "sixseven")
+	end
+	-- Lunch Rush
+	local r = rt(player)
+	if r then
+		local bonus
+		r.rush, bonus = Hype.rushStep(r.rush, T(), Config.Rush.period, Config.Rush.need, Config.Rush.bonusFrac, value)
+		if bonus > 0 then
+			GameService.addCoins(player, data, bonus, true)
+			GameService.fx(player, "rush", { bonus = bonus })
+			GameService.toast(player, string.format("🍽️ Lunch Rush cleared! +%d coins", bonus), "good")
+		end
+	end
 	if not data.tutorial.done then
 		data.tutorial.done = true
 	end
@@ -966,6 +991,12 @@ local function snapshot(player: Player, data: any): any
 		customers = customers,
 		combo = data.combo,
 		crew = r.crew,
+		rush = (function()
+			local w = Hype.rushWindow(T(), Config.Rush.period)
+			local cur = (r.rush and r.rush.w == w) and r.rush or nil
+			return { n = cur and cur.n or 0, need = Config.Rush.need, done = cur ~= nil and cur.done, ends = Hype.rushEnds(w, Config.Rush.period) }
+		end)(),
+		zoomiesUntil = GameService.zoomiesUntil,
 		season = GameService.currentSeason(),
 		saturday = GameService.isSaturday(),
 		suds = GameService.isSudsWeekend(),
@@ -1053,6 +1084,7 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 		snagLockUntil = 0,
 		snagCooldownUntil = 0,
 		peaceChangedAt = -1e9,
+		rush = nil,
 		resting = false,
 		cookoffReadyAt = 0,
 		announcedDone = {},

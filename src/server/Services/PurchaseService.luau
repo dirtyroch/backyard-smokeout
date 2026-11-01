@@ -118,6 +118,16 @@ local function grantProduct(player: Player, data: any, key: string): string
 	local p = Monetization.Products[key]
 	if p.kind == "boost" then
 		ctx.Game.addBoost(data, p.minutes or 30, p.mult or 2)
+		-- Fair Play: everyone else in the server gets a free Smoke Shower.
+		local now = workspace:GetServerTimeNow()
+		for other in pairs(ctx.Game.runtime) do
+			local od = other ~= player and ctx.Game.dataOf(other) or nil
+			if od and od.boost.untilT <= now then
+				ctx.Game.addBoost(od, Config.FairPlay.showerMinutes, Config.FairPlay.showerMult)
+				ctx.Game.markDirty(other)
+				ctx.Game.toast(other, string.format("💨 Smoke Shower from %s! Everyone gets x%.2g speed for %d min.", player.DisplayName, Config.FairPlay.showerMult, Config.FairPlay.showerMinutes), "good")
+			end
+		end
 	elseif p.kind == "finish" then
 		local t = workspace:GetServerTimeNow()
 		ctx.Game.advanceAll(player, data, t, false)

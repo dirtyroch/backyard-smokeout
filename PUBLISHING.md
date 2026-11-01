@@ -69,7 +69,7 @@ The game reads every price ID from one file: **`src/shared/Monetization.luau`**.
 | `ExtraSmokers` | Extra Smoker Slots | R$ 249 |
 | `AutoServe` | Possum Pete Waiter | R$ 299 |
 | `PremiumCuts` | Premium Cuts | R$ 349 |
-| `DoubleTips` | Double Tips | R$ 399 |
+| `DoubleTips` | Big Tipper (+50% tips, Fair Play cap) | R$ 299 |
 
 ### Developer Products (can be bought more than once, or one-time cosmetics)
 
@@ -109,34 +109,63 @@ Go to **Monetization > Developer Products > Create a Developer Product**. For ea
 
 When you're done, choose **File > Publish to Roblox** again so the live game gets the new IDs.
 
-## 7. Maturity & Compliance questionnaire
+## 7. Maturity & Compliance questionnaire (prefilled answers)
 
-On the Creator Dashboard, open your game, then **Audience > Maturity & Compliance** (sometimes shown as **Experience Questionnaire**). Answer honestly. For this game, the honest answers are:
+On the Creator Dashboard, open your game, then **Publish settings > Content rating** (older dashboards call it **Audience > Maturity & Compliance**). Click **Start**, and answer every page (not just the first question), so the game can reach younger players. Base each answer on the most intense thing a player can see. These are the honest answers for this build (checked against Roblox's guide, Nov 2026):
 
-- **Violence:** none against people or avatars. The only "fighting" is swatting cartoon mosquitoes. If a question asks about unrealistic or cartoon violence, choose the mildest option.
-- **Blood, gore, fear, romance, crude humor, gambling, alcohol, drugs:** none. The sauces are BBQ sauce, and the drinks are sweet tea and soda.
-- **Paid random items:** **No.** Nothing sold for Robux is random.
-- **Religious references:** there's a small "Jesus loves you" figure in the hub. If the questionnaire asks about religious content, say yes and describe it as a small positive message.
-- **Social features:** players see each other's names and a short fixed "smoke signal" message. There's no custom player text besides Roblox's normal chat.
-- **Real-money or off-platform links:** none.
+| Category | Question | Answer for Backyard Smokeout | Why |
+|---|---|---|---|
+| Violence | Depicts violence? | **Yes** | Players swat cartoon mosquitoes at dusk. |
+| Violence | How intense? | **Mild** | Unrealistic: swatted mosquitoes just pop and vanish. No violence against players or NPC people. |
+| Violence | How frequent? | **Repeated** | During the swarm, many swats happen quickly. (Picking "Repeated" is the safe choice. It still gives a Mild label.) |
+| Blood | Any blood? | **No** | None anywhere. |
+| Fear | Scary elements? | **Yes** | Temp the thermometer says slightly creepy jokes at night ("I see your brisket..."). |
+| Fear | Level | **Mild** | A silly, creepy-ish NPC with no jump scares, gore or scary sounds. |
+| Fear | Frequency | **Occasional** | Only at night, and only if you poke Temp. |
+| Crude humor | Crude humor? | **No** | No burping, farting, poop or pee jokes. Unc's dad jokes are clean. |
+| Gambling | Unplayable gambling content? | **No** | No casino and no cards. Rarity rolls are free and not bought with Robux. |
+| Strong language | Strong language? | **No** | None. The slang ("Mid", "Cooked", "Taxed", "6-7") is clean. |
+| Romantic themes | Romance, private spaces or adult settings? | **No** | It's a public backyard BBQ. There are no bars, and the drinks are sweet tea and soda. |
+| Alcohol | Alcohol? | **No** | None. The sauces are BBQ sauces. |
+| Social hangout | Primary theme is a social hangout? | **No** | It's a tycoon or simulator, and chat is not the point of the game. |
+| Free-form creation | Free-form user creation? | **No** | No drawing, painting or free text on surfaces. Smoke signals are fixed phrases. |
+| Sensitive issues | Primary theme a sensitive issue? | **No** | The small "Jesus loves you" potluck figure is a minor detail, not the theme. Roblox says not to disclose minor details like this. |
+| Paid random items | Paid random items? | **No** | Every Robux item shows exactly what you get. Rarities, restocks and bandanas are free to play. |
+| Paid item trading | Trade paid items? | **No** | There's no trading. Snagged plates are earned food, can't be bought, and snagging is opt-in. |
+| Media | Share media from gameplay that others can see? | **Yes** | The "Say Brisket!" photo spot opens Roblox's own Captures share sheet (CaptureService). The game never shows other players' images in game. |
+| Media | Content feeds or autoplay video? | **No** | |
+| Media | View captures from other games? | **No** | |
+| AI interaction | Users interact with generative AI? | **No** | All NPC lines are pre-written. |
 
-You should get **Minimal** or **Mild**, which lets everyone play. Once it's done, go back to step 4 and set the game to **Public**.
+**Expected result:** a **Mild** label (mild cartoon violence, mild fear), which is eligible for Roblox Kids (5–8) and Select (9–15). Before you click **Submit**, check that the preview shows Mild. If it shows anything higher, retake the questionnaire. If you add content later (a new event, voice or sounds), retake it in the same update. When you're done, go back to step 4 and set the game to **Public**.
 
-## 8. Thumbnail and icon tips
+Already wired in code: `PolicyService` gates (`PurchaseService.policy`), with no paid random items and no paid trading. The photo spot is wrapped in `pcall`, so devices that can't share fall back to a friendly message.
 
-- **Icon (512×512):** one big, readable thing. A glowing golden brisket on a smoker, or a cartoon pitmaster in a cowboy hat holding a spatula, against a bright orange sunset sky. Add 1–3 big words at most ("SMOKEOUT!").
-- **Thumbnails (1920×1080, upload 3–5):**
-  1. A rare-reveal moment: the gold beam and "SMOKE RING GOLD!" card.
-  2. The busy yard: critters at the tables, smoke rising, VIP lights.
-  3. The Saturday Cook-Off stage with Granny Pecan and the leaderboard.
-  4. Mosquito night: the purple Queen and lots of players swatting.
-- To take a clean screenshot:
-  1. Press Play in Studio.
-  2. Hide the game's buttons. In the Explorer, open **Players > (you) > PlayerGui > BackyardSmokeout** and untick **Enabled**.
-  3. Set the time with **Lighting > ClockTime**. 18 gives a golden sunset.
-  4. Take the screenshot with **View > Screenshot**.
-- Use bright, warm colors (orange, gold, sky blue). Thumbnails that show a moment work better than ones that show a menu.
-- Follow the Roblox thumbnail rules: no fake "FREE ROBUX" text, no real brand logos, and no images of real people.
+## 8. Icon, thumbnails and trailer (ready-made files in `marketing/`)
+
+Draft files are rendered from the actual map:
+
+| File | Use | Notes |
+|---|---|---|
+| `marketing/icon-512.png` | Game icon (512×512) | Big Biscuit belly-up, grinning, with the gold collar. One big readable character and no text, as Roblox recommends. |
+| `marketing/thumb-1-zoomies.png` | Thumbnail 1 (1920×1080) | "RUB THE BELLY = ZOOMIES!" Big Biscuit and the photo spot. |
+| `marketing/thumb-2-temp.png` | Thumbnail 2 | "TEMP IS ALWAYS WATCHING... YOUR BRISKET" |
+| `marketing/thumb-3-ranches.png` | Thumbnail 3 | "8 RANCHES. 1 KING OF THE PIT." Shows the whole map. |
+| `marketing/thumb-4-sleep.png` | Thumbnail 4 | "SMOKE IT WHILE YOU SLEEP" Shows the smoker row and grill. |
+| `marketing/TRAILER.md` | 30-second trailer plan | A shot list you can record in Studio. |
+
+How to upload: on the dashboard, open your game, then **Places > (start place) > Thumbnails** (or **Configure > Thumbnails**). Upload 3–5 thumbnails, and set the icon under **Basic Info > Icon**.
+
+- **Swap in real gameplay shots once you can.** The drafts come from a preview renderer, so they have no smoke particles, UI or night lighting. Studio screenshots will look better. Keep the same text and layout.
+- Keep words big and at the top. Nothing important should sit in the bottom 15%, because Roblox overlays UI there. Use 1–6 words per thumbnail.
+- **A/B test the thumbnails** (Creator Hub **Thumbnail Personalization** or rotating order). Keep the one with the best click-through after about 1,000 impressions each.
+- Follow the rules: no fake "FREE ROBUX" text, no real brands or real people, and no misleading art. Every scene shown is really in the game.
+
+To take a clean Studio screenshot:
+  1. Press Play.
+  2. Hide the UI: **Players > (you) > PlayerGui > BackyardSmokeout > Enabled = off**.
+  3. Set **Lighting > ClockTime** (18 gives golden hour, 21 gives night with smoke glow).
+  4. Use **View > Screenshot**.
 
 ## 9. After launch
 

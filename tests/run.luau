@@ -16,6 +16,7 @@ local RateLimiter = require("../src/shared/Logic/RateLimiter")
 local ReceiptLedger = require("../src/shared/Logic/ReceiptLedger")
 local SessionLock = require("../src/shared/Logic/SessionLock")
 local TimeUtil = require("../src/shared/Logic/TimeUtil")
+local Hype = require("../src/shared/Logic/Hype")
 
 local passed, failed = 0, 0
 local current = ""
@@ -172,7 +173,7 @@ print("Economy")
 test("plate value multiplies everything and rounds", function()
 	local v = Economy.plateValue(12, { rarityMult = 1.5, rankMult = 1, crewMult = 1.1, tipMult = 1, flipMult = 1.5 })
 	eq(v, 30) -- 12*1.5*1.1*1.5 = 29.7
-	eq(Economy.plateValue(12, { rarityMult = 1, doubleTips = true }), 24)
+	eq(Economy.plateValue(12, { rarityMult = 1, doubleTips = true }), 18) -- Fair Play: +50%, not x2
 end)
 test("rank and crew multipliers", function()
 	near(Economy.rankMult(3, Config.RANK_STEP), 2)
@@ -480,6 +481,62 @@ test("no pushy shop words anywhere in product copy", function()
 end)
 test("Unc has a month of daily jokes", function()
 	truthy(#Content.UncJokes >= 28)
+end)
+
+print("Hype (social + clip moments)")
+test("Zoomies need 3 different rubbers inside the window, then respect the cooldown", function()
+	local Z = Config.Zoomies
+	local rubs = {}
+	rubs[1] = 100
+	rubs[1] = 105 -- same player twice still counts once
+	local n, go = Hype.pileOn(rubs, 105, Z.window, Z.need, -1e9, Z.cooldown)
+	eq(n, 1)
+	eq(go, false)
+	rubs[2] = 110
+	rubs[3] = 118
+	n, go = Hype.pileOn(rubs, 118, Z.window, Z.need, -1e9, Z.cooldown)
+	eq(n, 3)
+	eq(go, true)
+	-- stale rubs fall out of the window
+	n = Hype.pileOn(rubs, 140, Z.window, Z.need, 118, Z.cooldown)
+	eq(n, 0)
+	-- cooldown blocks a second trigger right away
+	local r2 = { [1] = 200, [2] = 200, [3] = 200 }
+	local _, go2 = Hype.pileOn(r2, 200, Z.window, Z.need, 118, Z.cooldown)
+	eq(go2, false)
+end)
+test("Lunch Rush pays once per window after `need` plates, and resets next window", function()
+	local R = Config.Rush
+	local s, bonus = nil, 0
+	local t0 = R.period * 10 + 1
+	for i = 1, R.need - 1 do
+		s, bonus = Hype.rushStep(s, t0 + i, R.period, R.need, R.bonusFrac, 100)
+		eq(bonus, 0)
+	end
+	s, bonus = Hype.rushStep(s, t0 + 20, R.period, R.need, R.bonusFrac, 100)
+	eq(bonus, math.floor(100 * R.need * R.bonusFrac + 0.5))
+	s, bonus = Hype.rushStep(s, t0 + 21, R.period, R.need, R.bonusFrac, 100)
+	eq(bonus, 0, "only once per window")
+	s, bonus = Hype.rushStep(s, t0 + R.period, R.period, R.need, R.bonusFrac, 100)
+	eq(s.n, 1, "new window starts fresh")
+	truthy(R.period >= 60 and R.period <= 180, "rush is a 1-3 minute cycle")
+end)
+test("6-7 detector", function()
+	eq(Hype.isSixSeven(67), true)
+	eq(Hype.isSixSeven(1267), true)
+	eq(Hype.isSixSeven(76), false)
+	eq(Hype.isSixSeven(7), false)
+end)
+test("Fair Play: tip pass is capped and paid perks stay below x2", function()
+	eq(Hype.passTip(false, 1.5, 1.5), 1)
+	eq(Hype.passTip(true, 3, Config.FairPlay.passTipCap), Config.FairPlay.passTipCap)
+	truthy(Config.FairPlay.passTipMult < 2)
+	truthy(Config.FairPlay.showerMult > 1 and Config.FairPlay.showerMinutes > 0)
+end)
+test("new players start in Peace Mode (snagging is opt-in)", function()
+	local fs = require("@lune/fs")
+	local src = fs.readFile("src/shared/DefaultData.luau")
+	truthy(string.find(src, "settings = { peace = true }", 1, true) ~= nil)
 end)
 
 print(string.format("\n%d passed, %d failed", passed, failed))

@@ -40,6 +40,8 @@ local EGGS = {
 	{ id = "rex", hint = "Meet enough regulars and someone special visits. RAWR!" },
 	{ id = "meteorite", hint = "Cook the rarest cut there is." },
 	{ id = "cooked", hint = "Make Granny Pecan say you COOKED." },
+	{ id = "sixseven", hint = "Some tips just hit different. Watch the last two digits." },
+	{ id = "zoomies", hint = "Big Biscuit loves a crowd. Bring two friends to the belly." },
 }
 
 local function S(): any
@@ -109,7 +111,10 @@ function Panels.invite()
 	end)
 	if ok and can then
 		pcall(function()
-			SocialService:PromptGameInvite(player)
+			local opts = Instance.new("ExperienceInviteOptions")
+			opts.PromptMessage = "Come rub Big Biscuit's belly with me! 3 rubs = ZOOMIES 🐶"
+			opts.LaunchData = "biscuit"
+			SocialService:PromptGameInvite(player, opts)
 		end)
 	else
 		Net.notify("Invites aren't available here. Share the game link with your friends! (Friends in the same server give a crew bonus.)", "info")

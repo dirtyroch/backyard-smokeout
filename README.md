@@ -14,11 +14,11 @@ A Texas backyard BBQ tycoon for Roblox. Smoke brisket in real time (it keeps coo
 | First cook | A one-button first brisket that finishes in 75s, is guaranteed Smoke Ring Gold, and gets a cinematic reveal. |
 | Rarity | Common, Juicy, Smoke Ring Gold, Texas-Size ("CRUNCH! It broke the table!") and Meteorite. Odds are shown in game. |
 | Customers | 10 original critter regulars, a Regulars Index, belly rubs, Suds Weekend pup washes, and a Rex cameo ("RAWR means I love you"). |
-| Social | Crew bonus with friends, pass-window plate snagging (target must be online, lock timer, peace mode, insurance, catch-back), smoke-signal flexes. |
-| Daily | Sauce Shack restock every 5 min, daily streak with one free miss a week, 28-day Pitmaster Path, Unc's joke of the day ("Skip the yap"). |
+| Social | Crew bonus with friends, **Big Biscuit Zoomies** (3 players rub his belly within 20 s → whole server +25% tips for 5 min), **"Say Brisket!" photo spot** (Roblox share sheet + invite link), invites ("Come rub Big Biscuit's belly with me"), opt-in plate snagging (new players start in Peace Mode; lock timer, insurance, catch-back), smoke-signal flexes. |
+| Daily | **Lunch Rush** every 2.5 min (serve 4 plates → +50% bonus), Sauce Shack restock every 5 min, daily streak with one free miss a week, 28-day Pitmaster Path, Unc's joke of the day ("Skip the yap"). |
 | Events | Saturday Cook-Off (3×, Granny Pecan judging, weekly leaderboard), the dusk mosquito swarm with the Queen boss, Sunday potluck. |
 | Prestige | Unc Status rebirth ranks (Lil Griller → Big Bro → Unc → Great Unc → OG Pitmaster), +coins forever. |
-| Secrets | 9 eggs: the roof sign-in, the creek whisper stone, the Okayest Unc apron, the King of the Pit's hat check, Temp, the blessed potluck figure, and more. |
+| Secrets | 11 eggs (incl. "6-7!" tips and Zoomies): the roof sign-in, the creek whisper stone, the Okayest Unc apron, the King of the Pit's hat check, Temp, the blessed potluck figure, and more. |
 
 ## Project layout
 
@@ -51,6 +51,10 @@ luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
 ```
 
 For live sync while editing, run `rojo serve` and use the Rojo Studio plugin.
+
+## Fair Play
+
+Paid perks are capped so they never wall off free players: the tip pass is +50% (not x2), buying a speed boost gives everyone else a free 5-minute Smoke Shower, snagging is opt-in, and nothing paid touches the Cook-Off. See `Config.FairPlay`.
 
 ## IP and safety
 

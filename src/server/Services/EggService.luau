@@ -14,21 +14,28 @@
 	  rex      - Rex visits your ranch ("RAWR means I love you")
 	  meteorite- cook a Meteorite cut
 	  cooked   - get a "Cooked" rating from Granny Pecan
+	  sixseven - serve a plate worth ...67 coins ("6-7!")
+	  zoomies  - be part of a 3-player Big Biscuit belly-rub pile-on (server-wide Zoomies)
 ]]
 local ProximityPromptService = game:GetService("ProximityPromptService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Content = require(Shared.Content)
 local TimeUtil = require(Shared.Logic.TimeUtil)
+local Hype = require(Shared.Logic.Hype)
 
 local EggService = {}
 local ctx: any = nil
 local rng = Random.new()
 local tempPokes: { [Player]: number } = {}
 
-EggService.EGGS = { "blessed", "roof", "creek", "apron", "king", "temp", "rex", "meteorite", "cooked" }
+EggService.EGGS = { "blessed", "roof", "creek", "apron", "king", "temp", "rex", "meteorite", "cooked", "sixseven", "zoomies" }
+
+local bellyRubs: { [number]: number } = {}
+local lastZoomies = -1e9
 
 local function today(): number
 	return TimeUtil.dayNumber(os.time(), Config.TIMEZONE_OFFSET_HOURS)
@@ -207,9 +214,37 @@ local PIBBLE_LINES = {
 	"You hear a tiny bronze \"boof.\" Good boy.",
 }
 
+-- Zoomies: enough different players rub the belly inside the window -> free server-wide tips.
+local function checkZoomies(player: Player)
+	local Z = Config.Zoomies
+	local now = workspace:GetServerTimeNow()
+	bellyRubs[player.UserId] = now
+	local n, go = Hype.pileOn(bellyRubs, now, Z.window, Z.need, lastZoomies, Z.cooldown)
+	if go then
+		lastZoomies = now
+		ctx.Game.zoomiesUntil = now + Z.minutes * 60
+		ctx.Game.announce(string.format("🐶 ZOOMIES! %d pitmasters rubbed Big Biscuit's belly. Everyone gets +%d%% tips for %d min!", n, math.floor(Z.tipBonus * 100 + 0.5), Z.minutes), "#FF8FB1")
+		ctx.Remotes.Push:FireAllClients("fx", { kind = "zoomies", data = { n = n } })
+		for id in pairs(bellyRubs) do
+			local p = Players:GetPlayerByUserId(id)
+			local pd = p and ctx.Game.dataOf(p)
+			if p and pd then
+				EggService.found(p, pd, "zoomies")
+			end
+		end
+		table.clear(bellyRubs)
+		for p in pairs(ctx.Game.runtime) do
+			ctx.Game.markDirty(p)
+		end
+	elseif now - lastZoomies >= Z.cooldown then
+		ctx.Game.toast(player, string.format("🐾 Belly-rub pile-on: %d/%d. Get %d more to rub within %ds for server-wide ZOOMIES!", n, Z.need, Z.need - n, Z.window), "info")
+	end
+end
+
 handlers["landmark:pibble"] = function(player, data)
 	local d = today()
 	ctx.Game.fx(player, "pibble", {})
+	checkZoomies(player)
 	local line = PIBBLE_LINES[rng:NextInteger(1, #PIBBLE_LINES)]
 	if data.daily.pibbleDay ~= d then
 		data.daily.pibbleDay = d

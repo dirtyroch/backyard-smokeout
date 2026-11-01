@@ -5,6 +5,7 @@ local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CaptureService = game:GetService("CaptureService")
 
 local Net = require(script.Parent.Net)
 local Hud = require(script.Parent.Hud)
@@ -14,6 +15,27 @@ local TimeUtil = require(Shared.Logic.TimeUtil)
 
 local player = Players.LocalPlayer
 local WorldClient = {}
+
+-- "Say Brisket!" photo spot: grab a screenshot and open the native share sheet (falls back
+-- to a save prompt where sharing isn't allowed). Everything is pcall'd: older clients just
+-- get a friendly toast.
+function WorldClient.photo()
+	Net.notify("📸 Say BRISKET!", "good")
+	task.delay(0.6, function()
+		local ok = pcall(function()
+			(CaptureService :: any):TakeScreenshotCaptureAsync(function(_result: any, capture: any)
+				if capture then
+					pcall(function()
+						(CaptureService :: any):PromptShareCapture(Content.fromObject(capture), "biscuit", function() end, function() end)
+					end)
+				end
+			end, {})
+		end)
+		if not ok then
+			Net.notify("Photos aren't available on this device. Use the Roblox menu's screenshot button!", "info")
+		end
+	end)
+end
 
 -- Prompts that only the owner should see, and the snag prompt the owner should NOT see.
 local OWNER_ONLY = { serve = true, bellyrub = true, wash = true, catch = true }
@@ -64,6 +86,8 @@ function WorldClient.start(Panels: any)
 			Panels.open("shop")
 		elseif kind == "npc:unc" then
 			Net.act("HearJoke")
+		elseif kind == "ui:photo" then
+			WorldClient.photo()
 		end
 	end)
 

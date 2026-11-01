@@ -19,6 +19,7 @@ export type ValueOpts = {
 	flipMult: number?,
 	comboMult: number?,
 	doubleTips: boolean?,
+	passTipMult: number?, -- Fair Play: the tip pass multiplier (default 1.5)
 	orderBonus: number?,
 }
 
@@ -32,7 +33,7 @@ function Economy.plateValue(price: number, o: ValueOpts): number
 		* (o.flipMult or 1)
 		* (o.comboMult or 1)
 		* (o.orderBonus or 1)
-		* (o.doubleTips and 2 or 1)
+		* (o.doubleTips and (o.passTipMult or 1.5) or 1)
 	return math.max(1, math.floor(v + 0.5))
 end
 

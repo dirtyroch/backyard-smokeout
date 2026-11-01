@@ -1123,6 +1123,22 @@ function WorldBuilder.pibble(parent, base, content)
 	glow.Parent = belly
 	billboard(head, "Label", "Big Biscuit 🐶", 8, 160, "#FFC83C", 260, 40)
 	prompt(belly, "landmark:pibble", "Rub the belly", "Big Biscuit", 0.6, 16)
+	-- "Say Brisket!" photo spot: a camera on a tripod facing his face (opens the share sheet)
+	local cam = base * E.CFrame.new(-6, 0, -17) * E.CFrame.Angles(0, math.rad(200), 0)
+	for i = 0, 2 do
+		local a2 = i / 3 * math.pi * 2
+		local foot = cam * E.CFrame.new(math.cos(a2) * 0.9, 0, math.sin(a2) * 0.9)
+		local topP = cam * E.CFrame.new(0, 3.6, 0)
+		local mid = foot.Position:Lerp(topP.Position, 0.5)
+		local len = (topP.Position - foot.Position).Magnitude
+		part(m, "TripodLeg", V(0.25, len, 0.25), E.CFrame.lookAt(mid, topP.Position) * E.CFrame.Angles(math.rad(90), 0, 0), "#3A2414", E.Enum.Material.Wood)
+	end
+	local body = part(m, "PhotoCamera", V(1.8, 1.2, 1.0), cam * E.CFrame.new(0, 4.2, 0), "#2A2B30", E.Enum.Material.SmoothPlastic)
+	cyl(m, "Lens", 0.7, 0.8, cam * E.CFrame.new(0, 4.2, -0.75) * E.CFrame.Angles(0, math.rad(90), 0), "#111111", E.Enum.Material.Glass)
+	local board = part(m, "PhotoSign", V(3.4, 1.2, 0.2), cam * E.CFrame.new(0, 2.2, 0.5), "#FFC83C", E.Enum.Material.SmoothPlastic)
+	surfaceText(board, E.Enum.NormalId.Back, "📸 SAY BRISKET!", "#3A2414", nil)
+	surfaceText(board, E.Enum.NormalId.Front, "📸 SAY BRISKET!", "#3A2414", nil)
+	prompt(body, "ui:photo", "Snap & share", "Say Brisket! photo spot", 0, 10)
 	-- bluebonnet bed around the plinth
 	for i = 0, 7 do
 		local a = i / 8 * math.pi * 2 + math.pi / 8

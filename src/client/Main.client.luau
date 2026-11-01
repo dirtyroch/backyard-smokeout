@@ -75,6 +75,14 @@ Net.on("fx", function(p)
 		Fx.pop(Content.Slang.snagged .. " Tag " .. tostring(d.by) .. " back!", UI.Theme.red, 34)
 	elseif p.kind == "pibble" then
 		Fx.pop("♥ GOOD BOY ♥", Color3.fromHex("#FF8FB1"), 40)
+	elseif p.kind == "zoomies" then
+		Fx.zoomies()
+	elseif p.kind == "sixseven" then
+		task.delay(0.5, function()
+			Fx.pop(Content.Slang.sixSeven, Color3.fromHex("#FFC83C"), 54)
+		end)
+	elseif p.kind == "rush" then
+		Fx.pop(Content.Slang.rush .. " +" .. tostring(d.bonus or 0), Color3.fromHex("#6CC24A"), 40)
 	elseif p.kind == "swat" then
 		Fx.pop(d.queen and "👑 QUEEN DOWN!" or "SWAT!", UI.Theme.gold, d.queen and 44 or 26)
 	end

@@ -48,7 +48,7 @@ return {
 	daily = { jokeDay = -1, creekDay = -1, kingDone = false, pibbleDay = -1 },
 	restock = { window = -1, bought = {} },
 	cookoff = { week = -1, best = 0 },
-	settings = { peace = false },
+	settings = { peace = true }, -- snagging is opt-in (Fair Play)
 	tutorial = { firstBrisket = false, done = false },
 	forceCritter = "",
 	combo = 0,

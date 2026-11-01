@@ -91,6 +91,9 @@ Content.Slang = {
 	unclocked = "Unc Status unlocked. Socks and sandals are now legal.",
 	quietCreek = "Shhh... quiet on the creek.",
 	skipYap = "Skip the yap",
+	sixSeven = "6-7! 🤷 (that tip ended in 67)",
+	rush = "🍽️ LUNCH RUSH CLEARED!",
+	zoomies = "🐶 ZOOMIES!! 🐶",
 }
 
 Content.Signs = {

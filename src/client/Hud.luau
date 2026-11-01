@@ -98,6 +98,7 @@ function Hud.mount(screen: GuiObject, panels: any)
 		Panels.goHome()
 	end)
 	refs.customers = UI.label("", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -12, 1, -322), Size = UDim2.new(0, 260, 0, 22), TextXAlignment = Enum.TextXAlignment.Right, TextSize = 16, TextStrokeTransparency = 0.4, Parent = root })
+	refs.rush = UI.label("", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -12, 1, -370), Size = UDim2.new(0, 300, 0, 22), TextXAlignment = Enum.TextXAlignment.Right, TextSize = 16, TextColor3 = Color3.fromHex("#FFC83C"), TextStrokeTransparency = 0.4, Parent = root })
 	refs.combo = UI.label("", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -12, 1, -346), Size = UDim2.new(0, 260, 0, 22), TextXAlignment = Enum.TextXAlignment.Right, TextSize = 18, TextColor3 = Color3.fromHex("#6CC24A"), TextStrokeTransparency = 0.4, Parent = root })
 
 	-- bottom: station bar
@@ -246,6 +247,16 @@ function Hud.update()
 	refs.btnPath.Dot.Visible = s.pathStatus.complete
 	refs.serveAll.Text = "🍽️ Serve All" .. (#s.customers > 0 and (" (" .. #s.customers .. ")") or "")
 	refs.customers.Text = #s.customers > 0 and (#s.customers .. " hungry critter" .. (#s.customers == 1 and "" or "s") .. " waiting") or ""
+	if s.rush then
+		local ends, n, done = s.rush.ends, s.rush.n, s.rush.done
+		if now >= ends then -- a new window started since the last snapshot
+			local P = Config.Rush.period
+			ends, n, done = (math.floor(now / P) + 1) * P, 0, false
+		end
+		local left = math.max(0, math.floor(ends - now))
+		local zoom = (s.zoomiesUntil or 0) > now and "  🐶 Zoomies +25% tips" or ""
+		refs.rush.Text = (done and "🍽️ Rush cleared! Next in " or string.format("🍽️ Lunch Rush %d/%d · ", n, s.rush.need)) .. TimeUtil.formatDuration(left) .. zoom
+	end
 	refs.combo.Text = s.combo >= Config.Flip.lockedInAt and ("LOCKED IN 🔒 x" .. s.combo) or (s.combo > 0 and ("Flip combo x" .. s.combo) or "")
 
 	-- first cook / tutorial hints
