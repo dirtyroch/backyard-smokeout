@@ -1,0 +1,58 @@
+--!strict
+-- The shape of a saved player. Add new fields here; old saves get them automatically (Reconcile).
+local Config = require(script.Parent.Config)
+
+return {
+	schema = 1,
+	coins = Config.START_COINS,
+	runCoins = 0,
+	lifetimeCoins = 0,
+	aura = 0,
+	rank = 1,
+	pitLevel = 1,
+	smokerSlotsBought = 0,
+	grillSlotsBought = 0,
+	stations = {}, -- "s1".."s7", "g1".."g4" -> Cook
+	cooler = {}, -- { m = meatId, r = rarityId, f = flip? }
+	sauces = {
+		luck = { amount = 0, charges = 0 },
+		speed = { amount = 0, charges = 0 },
+		tip = { amount = 0, charges = 0 },
+	},
+	boost = { mult = 1, untilT = 0 },
+	cuts = { wagyu = 0, tomahawk = 0 },
+	unlocks = { tomahawk = false },
+	owned = {},
+	equipped = {},
+	titles = {},
+	title = "",
+	critters = {},
+	cutsIndex = {},
+	eggs = {},
+	stats = {
+		served = 0,
+		smoked = 0,
+		cooks = 0,
+		rares = 0,
+		perfectFlips = 0,
+		critters = 0,
+		cookoffs = 0,
+		upgrades = 0,
+		mosquitoes = 0,
+		sauces = 0,
+		burnt = 0,
+		snags = 0,
+	},
+	streak = { lastDay = -1, count = 0, best = 0, freeMissWeek = -1 },
+	path = { claimed = 0, playDays = 0, lastPlayDay = -1 },
+	daily = { jokeDay = -1, creekDay = -1, kingDone = false },
+	restock = { window = -1, bought = {} },
+	cookoff = { week = -1, best = 0 },
+	settings = { peace = false },
+	tutorial = { firstBrisket = false, done = false },
+	forceCritter = "",
+	combo = 0,
+	receipts = {},
+	lastSeen = 0,
+	playSeconds = 0,
+}

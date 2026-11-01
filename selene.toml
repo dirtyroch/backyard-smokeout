@@ -1,0 +1,6 @@
+std = "roblox"
+
+[lints]
+shadowing = "allow"
+# Style-only: UDim2.new(1, 0, 0, 40) reads fine and matches Roblox docs.
+roblox_manual_fromscale_or_fromoffset = "allow"

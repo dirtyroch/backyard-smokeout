@@ -1,0 +1,27 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: CompeyDev/setup-rokit@v0.2.1
+      - name: Lint (selene)
+        run: |
+          selene generate-roblox-std
+          selene src tests scripts
+      - name: Unit tests (Lune)
+        run: lune run tests/run
+      - name: Type check (luau-lsp)
+        run: |
+          curl -sSL -o globalTypes.d.luau https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/main/scripts/globalTypes.d.luau
+          rojo sourcemap default.project.json -o sourcemap.json
+          luau-lsp analyze --definitions=globalTypes.d.luau --sourcemap=sourcemap.json src
+      - name: Build place file
+        run: ./scripts/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BackyardSmokeout
+          path: BackyardSmokeout.rbxlx
