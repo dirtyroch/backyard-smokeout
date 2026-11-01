@@ -18,19 +18,24 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local screen = UI.new("ScreenGui", { Name = "BackyardSmokeout", ResetOnSpawn = false, IgnoreGuiInset = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = playerGui })
--- Scale everything down on small (phone) screens.
-local scale = UI.new("UIScale", { Parent = screen })
+-- Scale everything down on small (phone) screens. The UIScale lives on a full-screen
+-- container that is sized 1/scale, so after scaling it still covers the whole screen and
+-- edge-anchored HUD pieces (menu, Serve All, station bar) stay on the screen edges.
+local root = UI.new("Frame", { Name = "Root", BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), Parent = screen })
+local scale = UI.new("UIScale", { Parent = root })
 local function rescale()
 	local cam = workspace.CurrentCamera
 	local v = cam and cam.ViewportSize or Vector2.new(1280, 720)
-	scale.Scale = math.clamp(math.min(v.X / 1280, v.Y / 760), 0.55, 1)
+	local s = math.clamp(math.min(v.X / 1280, v.Y / 760), 0.55, 1)
+	scale.Scale = s
+	root.Size = UDim2.fromScale(1 / s, 1 / s)
 end
 rescale()
 workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
 
-Fx.mount(screen)
-Panels.mount(screen)
-Hud.mount(screen, Panels)
+Fx.mount(root)
+Panels.mount(root)
+Hud.mount(root, Panels)
 Net.notify = Fx.toast
 WorldClient.start(Panels)
 

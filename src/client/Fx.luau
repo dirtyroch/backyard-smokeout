@@ -12,7 +12,7 @@ local Content = require(Shared.Content)
 local T = UI.Theme
 
 local Fx = {}
-local gui: ScreenGui = nil :: any
+local gui: GuiObject = nil :: any
 local toastHolder: Frame = nil :: any
 local announceHolder: Frame = nil :: any
 
@@ -24,7 +24,7 @@ local KIND_COLOR = {
 	info = Color3.fromHex("#5A4030"),
 }
 
-function Fx.mount(screen: ScreenGui)
+function Fx.mount(screen: GuiObject)
 	gui = screen
 	toastHolder = UI.frame({ Name = "Toasts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 120), Size = UDim2.new(0, 460, 0, 300), Parent = screen, ZIndex = 50 })
 	UI.list(toastHolder, nil, 6, Enum.HorizontalAlignment.Center)

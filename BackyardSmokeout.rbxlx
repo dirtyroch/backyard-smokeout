@@ -1532,10 +1532,17 @@ local function surfaceText(p, face, text, textColor, bg, font)
 end
 WorldBuilder.surfaceText = surfaceText
 
-local function billboard(adornee, name, text, offsetY, maxDist, color, w, h)
+-- `studs` (optional {w, h}) sizes the label in world studs instead of pixels, so labels on
+-- closely spaced things (smoker row, grill spots, customer tables) shrink with distance
+-- instead of piling on top of each other.
+local function billboard(adornee, name, text, offsetY, maxDist, color, w, h, studs: { number }?)
 	local b = E.Instance.new("BillboardGui")
 	b.Name = name
-	b.Size = E.UDim2.new(0, w or 160, 0, h or 40)
+	if studs then
+		b.Size = E.UDim2.new(studs[1], 0, studs[2], 0)
+	else
+		b.Size = E.UDim2.new(0, w or 160, 0, h or 40)
+	end
 	b.StudsOffset = V(0, offsetY or 3, 0)
 	b.AlwaysOnTop = false
 	b.MaxDistance = maxDist or 80
@@ -1777,7 +1784,7 @@ local function smoker(parent, name, cf)
 	smoke.Parent = chimney
 	part(m, "Handle", V(2, 0.3, 0.3), cf * E.CFrame.new(0, 4, -1.7), "#C0C0C0", E.Enum.Material.Metal)
 	local spot = part(m, "MeatSpot", V(1, 0.2, 1), cf * E.CFrame.new(0, 5.15, 0), "#000000", nil, { Transparency = 1, CanCollide = false })
-	local gui = billboard(barrel, "SlotGui", "", 4.2, 70, "#FFFFFF", 180, 44)
+	local gui = billboard(barrel, "SlotGui", "", 4.2, 70, "#FFFFFF", 180, 44, { 7.5, 2 })
 	gui.Name = "SlotGui"
 	m:SetAttribute("Slot", name)
 	return m, barrel, spot
@@ -1793,7 +1800,7 @@ local function stall(parent, name, cf, title, awningA, awningB, promptKind, prom
 		part(m, "Awning" .. i, V(2, 0.4, 7), cf * E.CFrame.new(-6 + i * 2, 9.2, 1) * E.CFrame.Angles(math.rad(-12), 0, 0), i % 2 == 0 and awningA or awningB, E.Enum.Material.Fabric)
 	end
 	local roof = part(m, "Roof", V(14.5, 0.6, 8), cf * E.CFrame.new(0, 10.2, 1.5), "#5A3A1E", E.Enum.Material.WoodPlanks)
-	local sign = part(m, "Sign", V(12, 2.2, 0.3), cf * E.CFrame.new(0, 7.6, -1.5), "#F4E1C1", E.Enum.Material.Wood)
+	local sign = part(m, "Sign", V(12, 2.2, 0.3), cf * E.CFrame.new(0, 7.25, -1.5), "#F4E1C1", E.Enum.Material.Wood)
 	surfaceText(sign, E.Enum.NormalId.Front, title, "#5A2E1E", nil)
 	-- bottles on the counter
 	local colors = { "#D2462E", "#FF5A00", "#E8B923", "#FFA07A", "#5B3A1E" }
@@ -1813,7 +1820,7 @@ local function buildPlot(root, i, cfg)
 	local m = model(root, "Plot" .. i)
 	m:SetAttribute("PlotIndex", i)
 	part(m, "Pad", V(S, 1, S), cf * E.CFrame.new(0, 0.1, 0), "#6FBF4B", E.Enum.Material.Grass)
-	part(m, "Patio", V(30, 0.3, 16), cf * E.CFrame.new(-10, 0.7, 18), "#C9B79C", E.Enum.Material.Slate)
+	part(m, "Patio", V(56, 0.3, 16), cf * E.CFrame.new(0, 0.7, 18), "#C9B79C", E.Enum.Material.Slate)
 	part(m, "Path", V(8, 0.25, 26), cf * E.CFrame.new(0, 0.68, -19), "#C2A878", E.Enum.Material.Sand)
 	-- fences (front has a gap for the path)
 	fence(m, cf * E.CFrame.new(0, 0.6, S / 2), S)
@@ -1848,7 +1855,7 @@ local function buildPlot(root, i, cfg)
 	for gi, x in ipairs(WorldBuilder.GRILL_X) do
 		local spot = part(grill, "g" .. gi, V(4, 0.2, 3), cf * E.CFrame.new(x, 4.05, 4), "#333333", E.Enum.Material.Metal)
 		spot:SetAttribute("Slot", "g" .. gi)
-		billboard(spot, "SlotGui", "", 3, 60, "#FFFFFF", 150, 40)
+		billboard(spot, "SlotGui", "", 3, 60, "#FFFFFF", 150, 40, { 4.6, 1.5 })
 	end
 	-- customer tables
 	local tables = folder(m, "Tables")
@@ -5498,7 +5505,7 @@ function WorldService.spawnCustomer(player: Player, customer: any, critter: any)
 		local meat = Config.Meats[customer.order]
 		orderText = critter.name .. ": " .. meat.icon .. " " .. meat.name .. " please!"
 	end
-	WorldBuilder.billboard(head, "Order", orderText, 2.4, 70, "#FFFFFF", 260, 34)
+	WorldBuilder.billboard(head, "Order", orderText, 2.4, 70, "#FFFFFF", 260, 34, { 10, 1.5 })
 	local serve = WorldBuilder.prompt(body, "serve", "Serve", critter.name, 0, 10)
 	serve:SetAttribute("CustomerId", customer.id)
 	serve:SetAttribute("OwnerUserId", player.UserId)
@@ -5731,7 +5738,7 @@ local Content = require(Shared.Content)
 local T = UI.Theme
 
 local Fx = {}
-local gui: ScreenGui = nil :: any
+local gui: GuiObject = nil :: any
 local toastHolder: Frame = nil :: any
 local announceHolder: Frame = nil :: any
 
@@ -5743,7 +5750,7 @@ local KIND_COLOR = {
 	info = Color3.fromHex("#5A4030"),
 }
 
-function Fx.mount(screen: ScreenGui)
+function Fx.mount(screen: GuiObject)
 	gui = screen
 	toastHolder = UI.frame({ Name = "Toasts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 120), Size = UDim2.new(0, 460, 0, 300), Parent = screen, ZIndex = 50 })
 	UI.list(toastHolder, nil, 6, Enum.HorizontalAlignment.Center)
@@ -5986,12 +5993,12 @@ local function menuButton(parent: Instance, icon: string, text: string, order: n
 	return b
 end
 
-function Hud.mount(screen: ScreenGui, panels: any)
+function Hud.mount(screen: GuiObject, panels: any)
 	Panels = panels
 	root = UI.frame({ Name = "Hud", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = screen })
 
 	-- top: currencies
-	local top = UI.frame({ BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Size = UDim2.new(0, 800, 0, 44), Parent = root })
+	local top = UI.frame({ BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Size = UDim2.new(0, 860, 0, 44), Parent = root })
 	UI.list(top, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Center)
 	refs.coins = topPill(top, "🪙", 1, T.gold)
 	refs.aura = topPill(top, "✨", 2, Color3.fromHex("#B48CFF"))
@@ -6273,6 +6280,8 @@ function Hud.update()
 				end
 			end
 		end
+		-- keep the meat name clear of the 👀 peek button in the card's top-right corner
+		c.name.Size = UDim2.new(1, c.peek.Visible and -40 or 0, 0, 34)
 	end
 end
 
@@ -6315,19 +6324,24 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local screen = UI.new("ScreenGui", { Name = "BackyardSmokeout", ResetOnSpawn = false, IgnoreGuiInset = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = playerGui })
--- Scale everything down on small (phone) screens.
-local scale = UI.new("UIScale", { Parent = screen })
+-- Scale everything down on small (phone) screens. The UIScale lives on a full-screen
+-- container that is sized 1/scale, so after scaling it still covers the whole screen and
+-- edge-anchored HUD pieces (menu, Serve All, station bar) stay on the screen edges.
+local root = UI.new("Frame", { Name = "Root", BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), Parent = screen })
+local scale = UI.new("UIScale", { Parent = root })
 local function rescale()
 	local cam = workspace.CurrentCamera
 	local v = cam and cam.ViewportSize or Vector2.new(1280, 720)
-	scale.Scale = math.clamp(math.min(v.X / 1280, v.Y / 760), 0.55, 1)
+	local s = math.clamp(math.min(v.X / 1280, v.Y / 760), 0.55, 1)
+	scale.Scale = s
+	root.Size = UDim2.fromScale(1 / s, 1 / s)
 end
 rescale()
 workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
 
-Fx.mount(screen)
-Panels.mount(screen)
-Hud.mount(screen, Panels)
+Fx.mount(root)
+Panels.mount(root)
+Hud.mount(root, Panels)
 Net.notify = Fx.toast
 WorldClient.start(Panels)
 
@@ -6470,7 +6484,7 @@ local T = UI.Theme
 
 local player = Players.LocalPlayer
 local Panels = {}
-local screen: ScreenGui = nil :: any
+local screen: GuiObject = nil :: any
 local window: Frame = nil :: any
 local titleLabel: TextLabel = nil :: any
 local body: Frame = nil :: any
@@ -6498,7 +6512,7 @@ local function S(): any
 end
 
 -- ===== window chrome =====
-function Panels.mount(sg: ScreenGui)
+function Panels.mount(sg: GuiObject)
 	screen = sg
 	window = UI.frame({ Name = "Window", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 760, 0, 500), BackgroundColor3 = T.bg, Visible = false, ZIndex = 20, Parent = screen })
 	UI.corner(window, 18)
@@ -7650,7 +7664,7 @@ return WorldClient
               <CoordinateFrame name="CFrame">
                 <X>168</X>
                 <Y>0.69999695</Y>
-                <Z>10</Z>
+                <Z>0</Z>
                 <R00>0</R00>
                 <R01>0</R01>
                 <R02>1</R02>
@@ -7664,7 +7678,7 @@ return WorldClient
               <Color3uint8 name="Color3uint8">13219740</Color3uint8>
               <token name="Material">800</token>
               <Vector3 name="size">
-                <X>30</X>
+                <X>56</X>
                 <Y>0.30000305</Y>
                 <Z>16</Z>
               </Vector3>
@@ -9259,10 +9273,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -9532,10 +9546,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -9805,10 +9819,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -10078,10 +10092,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -10351,10 +10365,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -10624,10 +10638,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -10897,10 +10911,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -11179,10 +11193,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -11255,10 +11269,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -11331,10 +11345,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -11407,10 +11421,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -13243,9 +13257,9 @@ return WorldClient
               <bool name="Anchored">true</bool>
               <token name="BottomSurface">0</token>
               <CoordinateFrame name="CFrame">
-                <X>111.72287</X>
+                <X>118.793945</X>
                 <Y>0.69999695</Y>
-                <Z>125.865005</Z>
+                <Z>118.793945</Z>
                 <R00>0.70710754</R00>
                 <R01>0</R01>
                 <R02>0.70710754</R02>
@@ -13259,7 +13273,7 @@ return WorldClient
               <Color3uint8 name="Color3uint8">13219740</Color3uint8>
               <token name="Material">800</token>
               <Vector3 name="size">
-                <X>30</X>
+                <X>56</X>
                 <Y>0.30000305</Y>
                 <Z>16</Z>
               </Vector3>
@@ -14854,10 +14868,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -15127,10 +15141,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -15400,10 +15414,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -15673,10 +15687,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -15946,10 +15960,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -16219,10 +16233,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -16492,10 +16506,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -16774,10 +16788,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -16850,10 +16864,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -16926,10 +16940,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -17002,10 +17016,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -18838,7 +18852,7 @@ return WorldClient
               <bool name="Anchored">true</bool>
               <token name="BottomSurface">0</token>
               <CoordinateFrame name="CFrame">
-                <X>-10</X>
+                <X>0</X>
                 <Y>0.69999695</Y>
                 <Z>168</Z>
                 <R00>1</R00>
@@ -18854,7 +18868,7 @@ return WorldClient
               <Color3uint8 name="Color3uint8">13219740</Color3uint8>
               <token name="Material">800</token>
               <Vector3 name="size">
-                <X>30</X>
+                <X>56</X>
                 <Y>0.30000305</Y>
                 <Z>16</Z>
               </Vector3>
@@ -20449,10 +20463,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -20722,10 +20736,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -20995,10 +21009,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -21268,10 +21282,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -21541,10 +21555,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -21814,10 +21828,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -22087,10 +22101,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -22369,10 +22383,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -22445,10 +22459,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -22521,10 +22535,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -22597,10 +22611,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -24433,9 +24447,9 @@ return WorldClient
               <bool name="Anchored">true</bool>
               <token name="BottomSurface">0</token>
               <CoordinateFrame name="CFrame">
-                <X>-125.865005</X>
+                <X>-118.793945</X>
                 <Y>0.69999695</Y>
-                <Z>111.72287</Z>
+                <Z>118.793945</Z>
                 <R00>0.70710754</R00>
                 <R01>0</R01>
                 <R02>-0.70710754</R02>
@@ -24449,7 +24463,7 @@ return WorldClient
               <Color3uint8 name="Color3uint8">13219740</Color3uint8>
               <token name="Material">800</token>
               <Vector3 name="size">
-                <X>30</X>
+                <X>56</X>
                 <Y>0.30000305</Y>
                 <Z>16</Z>
               </Vector3>
@@ -26044,10 +26058,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -26317,10 +26331,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -26590,10 +26604,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -26863,10 +26877,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -27136,10 +27150,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -27409,10 +27423,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -27682,10 +27696,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -27964,10 +27978,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -28040,10 +28054,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -28116,10 +28130,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -28192,10 +28206,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -30030,7 +30044,7 @@ return WorldClient
               <CoordinateFrame name="CFrame">
                 <X>-168</X>
                 <Y>0.69999695</Y>
-                <Z>-10</Z>
+                <Z>0</Z>
                 <R00>0</R00>
                 <R01>0</R01>
                 <R02>-1</R02>
@@ -30044,7 +30058,7 @@ return WorldClient
               <Color3uint8 name="Color3uint8">13219740</Color3uint8>
               <token name="Material">800</token>
               <Vector3 name="size">
-                <X>30</X>
+                <X>56</X>
                 <Y>0.30000305</Y>
                 <Z>16</Z>
               </Vector3>
@@ -31639,10 +31653,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -31912,10 +31926,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -32185,10 +32199,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -32458,10 +32472,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -32731,10 +32745,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -33004,10 +33018,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -33277,10 +33291,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -33559,10 +33573,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -33635,10 +33649,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -33711,10 +33725,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -33787,10 +33801,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -35623,9 +35637,9 @@ return WorldClient
               <bool name="Anchored">true</bool>
               <token name="BottomSurface">0</token>
               <CoordinateFrame name="CFrame">
-                <X>-111.72287</X>
+                <X>-118.793945</X>
                 <Y>0.69999695</Y>
-                <Z>-125.865005</Z>
+                <Z>-118.793945</Z>
                 <R00>-0.70710754</R00>
                 <R01>0</R01>
                 <R02>-0.70710754</R02>
@@ -35639,7 +35653,7 @@ return WorldClient
               <Color3uint8 name="Color3uint8">13219740</Color3uint8>
               <token name="Material">800</token>
               <Vector3 name="size">
-                <X>30</X>
+                <X>56</X>
                 <Y>0.30000305</Y>
                 <Z>16</Z>
               </Vector3>
@@ -37234,10 +37248,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -37507,10 +37521,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -37780,10 +37794,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -38053,10 +38067,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -38326,10 +38340,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -38599,10 +38613,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -38872,10 +38886,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -39154,10 +39168,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -39230,10 +39244,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -39306,10 +39320,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -39382,10 +39396,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -41218,7 +41232,7 @@ return WorldClient
               <bool name="Anchored">true</bool>
               <token name="BottomSurface">0</token>
               <CoordinateFrame name="CFrame">
-                <X>10</X>
+                <X>-0</X>
                 <Y>0.69999695</Y>
                 <Z>-168</Z>
                 <R00>-1</R00>
@@ -41234,7 +41248,7 @@ return WorldClient
               <Color3uint8 name="Color3uint8">13219740</Color3uint8>
               <token name="Material">800</token>
               <Vector3 name="size">
-                <X>30</X>
+                <X>56</X>
                 <Y>0.30000305</Y>
                 <Z>16</Z>
               </Vector3>
@@ -42829,10 +42843,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -43102,10 +43116,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -43375,10 +43389,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -43648,10 +43662,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -43921,10 +43935,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -44194,10 +44208,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -44467,10 +44481,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -44749,10 +44763,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -44825,10 +44839,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -44901,10 +44915,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -44977,10 +44991,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -46813,9 +46827,9 @@ return WorldClient
               <bool name="Anchored">true</bool>
               <token name="BottomSurface">0</token>
               <CoordinateFrame name="CFrame">
-                <X>125.865005</X>
+                <X>118.793945</X>
                 <Y>0.69999695</Y>
-                <Z>-111.72287</Z>
+                <Z>-118.793945</Z>
                 <R00>-0.70710754</R00>
                 <R01>0</R01>
                 <R02>0.70710754</R02>
@@ -46829,7 +46843,7 @@ return WorldClient
               <Color3uint8 name="Color3uint8">13219740</Color3uint8>
               <token name="Material">800</token>
               <Vector3 name="size">
-                <X>30</X>
+                <X>56</X>
                 <Y>0.30000305</Y>
                 <Z>16</Z>
               </Vector3>
@@ -48424,10 +48438,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -48697,10 +48711,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -48970,10 +48984,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -49243,10 +49257,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -49516,10 +49530,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -49789,10 +49803,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -50062,10 +50076,10 @@ return WorldClient
                     <float name="LightInfluence">0</float>
                     <float name="MaxDistance">70</float>
                     <UDim2 name="Size">
-                      <XS>0</XS>
-                      <XO>180</XO>
-                      <YS>0</YS>
-                      <YO>44</YO>
+                      <XS>7.5</XS>
+                      <XO>0</XO>
+                      <YS>2</YS>
+                      <YO>0</YO>
                     </UDim2>
                     <Vector3 name="StudsOffset">
                       <X>0</X>
@@ -50344,10 +50358,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -50420,10 +50434,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -50496,10 +50510,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -50572,10 +50586,10 @@ return WorldClient
                   <float name="LightInfluence">0</float>
                   <float name="MaxDistance">60</float>
                   <UDim2 name="Size">
-                    <XS>0</XS>
-                    <XO>150</XO>
-                    <YS>0</YS>
-                    <YO>40</YO>
+                    <XS>4.6</XS>
+                    <XO>0</XO>
+                    <YS>1.5</YS>
+                    <YO>0</YO>
                   </UDim2>
                   <Vector3 name="StudsOffset">
                     <X>0</X>
@@ -53224,7 +53238,7 @@ return WorldClient
               <token name="BottomSurface">0</token>
               <CoordinateFrame name="CFrame">
                 <X>-29.486969</X>
-                <Y>8</Y>
+                <Y>7.649994</Y>
                 <Z>-16.59047</Z>
                 <R00>-0.93969727</R00>
                 <R01>0</R01>
@@ -53801,7 +53815,7 @@ return WorldClient
               <token name="BottomSurface">0</token>
               <CoordinateFrame name="CFrame">
                 <X>29.486969</X>
-                <Y>8</Y>
+                <Y>7.649994</Y>
                 <Z>-16.59047</Z>
                 <R00>-0.93969727</R00>
                 <R01>0</R01>
@@ -56549,10 +56563,10 @@ No entries yet</string>
                 <float name="LightInfluence">0</float>
                 <float name="MaxDistance">70</float>
                 <UDim2 name="Size">
-                  <XS>0</XS>
-                  <XO>180</XO>
-                  <YS>0</YS>
-                  <YO>44</YO>
+                  <XS>7.5</XS>
+                  <XO>0</XO>
+                  <YS>2</YS>
+                  <YO>0</YO>
                 </UDim2>
                 <Vector3 name="StudsOffset">
                   <X>0</X>

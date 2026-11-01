@@ -309,7 +309,7 @@ function WorldService.spawnCustomer(player: Player, customer: any, critter: any)
 		local meat = Config.Meats[customer.order]
 		orderText = critter.name .. ": " .. meat.icon .. " " .. meat.name .. " please!"
 	end
-	WorldBuilder.billboard(head, "Order", orderText, 2.4, 70, "#FFFFFF", 260, 34)
+	WorldBuilder.billboard(head, "Order", orderText, 2.4, 70, "#FFFFFF", 260, 34, { 10, 1.5 })
 	local serve = WorldBuilder.prompt(body, "serve", "Serve", critter.name, 0, 10)
 	serve:SetAttribute("CustomerId", customer.id)
 	serve:SetAttribute("OwnerUserId", player.UserId)

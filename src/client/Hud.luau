@@ -58,12 +58,12 @@ local function menuButton(parent: Instance, icon: string, text: string, order: n
 	return b
 end
 
-function Hud.mount(screen: ScreenGui, panels: any)
+function Hud.mount(screen: GuiObject, panels: any)
 	Panels = panels
 	root = UI.frame({ Name = "Hud", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = screen })
 
 	-- top: currencies
-	local top = UI.frame({ BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Size = UDim2.new(0, 800, 0, 44), Parent = root })
+	local top = UI.frame({ BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Size = UDim2.new(0, 860, 0, 44), Parent = root })
 	UI.list(top, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Center)
 	refs.coins = topPill(top, "🪙", 1, T.gold)
 	refs.aura = topPill(top, "✨", 2, Color3.fromHex("#B48CFF"))
@@ -345,6 +345,8 @@ function Hud.update()
 				end
 			end
 		end
+		-- keep the meat name clear of the 👀 peek button in the card's top-right corner
+		c.name.Size = UDim2.new(1, c.peek.Visible and -40 or 0, 0, 34)
 	end
 end
 

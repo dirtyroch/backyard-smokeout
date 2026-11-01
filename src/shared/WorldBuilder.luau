@@ -125,10 +125,17 @@ local function surfaceText(p, face, text, textColor, bg, font)
 end
 WorldBuilder.surfaceText = surfaceText
 
-local function billboard(adornee, name, text, offsetY, maxDist, color, w, h)
+-- `studs` (optional {w, h}) sizes the label in world studs instead of pixels, so labels on
+-- closely spaced things (smoker row, grill spots, customer tables) shrink with distance
+-- instead of piling on top of each other.
+local function billboard(adornee, name, text, offsetY, maxDist, color, w, h, studs: { number }?)
 	local b = E.Instance.new("BillboardGui")
 	b.Name = name
-	b.Size = E.UDim2.new(0, w or 160, 0, h or 40)
+	if studs then
+		b.Size = E.UDim2.new(studs[1], 0, studs[2], 0)
+	else
+		b.Size = E.UDim2.new(0, w or 160, 0, h or 40)
+	end
 	b.StudsOffset = V(0, offsetY or 3, 0)
 	b.AlwaysOnTop = false
 	b.MaxDistance = maxDist or 80
@@ -370,7 +377,7 @@ local function smoker(parent, name, cf)
 	smoke.Parent = chimney
 	part(m, "Handle", V(2, 0.3, 0.3), cf * E.CFrame.new(0, 4, -1.7), "#C0C0C0", E.Enum.Material.Metal)
 	local spot = part(m, "MeatSpot", V(1, 0.2, 1), cf * E.CFrame.new(0, 5.15, 0), "#000000", nil, { Transparency = 1, CanCollide = false })
-	local gui = billboard(barrel, "SlotGui", "", 4.2, 70, "#FFFFFF", 180, 44)
+	local gui = billboard(barrel, "SlotGui", "", 4.2, 70, "#FFFFFF", 180, 44, { 7.5, 2 })
 	gui.Name = "SlotGui"
 	m:SetAttribute("Slot", name)
 	return m, barrel, spot
@@ -386,7 +393,7 @@ local function stall(parent, name, cf, title, awningA, awningB, promptKind, prom
 		part(m, "Awning" .. i, V(2, 0.4, 7), cf * E.CFrame.new(-6 + i * 2, 9.2, 1) * E.CFrame.Angles(math.rad(-12), 0, 0), i % 2 == 0 and awningA or awningB, E.Enum.Material.Fabric)
 	end
 	local roof = part(m, "Roof", V(14.5, 0.6, 8), cf * E.CFrame.new(0, 10.2, 1.5), "#5A3A1E", E.Enum.Material.WoodPlanks)
-	local sign = part(m, "Sign", V(12, 2.2, 0.3), cf * E.CFrame.new(0, 7.6, -1.5), "#F4E1C1", E.Enum.Material.Wood)
+	local sign = part(m, "Sign", V(12, 2.2, 0.3), cf * E.CFrame.new(0, 7.25, -1.5), "#F4E1C1", E.Enum.Material.Wood)
 	surfaceText(sign, E.Enum.NormalId.Front, title, "#5A2E1E", nil)
 	-- bottles on the counter
 	local colors = { "#D2462E", "#FF5A00", "#E8B923", "#FFA07A", "#5B3A1E" }
@@ -406,7 +413,7 @@ local function buildPlot(root, i, cfg)
 	local m = model(root, "Plot" .. i)
 	m:SetAttribute("PlotIndex", i)
 	part(m, "Pad", V(S, 1, S), cf * E.CFrame.new(0, 0.1, 0), "#6FBF4B", E.Enum.Material.Grass)
-	part(m, "Patio", V(30, 0.3, 16), cf * E.CFrame.new(-10, 0.7, 18), "#C9B79C", E.Enum.Material.Slate)
+	part(m, "Patio", V(56, 0.3, 16), cf * E.CFrame.new(0, 0.7, 18), "#C9B79C", E.Enum.Material.Slate)
 	part(m, "Path", V(8, 0.25, 26), cf * E.CFrame.new(0, 0.68, -19), "#C2A878", E.Enum.Material.Sand)
 	-- fences (front has a gap for the path)
 	fence(m, cf * E.CFrame.new(0, 0.6, S / 2), S)
@@ -441,7 +448,7 @@ local function buildPlot(root, i, cfg)
 	for gi, x in ipairs(WorldBuilder.GRILL_X) do
 		local spot = part(grill, "g" .. gi, V(4, 0.2, 3), cf * E.CFrame.new(x, 4.05, 4), "#333333", E.Enum.Material.Metal)
 		spot:SetAttribute("Slot", "g" .. gi)
-		billboard(spot, "SlotGui", "", 3, 60, "#FFFFFF", 150, 40)
+		billboard(spot, "SlotGui", "", 3, 60, "#FFFFFF", 150, 40, { 4.6, 1.5 })
 	end
 	-- customer tables
 	local tables = folder(m, "Tables")

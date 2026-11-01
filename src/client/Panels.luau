@@ -19,7 +19,7 @@ local T = UI.Theme
 
 local player = Players.LocalPlayer
 local Panels = {}
-local screen: ScreenGui = nil :: any
+local screen: GuiObject = nil :: any
 local window: Frame = nil :: any
 local titleLabel: TextLabel = nil :: any
 local body: Frame = nil :: any
@@ -47,7 +47,7 @@ local function S(): any
 end
 
 -- ===== window chrome =====
-function Panels.mount(sg: ScreenGui)
+function Panels.mount(sg: GuiObject)
 	screen = sg
 	window = UI.frame({ Name = "Window", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 760, 0, 500), BackgroundColor3 = T.bg, Visible = false, ZIndex = 20, Parent = screen })
 	UI.corner(window, 18)
