@@ -22,6 +22,7 @@ This guide takes you from "I have a file" to "my game is live on Roblox". Plan o
 **About Studio test mode:**
 - Saving doesn't work in Studio until you finish step 5. A yellow note will say "progress is NOT saved". That's normal.
 - Shop items show a **"Studio test (free)"** button so you can try every apron and smoker skin without spending anything.
+- **Turkey Day Smokeout** (Thanksgiving week, Nov 23–29 in 2026) turns on by itself on the right dates. To test it any day in Studio: in the **Explorer** click **Workspace**, then in **Properties** scroll to **Attributes**, click **+**, name it `ForceTurkeyDay`, pick **boolean**, tick it, and press Play. The potluck table in the hub gets the turkey, pies, pumpkins and banner. It only works in Studio; the live game always uses the real dates.
 - Want to test with a friend? Open the **Test** tab, set **Clients** to 2 and press **Start**.
 
 ## 3. Publish it

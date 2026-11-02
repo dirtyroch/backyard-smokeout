@@ -15,6 +15,7 @@ local Rarity = require(Shared.Logic.Rarity)
 local Restock = require(Shared.Logic.Restock)
 local Economy = require(Shared.Logic.Economy)
 local TimeUtil = require(Shared.Logic.TimeUtil)
+local Holiday = require(Shared.Logic.Holiday)
 local T = UI.Theme
 
 local player = Players.LocalPlayer
@@ -318,7 +319,7 @@ local function meatLocked(s: any, meat: any): string?
 	if meat.hidden then
 		return "hidden"
 	end
-	if meat.season and meat.season ~= s.season.id then
+	if not Holiday.meatInSeason(meat, s.season.id, s.turkey ~= nil and s.turkey.active, Config.TurkeyDay.meat) then
 		return "Seasonal: back next " .. meat.season
 	end
 	if s.pitLevel < meat.unlockPit then
@@ -344,7 +345,7 @@ local function renderCook(s: any)
 	local order = 0
 	for _, id in ipairs(Config.MeatOrder) do
 		local meat = Config.Meats[id]
-		if meat.station == kind and not (meat.season and meat.season ~= s.season.id) then
+		if meat.station == kind and Holiday.meatInSeason(meat, s.season.id, s.turkey ~= nil and s.turkey.active, Config.TurkeyDay.meat) then
 			order += 1
 			local why = meatLocked(s, meat)
 			local f = card(sf, order, 74)

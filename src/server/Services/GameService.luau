@@ -24,6 +24,7 @@ local Restock = require(Shared.Logic.Restock)
 local CookOff = require(Shared.Logic.CookOff)
 local RateLimiter = require(Shared.Logic.RateLimiter)
 local TimeUtil = require(Shared.Logic.TimeUtil)
+local Holiday = require(Shared.Logic.Holiday)
 
 local GameService = {}
 local ctx: any = nil
@@ -84,6 +85,16 @@ function GameService.isSunday(): boolean
 	return weekday() == 1
 end
 
+-- Turkey Day Smokeout window (Thanksgiving week, Texas time). In Studio, the workspace attribute
+-- ForceTurkeyDay = true turns it on any day so it can be tested.
+function GameService.turkeyWeek(): Holiday.Week
+	local w = Holiday.turkeyWeek(today(), Config.TurkeyDay.daysBefore, Config.TurkeyDay.daysAfter)
+	if not w.active and RunService:IsStudio() and workspace:GetAttribute("ForceTurkeyDay") == true then
+		w.active = true
+	end
+	return w
+end
+
 local function profileOf(player: Player): any?
 	local p = ctx.Data.get(player)
 	return p and p.data or nil
@@ -126,9 +137,19 @@ end
 GameService.awardBadge = awardBadge
 
 -- Big Bertha's Dinner Bell: a free server-wide tip bonus (set by EggService).
+-- The Turkey Day potluck table fills the same way (set by EggService). The two don't stack.
 GameService.dinnerUntil = 0
+GameService.potluckUntil = 0
 function GameService.dinnerBonus(): number
-	return workspace:GetServerTimeNow() < GameService.dinnerUntil and Config.DinnerBell.tipBonus or 0
+	local now = workspace:GetServerTimeNow()
+	local bonus = 0
+	if now < GameService.dinnerUntil then
+		bonus = Config.DinnerBell.tipBonus
+	end
+	if now < GameService.potluckUntil then
+		bonus = math.max(bonus, Config.TurkeyDay.tipBonus)
+	end
+	return bonus
 end
 
 function GameService.hasPass(player: Player, key: string): boolean
@@ -312,7 +333,7 @@ local function meatAvailable(player: Player, data: any, meat: any): (boolean, st
 	if meat.hidden then
 		return false, "Not on the menu."
 	end
-	if meat.season and meat.season ~= GameService.currentSeason().id then
+	if not Holiday.meatInSeason(meat, GameService.currentSeason().id, GameService.turkeyWeek().active, Config.TurkeyDay.meat) then
 		return false, "That's a seasonal cut. It's back next season!"
 	end
 	if data.pitLevel < meat.unlockPit then
@@ -997,6 +1018,11 @@ local function snapshot(player: Player, data: any): any
 			return { n = cur and cur.n or 0, need = Config.Rush.need, done = cur ~= nil and cur.done, ends = Hype.rushEnds(w, Config.Rush.period) }
 		end)(),
 		dinnerUntil = GameService.dinnerUntil,
+		potluckUntil = GameService.potluckUntil,
+		turkey = (function()
+			local w = GameService.turkeyWeek()
+			return { active = w.active, isDay = w.isDay, ends = Holiday.label(w.endDay), shared = data.daily.turkeyDay == today() }
+		end)(),
 		season = GameService.currentSeason(),
 		saturday = GameService.isSaturday(),
 		suds = GameService.isSudsWeekend(),

@@ -96,11 +96,31 @@ Content.Slang = {
 	dinnerBell = "🔔 DINNER'S ON! 🔔",
 }
 
+-- Turkey Day Smokeout (Thanksgiving week). Family-friendly, original lines only.
+Content.TurkeyDay = {
+	login = "🦃 It's Turkey Day Smokeout week! Smoke a Harvest Turkey Leg and share it at the potluck table for a free Thankful & Full Apron.",
+	needDish = "Everybody brings a dish! Smoke a Harvest Turkey Leg (any smoker, 15 min), then set it on the table here.",
+	already = "You already brought a dish today. Thank you, sugar! Come back tomorrow, and bring your crew: when 3 pitmasters share, the table's full for everybody.",
+	firstShare = "You set your %s on the table. Granny Pecan gives you a hug and a brand-new apron.\n\n+%d coins, the Thankful & Full Apron, and a new title: Thankful.",
+	share = "You set your %s on the table. \"Now THAT's a potluck!\"\n\n+%d coins. Come back tomorrow with another dish.",
+	progress = "🥧 Potluck table: %d/%d dishes. %d more pitmasters sharing in the next few minutes fills the table, and everybody gets bonus tips!",
+	full = "🦃 THE POTLUCK'S FULL! %d pitmasters shared a dish. Everyone gets +%d%% tips for %d min!",
+	over = "The Turkey Day potluck is packed up for the year. See y'all next Thanksgiving!",
+	thanks = {
+		"Granny Pecan: \"I'm thankful for good smoke and better company.\"",
+		"Unc Hank: \"I'm thankful for elastic waistbands. That's it. That's the joke.\"",
+		"The King of the Pit: \"Thankful for low fire, slow days, and folks to feed.\"",
+		"Temp: \"I am thankful for... 165 degrees. Always 165.\"",
+	},
+}
+
 Content.Signs = {
 	hub = "ROCHIN' RANCH RD.",
 	shop = "ROCH & ROLL SAUCE SHACK",
 	cookoff = "SATURDAY COOK-OFF",
 	potluck = "SUNDAY POTLUCK",
+	turkeyPotluck = "TURKEY DAY POTLUCK",
+	turkeyBanner = "TURKEY DAY SMOKEOUT\nBring a dish!",
 	creek = "(nothing to see here)",
 	welcome = "BACKYARD SMOKEOUT",
 	bertha = "BIG BERTHA\nThe King of the Pit's 1,000-gallon smoker · Ring the bell when supper's on",

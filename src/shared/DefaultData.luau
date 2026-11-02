@@ -45,7 +45,7 @@ return {
 	},
 	streak = { lastDay = -1, count = 0, best = 0, freeMissWeek = -1 },
 	path = { claimed = 0, playDays = 0, lastPlayDay = -1 },
-	daily = { jokeDay = -1, creekDay = -1, kingDone = false, bellDay = -1 },
+	daily = { jokeDay = -1, creekDay = -1, kingDone = false, bellDay = -1, turkeyDay = -1 },
 	restock = { window = -1, bought = {} },
 	cookoff = { week = -1, best = 0 },
 	settings = { peace = true }, -- snagging is opt-in (Fair Play)

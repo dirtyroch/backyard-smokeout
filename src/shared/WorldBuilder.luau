@@ -1286,6 +1286,77 @@ local function ell(parent, name, size, cf, color, material)
 end
 WorldBuilder.ellipsoid = ell
 
+-- Turkey Day Smokeout decor for the hub potluck table (built at runtime only during Thanksgiving
+-- week, then destroyed). `pot` is the Potluck model; everything is placed off its Table part.
+-- Adds a glazed smoked turkey (the "Share a dish" prompt), a pecan pie, pumpkins, a corn-stalk
+-- arch with fall pennants, and a banner. Original art, no brands.
+function WorldBuilder.turkeyDay(pot, content)
+	local tablePart = pot:FindFirstChild("Table")
+	if not tablePart then
+		return nil
+	end
+	local old = pot:FindFirstChild("TurkeyDay")
+	if old then
+		old:Destroy()
+	end
+	local m = model(pot, "TurkeyDay")
+	local base = tablePart.CFrame * E.CFrame.new(0, -3, 0) -- the potluck's own origin (ground)
+	local function B(x, y, z, rx, ry, rz)
+		return base * E.CFrame.new(x, y, z) * E.CFrame.Angles(math.rad(rx or 0), math.rad(ry or 0), math.rad(rz or 0))
+	end
+	local TOP = 3.25
+	local TX = 1.3 -- turkey x on the table
+	-- table runner in harvest orange
+	deco(m, "Runner", V(13.6, 0.06, 1.6), B(0, TOP + 0.03, 0.6), "#C8641E", E.Enum.Material.Fabric)
+	-- the smoked turkey on a platter
+	dcyl(m, "Platter", 0.16, 3.4, B(TX, TOP + 0.1, 0.7) * upright(), "#F4F1EA", E.Enum.Material.SmoothPlastic)
+	local body = ell(m, "TurkeyBody", V(2.8, 1.65, 2.1), B(TX, TOP + 0.9, 0.7), "#9C4A1A")
+	ell(m, "TurkeyGlaze", V(2.4, 0.75, 1.75), B(TX, TOP + 1.45, 0.7), "#B8642A")
+	for side = -1, 1, 2 do
+		ell(m, "Drumstick", V(1.3, 0.75, 0.75), B(TX + side * 1.25, TOP + 0.75, 1.25, 0, side * 25, side * -20), "#8E4316")
+		dball(m, "Frill", 0.42, B(TX + side * 1.9, TOP + 1.0, 1.55), "#FFFFFF", E.Enum.Material.SmoothPlastic)
+		ell(m, "Wing", V(0.9, 0.6, 1.2), B(TX + side * 1.05, TOP + 0.95, 0.2), "#8E4316")
+	end
+	for k = -1, 1 do -- herb sprigs
+		dball(m, "Herb", 0.32, B(TX + k * 0.9, TOP + 0.3, 2.15), "#4E8A3A", E.Enum.Material.SmoothPlastic)
+	end
+	prompt(body, "event:potluck", "Share a dish", "Turkey Day Potluck", 0.4, 10)
+	-- pecan pie
+	dcyl(m, "PieTin", 0.28, 1.9, B(-1.5, TOP + 0.17, 0.5) * upright(), "#E3B36A", E.Enum.Material.SmoothPlastic)
+	dcyl(m, "PieFill", 0.06, 1.55, B(-1.5, TOP + 0.33, 0.5) * upright(), "#6B3416", E.Enum.Material.SmoothPlastic)
+	for k = 0, 5 do
+		local a = k / 6 * math.pi * 2
+		ell(m, "Pecan", V(0.3, 0.1, 0.18), B(-1.5 + math.cos(a) * 0.45, TOP + 0.38, 0.5 + math.sin(a) * 0.45, 0, math.deg(a), 0), "#8B5A2B")
+	end
+	-- cornbread squares
+	for k = 0, 2 do
+		deco(m, "Cornbread", V(0.6, 0.35, 0.6), B(3.6 + k * 0.65, TOP + 0.2, 0.1), "#F2C14E", E.Enum.Material.SmoothPlastic)
+	end
+	-- pumpkins at the table ends
+	local PUMP = { { -8.2, 0.8, 1.2, 2.0 }, { -7.4, 0.55, -0.9, 1.3 }, { 8.1, 0.7, 1.0, 1.7 } }
+	for i, pk in ipairs(PUMP) do
+		ell(m, "Pumpkin" .. i, V(pk[4] * 1.25, pk[4], pk[4] * 1.25), B(pk[1], pk[2] + pk[4] * 0.35, pk[3]), "#E8761E")
+		deco(m, "Stem" .. i, V(0.22, 0.45, 0.22), B(pk[1], pk[2] + pk[4] * 0.85 + 0.2, pk[3]), "#4E6B2A", E.Enum.Material.Wood)
+	end
+	-- corn-stalk arch posts with a pennant line and banner
+	for side = -1, 1, 2 do
+		deco(m, "Post", V(0.4, 8.6, 0.4), B(side * 7.6, 4.3, -1.6), "#7A4E2A", E.Enum.Material.Wood, true)
+		for k = 0, 3 do
+			deco(m, "Stalk", V(0.18, 4.4, 0.6), B(side * (7.6 + 0.35), 2.2 + k * 0.2, -1.6 + (k - 1.5) * 0.35, 0, 0, side * (8 + k * 4)), k % 2 == 0 and "#C9A44C" or "#B08838", E.Enum.Material.Grass)
+		end
+	end
+	local banner = part(m, "Banner", V(10.5, 1.5, 0.2), B(0, 8.05, -1.6), "#7A2E12", E.Enum.Material.Fabric, { CanCollide = false, CanQuery = false, CanTouch = false })
+	local bt = surfaceText(banner, E.Enum.NormalId.Back, content and content.Signs and content.Signs.turkeyBanner or "TURKEY DAY SMOKEOUT", "#FFE3A0", nil)
+	bt.Name = "BannerText"
+	local PEN = { "#C8641E", "#E3A126", "#8E3B1E", "#6B8E23" }
+	for k = 0, 12 do
+		local x = -7.2 + k * 1.2
+		local sag = -0.6 * (1 - ((x / 7.2) ^ 2))
+		deco(m, "Pennant", V(0.75, 0.75, 0.06), B(x, 6.85 + sag, -1.6, 0, 0, 45), PEN[k % #PEN + 1], E.Enum.Material.Fabric)
+	end
+	return m
+end
+
 function WorldBuilder.bertha(parent, base, content)
 	local m = model(parent, "BigBertha")
 	local IRON, IRON_D, RUST, STEEL = "#3A3536", "#262223", "#7A3B22", "#B9BEC4"

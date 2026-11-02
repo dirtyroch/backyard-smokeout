@@ -17,6 +17,7 @@ local ReceiptLedger = require("../src/shared/Logic/ReceiptLedger")
 local SessionLock = require("../src/shared/Logic/SessionLock")
 local TimeUtil = require("../src/shared/Logic/TimeUtil")
 local Hype = require("../src/shared/Logic/Hype")
+local Holiday = require("../src/shared/Logic/Holiday")
 
 local passed, failed = 0, 0
 local current = ""
@@ -537,6 +538,94 @@ test("new players start in Peace Mode (snagging is opt-in)", function()
 	local fs = require("@lune/fs")
 	local src = fs.readFile("src/shared/DefaultData.luau")
 	truthy(string.find(src, "settings = { peace = true }", 1, true) ~= nil)
+end)
+
+-- ===== Turkey Day Smokeout (Holiday.luau) =====
+test("calendar <-> day number round-trips and matches TimeUtil", function()
+	eq(Holiday.daysFromCivil(1970, 1, 1), 0)
+	eq(Holiday.daysFromCivil(2026, 11, 26), TimeUtil.dayNumber(os.time({ year = 2026, month = 11, day = 26, hour = 12 }), 0))
+	for day = Holiday.daysFromCivil(1999, 12, 25), Holiday.daysFromCivil(2041, 3, 1), 13 do
+		local y, m, d = Holiday.civilFromDays(day)
+		eq(Holiday.daysFromCivil(y, m, d), day, "round trip " .. y .. "-" .. m .. "-" .. d)
+		eq(TimeUtil.month(day * 86400 + 3600, 0), m, "month agrees with TimeUtil")
+		eq(Holiday.weekdayOf(day), TimeUtil.weekday(day * 86400 + 3600, 0), "weekday agrees with TimeUtil")
+	end
+	local y, m, d = Holiday.civilFromDays(Holiday.daysFromCivil(2028, 2, 29))
+	eq(y * 10000 + m * 100 + d, 20280229, "leap day")
+end)
+test("Thanksgiving is the 4th Thursday of November", function()
+	local known = { [2025] = 27, [2026] = 26, [2027] = 25, [2028] = 23, [2029] = 22, [2030] = 28, [2031] = 27 }
+	for year, day in pairs(known) do
+		eq(Holiday.thanksgiving(year), Holiday.daysFromCivil(year, 11, day), "Thanksgiving " .. year)
+	end
+	for year = 2025, 2060 do
+		local t = Holiday.thanksgiving(year)
+		local _, m, d = Holiday.civilFromDays(t)
+		eq(Holiday.weekdayOf(t), 5, "a Thursday")
+		truthy(m == 11 and d >= 22 and d <= 28, "between Nov 22 and 28")
+	end
+end)
+test("Turkey Day Smokeout window is Mon-Sun of Thanksgiving week (2026: Nov 23-29)", function()
+	local TD = Config.TurkeyDay
+	local function at(mo, d)
+		return Holiday.turkeyWeek(Holiday.daysFromCivil(2026, mo, d), TD.daysBefore, TD.daysAfter)
+	end
+	eq(at(11, 22).active, false, "Sun Nov 22 is before")
+	eq(at(11, 23).active, true, "Mon Nov 23 opens")
+	eq(at(11, 26).active and at(11, 26).isDay, true, "Thanksgiving itself")
+	eq(at(11, 25).isDay, false)
+	eq(at(11, 29).active, true, "Sun Nov 29 is the last day")
+	eq(at(11, 30).active, false, "Mon Nov 30 is after")
+	eq(at(11, 2).active, false, "early November is off")
+	eq(at(7, 4).active, false, "summer is off")
+	eq(Holiday.weekdayOf(at(11, 23).startDay), 2, "starts on a Monday")
+	eq(Holiday.weekdayOf(at(11, 23).endDay), 1, "ends on a Sunday")
+	eq(Holiday.label(at(11, 23).endDay), "Nov 29")
+	-- 2030: Thanksgiving Nov 28, so the window runs into December
+	local w30 = Holiday.turkeyWeek(Holiday.daysFromCivil(2030, 12, 1), TD.daysBefore, TD.daysAfter)
+	eq(w30.active, true, "Dec 1 2030 is still Turkey Day week")
+end)
+test("the turkey leg stays cookable for the whole event, even in December", function()
+	local leg = Config.Meats[Config.TurkeyDay.meat]
+	truthy(leg and leg.season == "harvest", "event meat is the seasonal Harvest Turkey Leg")
+	eq(CookOff.seasonFor(Config.Seasons, 11).id, "harvest")
+	eq(Holiday.meatInSeason(leg, "harvest", false, Config.TurkeyDay.meat), true)
+	eq(Holiday.meatInSeason(leg, "holiday", false, Config.TurkeyDay.meat), false, "off-season without the event")
+	eq(Holiday.meatInSeason(leg, "holiday", true, Config.TurkeyDay.meat), true, "event keeps it open")
+	eq(Holiday.meatInSeason(Config.Meats.brisket, "summer", false, Config.TurkeyDay.meat), true, "non-seasonal cuts always open")
+end)
+test("potluck shares the plainest turkey leg, never another cut", function()
+	local idx = function(id)
+		return Rarity.indexOf(Config.Rarities, id)
+	end
+	local cooler = { { m = "brisket", r = "common" }, { m = "turkeyleg", r = "smokering" }, { m = "turkeyleg", r = "juicy" }, { m = "turkeyleg", r = "juicy" } }
+	eq(Holiday.pickPlate(cooler, "turkeyleg", idx), 3, "lowest rarity, earliest on ties")
+	eq(Holiday.pickPlate({ { m = "brisket", r = "common" } }, "turkeyleg", idx), nil, "no turkey leg")
+	eq(Holiday.pickPlate({}, "turkeyleg", idx), nil, "empty cooler")
+end)
+test("Turkey Day reward is a free event cosmetic with copy in place", function()
+	local TD = Config.TurkeyDay
+	local def = Config.Cosmetics[TD.reward]
+	truthy(def, "reward cosmetic exists")
+	eq(def.source, "event", "earned, not sold")
+	for _, p in pairs(Monetization.Products) do
+		for _, g in ipairs(p.grants or {}) do
+			truthy(g ~= TD.reward, "the event apron is never a Robux product")
+		end
+	end
+	truthy(TD.need >= 2 and TD.tipBonus <= Config.DinnerBell.tipBonus, "potluck bonus is a small co-op bonus")
+	local fs = require("@lune/fs")
+	truthy(string.find(fs.readFile("src/shared/DefaultData.luau"), "turkeyDay = -1", 1, true) ~= nil, "save field for the once-a-day share")
+	local C = Content.TurkeyDay
+	truthy(#C.thanks >= 3)
+	truthy(string.format(C.firstShare, "Juicy Harvest Turkey Leg", 520) ~= "")
+	truthy(string.format(C.progress, 1, TD.need, TD.need - 1) ~= "")
+	truthy(string.format(C.full, 3, 25, 5) ~= "")
+	truthy(Content.Signs.turkeyPotluck and Content.Signs.turkeyBanner)
+	for _, line in ipairs({ C.login, C.needDish, C.already, C.firstShare, C.share, C.over, Content.Signs.turkeyBanner }) do
+		local low = string.lower(line)
+		truthy(not string.find(low, "pilgrim", 1, true) and not string.find(low, "buy", 1, true) and not string.find(low, "robux", 1, true), "no pressure or loaded copy: " .. line)
+	end
 end)
 
 print(string.format("\n%d passed, %d failed", passed, failed))

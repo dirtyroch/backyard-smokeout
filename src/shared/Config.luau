@@ -186,7 +186,8 @@ Config.Critters = {
 	{ id = "rex", name = "Rex", weight = 0.8, tip = 3.0, body = "#6CC24A", head = "#7BD35A", scale = 1.2, ears = false, rex = true, ribbon = "RAWR means I love you ♥" },
 }
 
--- Cosmetics. `source`: "robux" (developer product), "path", "egg", "rank", "suds", "pass", "rotation" (limited-time Robux).
+-- Cosmetics. `source`: "robux" (developer product), "path", "egg", "rank", "suds", "pass", "rotation" (limited-time Robux),
+-- "event" (free, earned during a date-gated event).
 Config.Cosmetics = {
 	hat_pitmaster = { name = "Pitmaster Cowboy Hat", slot = "hat", source = "robux", color = "#3B2A1A" },
 	hat_straw = { name = "Straw Cowboy Hat", slot = "hat", source = "path", color = "#E3C77A" },
@@ -195,6 +196,7 @@ Config.Cosmetics = {
 	apron_okayestunc = { name = "World's Okayest Unc Apron", slot = "apron", source = "egg", color = "#4A6FA5", text = "WORLD'S OKAYEST UNC" },
 	apron_pathfinder = { name = "Pit Path Apron", slot = "apron", source = "path", color = "#2F4F2F", text = "28 DAYS LOW & SLOW" },
 	apron_harvest = { name = "Harvest Plaid Apron", slot = "apron", source = "rotation", color = "#A0522D", text = "GIVE THANKS" },
+	apron_thankful = { name = "Thankful & Full Apron", slot = "apron", source = "event", color = "#D9822B", text = "THANKFUL & FULL" },
 	tool_goldenspatula = { name = "Golden Spatula", slot = "tool", source = "robux", color = "#FFD700" },
 	tool_goldtongs = { name = "Golden Tongs", slot = "tool", source = "path", color = "#E6BE8A" },
 	skin_candyred = { name = "Candy Apple Smoker", slot = "skin", source = "robux", color = "#C1121F" },
@@ -277,6 +279,25 @@ Config.DinnerBell = { window = 20, need = 3, cooldown = 600, minutes = 5, tipBon
 
 -- Lunch Rush: every 150 s window, serve 4 plates for +50% of what those plates earned.
 Config.Rush = { period = 150, need = 4, bonusFrac = 0.5 }
+
+-- Turkey Day Smokeout: Thanksgiving week (Mon-Sun around the 4th Thursday of November, Texas time).
+-- Smoke a Harvest Turkey Leg and share it at the potluck table: once a day you get coins, and the first
+-- share ever earns the free Thankful & Full Apron. When `need` different pitmasters share within
+-- `window` seconds the table is full and the whole server gets +25% tips (free, like the Dinner Bell).
+-- Nothing here is paid. In Studio, set the workspace attribute ForceTurkeyDay = true to test it any day.
+Config.TurkeyDay = {
+	daysBefore = 3,
+	daysAfter = 3,
+	meat = "turkeyleg",
+	reward = "apron_thankful",
+	title = "Thankful",
+	shareMult = 2, -- coins = turkey leg price x2 x rank bonus, once per day
+	need = 3,
+	window = 600,
+	cooldown = 900,
+	minutes = 5,
+	tipBonus = 0.25,
+}
 
 -- Season themes: the Cook-Off template reskins by month.
 Config.Seasons = {

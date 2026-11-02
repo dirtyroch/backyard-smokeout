@@ -5,7 +5,8 @@
 	  * the co-op Mosquito Swarm at dusk with a Queen Skeeter boss,
 	  * the Cook-Off (practice any day, 3x payouts + weekly leaderboard on Saturdays, Texas time),
 	  * the monthly season theme on the Cook-Off banner,
-	  * Suds Saturday & Sunday announcements.
+	  * Suds Saturday & Sunday announcements,
+	  * the Turkey Day Smokeout (Thanksgiving week): potluck table decor + sign, login toast.
 ]]
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
@@ -304,6 +305,39 @@ local function refreshBoard()
 	bt.Text = "🏆 " .. string.upper(season.name) .. (ctx.Game.isSaturday() and " - TODAY! 3x PRIZES" or " - SATURDAY") .. " 🏆"
 end
 
+-- ===== Turkey Day Smokeout =====
+local turkeyOn: boolean? = nil
+
+local function refreshTurkey()
+	local w = ctx.Game.turkeyWeek()
+	if w.active == turkeyOn then
+		return
+	end
+	local pot = ctx.World.map().Hub:FindFirstChild("Potluck")
+	if not pot then
+		return
+	end
+	turkeyOn = w.active
+	local sign = pot:FindFirstChild("Sign")
+	local gui = sign and sign:FindFirstChild("SignGui")
+	local label = gui and gui:FindFirstChild("Text") :: TextLabel?
+	if w.active then
+		WorldBuilder.turkeyDay(pot, Content)
+		if label then
+			label.Text = Content.Signs.turkeyPotluck
+		end
+	else
+		local decor = pot:FindFirstChild("TurkeyDay")
+		if decor then
+			decor:Destroy()
+		end
+		if label then
+			label.Text = Content.Signs.potluck
+		end
+	end
+end
+EventService.refreshTurkey = refreshTurkey
+
 function EventService.init(c: any)
 	ctx = c
 end
@@ -316,6 +350,13 @@ function EventService.start()
 	task.spawn(dayNightLoop)
 	task.spawn(function()
 		while true do
+			local okT, errT = pcall(function(): any
+				refreshTurkey()
+				return nil
+			end)
+			if not okT then
+				warn("[EventService] turkey day: " .. tostring(errT))
+			end
 			local okB, err = pcall(function(): any
 				refreshBoard()
 				return nil
@@ -340,6 +381,9 @@ function EventService.start()
 			end
 			if ctx.Game.isSudsWeekend() then
 				ctx.Game.toast(player, "🫧 Suds Saturday & Sunday! Muddy pups need a bath. Wash one for a free bandana.", "good")
+			end
+			if ctx.Game.turkeyWeek().active then
+				ctx.Game.toast(player, Content.TurkeyDay.login, "good")
 			end
 			if ctx.Game.isSaturday() then
 				ctx.Game.toast(player, "🏆 It's Cook-Off Saturday! Bring your best plate to Granny Pecan for 3x prizes.", "good")
