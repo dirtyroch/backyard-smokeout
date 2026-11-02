@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local UI = require(script.Parent.UI)
+local Sfx = require(script.Parent.Sfx)
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Content = require(Shared.Content)
@@ -89,6 +90,7 @@ local function bertha(): Model?
 end
 
 function Fx.ringBell()
+	Sfx.play("bell", 0.95 + math.random() * 0.1, 0.4)
 	local m = bertha()
 	local bell = m and m:FindFirstChild("DinnerBell")
 	if not bell or not bell:IsA("Model") then
@@ -109,6 +111,9 @@ end
 function Fx.dinnerBell()
 	Fx.pop(Content.Slang.dinnerBell, Color3.fromHex("#FFC83C"), 64)
 	Fx.ringBell()
+	task.delay(0.35, function()
+		Sfx.play("fanfare")
+	end)
 	local m = bertha()
 	if not m then
 		return
@@ -167,6 +172,7 @@ function Fx.pop(text: string, color: Color3, size: number?)
 end
 
 function Fx.coins(amount: number)
+	Sfx.play("register", 0.95 + math.random() * 0.1, 0.12)
 	Fx.pop("+" .. UI.fmt(amount) .. " 🪙", T.gold, 34)
 end
 
@@ -199,6 +205,7 @@ function Fx.reveal(meatId: string, rarityId: string, aura: number, smokerPos: Ve
 		return
 	end
 	local color = Color3.fromHex(rar.color)
+	Sfx.play("fanfare", rarityId == "meteorite" and 0.85 or 1)
 	local cam = workspace.CurrentCamera
 	if smokerPos then
 		local oldType = cam.CameraType
@@ -234,6 +241,7 @@ function Fx.reveal(meatId: string, rarityId: string, aura: number, smokerPos: Ve
 		-- Texas-size: the cut is so big it crushes the picnic table (camera shake + crunch text)
 		task.delay(0.4, function()
 			shake(0.8, 1.2)
+			Sfx.play("crunch")
 			Fx.pop("CRUNCH! It broke the table!", Color3.fromHex("#FF5A36"), 38)
 		end)
 	elseif rarityId == "meteorite" then
@@ -248,8 +256,17 @@ function Fx.reveal(meatId: string, rarityId: string, aura: number, smokerPos: Ve
 	end)
 end
 
+-- Spatula flip: the clank always plays; a perfect flip adds a big sear that climbs in pitch
+-- with your combo, so a hot streak sounds hotter.
 function Fx.flip(result: string, combo: number, lockedIn: boolean?)
+	Sfx.play("spatula", result == "miss" and 0.85 or 1)
 	if result == "perfect" then
+		Sfx.play("sear", 1 + math.min(combo, 10) * 0.04)
+		if lockedIn then
+			task.delay(0.5, function()
+				Sfx.play("ding", 1 + math.min(combo, 10) * 0.03)
+			end)
+		end
 		Fx.pop(Content.Slang.perfectFlip, T.gold)
 		if lockedIn then
 			task.delay(0.5, function()
@@ -260,6 +277,49 @@ function Fx.flip(result: string, combo: number, lockedIn: boolean?)
 		Fx.pop("Nice flip!", T.green, 36)
 	else
 		Fx.pop("Flipped too early/late", T.dim, 30)
+	end
+end
+
+-- Rookie List goal done: a ding, a coin jingle and Unc's cheer. The last goal gets the kazoo
+-- fanfare and a confetti pop around you.
+function Fx.rookie(d: any)
+	if d.last then
+		Sfx.play("fanfare")
+		Fx.pop("🎉 ROOKIE OF THE RANCH!", T.gold, 52)
+		local char = Players.LocalPlayer.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+		if hrp then
+			local burst = Instance.new("Part")
+			burst.Anchored, burst.CanCollide, burst.CanQuery, burst.CanTouch = true, false, false, false
+			burst.Transparency = 1
+			burst.Size = Vector3.new(1, 1, 1)
+			burst.CFrame = hrp.CFrame * CFrame.new(0, 3, 0)
+			burst.Parent = workspace
+			local pe = Instance.new("ParticleEmitter")
+			pe.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.fromHex("#FFC83C")), ColorSequenceKeypoint.new(0.5, Color3.fromHex("#E8590C")), ColorSequenceKeypoint.new(1, Color3.fromHex("#5AD2FF")) })
+			pe.Speed = NumberRange.new(10, 18)
+			pe.SpreadAngle = Vector2.new(80, 80)
+			pe.Lifetime = NumberRange.new(1, 1.8)
+			pe.Acceleration = Vector3.new(0, -20, 0)
+			pe.Size = NumberSequence.new(0.4)
+			pe.Rate = 0
+			pe.Parent = burst
+			pe:Emit(90)
+			task.delay(2.5, function()
+				burst:Destroy()
+			end)
+		end
+	else
+		Sfx.play("ding", 1 + (d.step or 1) * 0.05)
+		task.delay(0.15, function()
+			Sfx.play("coins")
+		end)
+		Fx.pop(string.format("✅ Rookie List %d/%d", d.step or 1, d.total or 5), T.green, 40)
+		if d.cheer then
+			task.delay(0.6, function()
+				Fx.announce(d.cheer, "#FFF6E6")
+			end)
+		end
 	end
 end
 

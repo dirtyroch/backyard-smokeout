@@ -11,6 +11,8 @@ local Hud = require(script.Parent.Hud)
 local Panels = require(script.Parent.Panels)
 local WorldClient = require(script.Parent.WorldClient)
 local Ambient = require(script.Parent.Ambient)
+local Sfx = require(script.Parent.Sfx)
+local RookieGuide = require(script.Parent.RookieGuide)
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Content = require(Shared.Content)
@@ -34,9 +36,14 @@ end
 rescale()
 workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
 
+Sfx.mount()
+UI.onClick = function()
+	Sfx.play("click", nil, 0.05)
+end
 Fx.mount(root)
 Panels.mount(root)
 Hud.mount(root, Panels)
+RookieGuide.mount(root)
 Net.notify = Fx.toast
 WorldClient.start(Panels)
 task.spawn(Ambient.start)
@@ -83,9 +90,13 @@ Net.on("fx", function(p)
 			Fx.pop(Content.Slang.sixSeven, Color3.fromHex("#FFC83C"), 54)
 		end)
 	elseif p.kind == "rush" then
+		Sfx.play("coins")
 		Fx.pop(Content.Slang.rush .. " +" .. tostring(d.bonus or 0), Color3.fromHex("#6CC24A"), 40)
 	elseif p.kind == "swat" then
+		Sfx.play("swat", d.queen and 0.8 or 0.9 + math.random() * 0.2, 0.08)
 		Fx.pop(d.queen and "👑 QUEEN DOWN!" or "SWAT!", UI.Theme.gold, d.queen and 44 or 26)
+	elseif p.kind == "rookie" then
+		Fx.rookie(d)
 	end
 end)
 
@@ -94,6 +105,13 @@ task.spawn(function()
 		task.wait(0.1)
 		local ok, err = pcall(function(): any
 			Hud.update()
+			RookieGuide.update(Net.state)
+			if Net.state and Net.state.settings then
+				local want = Net.state.settings.sfx ~= false
+				if want ~= Sfx.isEnabled() then
+					Sfx.setEnabled(want)
+				end
+			end
 			return nil
 		end)
 		if not ok then

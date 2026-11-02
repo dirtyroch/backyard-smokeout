@@ -172,6 +172,18 @@ Config.PathSteps = ({
 	{ stat = "served", amount = 500, reward = { tomahawk = true, cosmetic = "skin_pathgold", title = "Pitmaster" }, label = "Serve 500 plates" },
 } :: { any })
 
+-- Unc Hank's Rookie List: five quick goals for a brand-new pitmaster's first five minutes, right
+-- after the one-button first brisket. Each one is a lifetime stat; the client draws an arrow to
+-- `target` ("grill", "tables", "smoker", "sauce", "bell"). All rewards are free.
+Config.RookieSteps = ({
+	{ id = "flip", stat = "flips", amount = 1, target = "grill", icon = "🍔", label = "Flip a burger on the grill", tip = "Tap FLIP! when the button turns gold for a perfect flip.", reward = { coins = 40 } },
+	{ id = "serve", stat = "served", amount = 3, target = "tables", icon = "🍽️", label = "Serve 3 hungry critters", tip = "Walk up to a critter at your picnic tables, or tap Serve All.", reward = { coins = 60 } },
+	{ id = "smoke", stat = "smokerStarts", amount = 1, target = "smoker", icon = "🌭", label = "Start a Hot Link in your smoker", tip = "Tap Cook on a smoker card. Hot Links are ready in 2 minutes.", reward = { coins = 80 } },
+	{ id = "sauce", stat = "sauces", amount = 1, target = "sauce", icon = "🥫", label = "Grab a sauce at the Sauce Shack", tip = "Sauce gives your next few plates a boost. It restocks every 5 minutes.", reward = { coins = 100 } },
+	{ id = "bell", stat = "bells", amount = 1, target = "bell", icon = "🔔", label = "Ring Big Bertha's dinner bell", tip = "She's the giant smoker in the town square. Ring it with 2 friends for bonus tips!", reward = { coins = 150, cosmetic = "bandana_rookie", title = "Rookie of the Ranch" } },
+} :: { any })
+Config.ROOKIE_VETERAN_SERVES = 25 -- saves from before the list existed skip it quietly
+
 -- Critter customers = the Regulars Index. All original characters.
 Config.Critters = {
 	{ id = "armadillo", name = "Dilly the Armadillo", weight = 20, tip = 1.0, body = "#9C8A7A", head = "#8A7868", scale = 1.0, ears = false },
@@ -187,7 +199,7 @@ Config.Critters = {
 }
 
 -- Cosmetics. `source`: "robux" (developer product), "path", "egg", "rank", "suds", "pass", "rotation" (limited-time Robux),
--- "event" (free, earned during a date-gated event).
+-- "event" (free, earned during a date-gated event), "rookie" (free, for finishing Unc Hank's Rookie List).
 Config.Cosmetics = {
 	hat_pitmaster = { name = "Pitmaster Cowboy Hat", slot = "hat", source = "robux", color = "#3B2A1A" },
 	hat_straw = { name = "Straw Cowboy Hat", slot = "hat", source = "path", color = "#E3C77A" },
@@ -220,6 +232,7 @@ Config.Cosmetics = {
 	bandana_blue = { name = "Blue Bandana", slot = "neck", source = "suds", color = "#2E86C1" },
 	bandana_paws = { name = "Paw Print Bandana", slot = "neck", source = "suds", color = "#F5B7B1" },
 	bandana_gold = { name = "Golden Bandana", slot = "neck", source = "suds", color = "#F1C40F" },
+	bandana_rookie = { name = "Rookie of the Ranch Bandana", slot = "neck", source = "rookie", color = "#E8590C" },
 	vip_lights = { name = "VIP Patio Lights", slot = "patio", source = "pass", color = "#FFE9A8" },
 }
 Config.CosmeticSlots = { "hat", "apron", "tool", "neck", "feet", "trail", "skin", "smoke", "patio" }

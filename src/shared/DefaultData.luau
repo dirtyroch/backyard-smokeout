@@ -42,14 +42,18 @@ return {
 		sauces = 0,
 		burnt = 0,
 		snags = 0,
+		flips = 0,
+		smokerStarts = 0,
+		bells = 0,
 	},
 	streak = { lastDay = -1, count = 0, best = 0, freeMissWeek = -1 },
 	path = { claimed = 0, playDays = 0, lastPlayDay = -1 },
 	daily = { jokeDay = -1, creekDay = -1, kingDone = false, bellDay = -1, turkeyDay = -1 },
 	restock = { window = -1, bought = {} },
 	cookoff = { week = -1, best = 0 },
-	settings = { peace = true }, -- snagging is opt-in (Fair Play)
+	settings = { peace = true, sfx = true }, -- snagging is opt-in (Fair Play)
 	tutorial = { firstBrisket = false, done = false },
+	rookie = { claimed = 0, skipped = false }, -- Unc Hank's Rookie List (Logic/Rookie)
 	forceCritter = "",
 	combo = 0,
 	receipts = {},

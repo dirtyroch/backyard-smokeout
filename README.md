@@ -3,7 +3,7 @@
 A Texas backyard BBQ tycoon for Roblox. Smoke brisket in real time (it keeps cooking while you're offline), flip 30-second burgers (faster with pit upgrades) while you wait, serve a yard full of original critter regulars, win the Saturday Cook-Off, swat the mosquito Queen at dusk, and climb to **OG Pitmaster** Unc Status.
 
 - **Just want to publish it?** Read **[PUBLISHING.md](PUBLISHING.md)**. No coding needed.
-- **Ready-to-open place file:** [`BackyardSmokeout.rbxlx`](BackyardSmokeout.rbxlx). Built geometry and code-built UI mean there are no uploaded assets to set up.
+- **Ready-to-open place file:** [`BackyardSmokeout.rbxlx`](BackyardSmokeout.rbxlx). Built geometry, code-built UI and public Roblox-library sound effects mean there are no uploaded assets to set up.
 
 ## What's in the game
 
@@ -12,6 +12,8 @@ A Texas backyard BBQ tycoon for Roblox. Smoke brisket in real time (it keeps coo
 | Smokers (long) | Yardbird 8m, Roch & Roll Ribs 30m, Pork Butt 2h, Wagyu Brisket 4h (premium), Texas Brisket 6h, and a seasonal turkey leg. Cooks keep going while you're offline. |
 | Grill (short) | Backyard Burger 30s, Hot Link 2m and Tomahawk 5m (premium), each with a timing flip: Perfect, Skill issue, or "Locked In" combos. |
 | First cook | A one-button first brisket that finishes in 75s, is guaranteed Smoke Ring Gold, and gets a cinematic reveal. |
+| Rookie List | Right after the first brisket, Unc Hank hands you five quick goals (flip a burger, serve 3 critters, start a Hot Link, grab a sauce, ring Big Bertha's bell). A card in the top right shows the goal, progress and reward, and a bobbing gold arrow with a trail on the ground leads you there. Each goal pays a few free coins; finishing all five earns the **Rookie of the Ranch** bandana and title. Players from before the list skip it quietly. Nothing in it is paid. |
+| Sound | Grill sizzle (it sits on your grill, so it fades as you walk away), spatula clank and sear on flips (the sear climbs in pitch with your combo), cash register on serves, Big Bertha's bell, a kazoo fanfare for rare reveals and the Dinner Bell, the Texas-Size crunch, mosquito swats and soft UI clicks. All are public Roblox-library sounds (`src/shared/SfxIds.luau`). Settings → Game has a saved on/off toggle. |
 | Rarity | Common, Juicy, Smoke Ring Gold, Texas-Size ("CRUNCH! It broke the table!") and Meteorite. Odds are shown in game. |
 | Customers | 10 original critter regulars, a Regulars Index, belly rubs, Suds Weekend pup washes, and a Rex cameo ("RAWR means I love you"). |
 | Social | Crew bonus with friends, **Big Bertha's Dinner Bell** (3 players ring the bell on the King of the Pit's 1,000-gallon hub smoker within 20 s → "DINNER'S ON!", whole server +25% tips for 5 min), **"Say Brisket!" photo spot** in front of Big Bertha (Roblox share sheet + invite link), invites ("Help me ring Big Bertha's dinner bell!"), opt-in plate snagging (new players start in Peace Mode; lock timer, insurance, catch-back), smoke-signal flexes. |
@@ -25,7 +27,7 @@ A Texas backyard BBQ tycoon for Roblox. Smoke brisket in real time (it keeps coo
 ```
 src/shared/          Config, Content (all jokes/lines), Monetization (ALL Robux IDs), WorldBuilder, Logic/*
 src/server/          Main.server + Services (Data, Game, World, Social, Event, Egg, Cosmetic, Purchase)
-src/client/          Main.client + UI, Net, Fx, Hud, Panels, WorldClient
+src/client/          Main.client + UI, Net, Fx, Sfx, Hud, Panels, RookieGuide, WorldClient
 tests/run.luau       Lune unit tests for the pure logic
 scripts/bake-map.luau  Bakes the map into the .rbxlx so Studio shows the world before Play
 ```

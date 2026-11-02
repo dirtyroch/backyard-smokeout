@@ -22,6 +22,8 @@ UI.Theme = {
 	bold = Enum.Font.GothamBold,
 }
 local T = UI.Theme
+-- Set by Main.client to give every button a soft click (Sfx). Kept as a hook so UI has no dependencies.
+UI.onClick = nil :: (() -> ())?
 
 type Props = { [string]: any }
 
@@ -120,6 +122,9 @@ function UI.button(text: string, color: Color3?, props: Props?, onClick: (() -> 
 	if onClick then
 		local busy = false
 		b.Activated:Connect(function()
+			if UI.onClick then
+				(UI.onClick :: any)()
+			end
 			if busy then
 				return
 			end

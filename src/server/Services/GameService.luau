@@ -25,6 +25,7 @@ local CookOff = require(Shared.Logic.CookOff)
 local RateLimiter = require(Shared.Logic.RateLimiter)
 local TimeUtil = require(Shared.Logic.TimeUtil)
 local Holiday = require(Shared.Logic.Holiday)
+local Rookie = require(Shared.Logic.Rookie)
 
 local GameService = {}
 local ctx: any = nil
@@ -381,6 +382,9 @@ Actions.StartCook = function(player, data, key, meatId)
 	local cook = CookLogic.new(meat.id, rarity, meat.cookTime, T(), 1 + speedBonus)
 	data.stations[key] = cook
 	data.stats.cooks += 1
+	if kind == "smoker" then
+		data.stats.smokerStarts += 1
+	end
 	local r = rt(player)
 	if r then
 		r.announcedDone[key] = nil
@@ -491,6 +495,7 @@ Actions.Flip = function(player, data, key)
 	local F = Config.Flip
 	local result = CookLogic.judgeFlip(CookLogic.fraction(cook), F.target, F.perfectWindow, F.goodWindow)
 	cook.flip = result
+	data.stats.flips += 1
 	if result == "perfect" then
 		data.combo = math.min((data.combo or 0) + 1, F.comboMax)
 		data.stats.perfectFlips += 1
@@ -611,7 +616,11 @@ function GameService.serveCustomer(player: Player, customer: any): (boolean, str
 	end
 	if not data.tutorial.done then
 		data.tutorial.done = true
+		if not data.rookie.skipped and data.rookie.claimed == 0 then
+			ctx.Remotes.Push:FireClient(player, "dialog", { npc = "Unc Hank", text = Content.Rookie.start, reward = 0 })
+		end
 	end
+	GameService.checkRookie(player, data)
 	removeCustomer(player, customer)
 	return true, nil
 end
@@ -927,6 +936,14 @@ Actions.SetPeace = function(player, data, on)
 	return true, nil
 end
 
+Actions.SetSfx = function(_player, data, on)
+	if type(on) ~= "boolean" then
+		return false, "Bad request."
+	end
+	data.settings.sfx = on
+	return true, nil
+end
+
 Actions.SetResting = function(player, _data, on)
 	local r = rt(player)
 	if type(on) ~= "boolean" or not r then
@@ -1008,6 +1025,7 @@ local function snapshot(player: Player, data: any): any
 		cookoff = data.cookoff,
 		settings = data.settings,
 		tutorial = data.tutorial,
+		rookie = Rookie.status(data.rookie, Config.RookieSteps, data.stats),
 		passes = r.passes,
 		customers = customers,
 		combo = data.combo,
@@ -1117,6 +1135,9 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 	}
 	GameService.runtime[player] = r
 	r.passes = ctx.Purchase.loadPasses(player)
+	if Rookie.shouldSkip(data.rookie, data.tutorial.done, data.stats, Config.ROOKIE_VETERAN_SERVES) then
+		data.rookie.skipped = true
+	end
 
 	-- Offline progress: one jump from the saved `last` of each cook to now.
 	local readyBefore = 0
@@ -1171,6 +1192,35 @@ local function onRemoving(player: Player)
 	ctx.Data.release(player)
 end
 
+-- Unc Hank's Rookie List: claim any goal that's now met (rewards are free and flat).
+function GameService.checkRookie(player: Player, data: any)
+	if not data.tutorial.done or type(data.rookie) ~= "table" then
+		return
+	end
+	local claimed = Rookie.advance(data.rookie, Config.RookieSteps, data.stats)
+	for _, def in ipairs(claimed) do
+		local rw = def.reward or {}
+		local coins = rw.coins or 0
+		if coins > 0 then
+			GameService.addCoins(player, data, coins, false)
+		end
+		local last = data.rookie.claimed >= #Config.RookieSteps
+		if last then
+			if rw.cosmetic then
+				GameService.grantCosmetic(player, data, rw.cosmetic)
+			end
+			if rw.title then
+				data.titles[rw.title] = true
+			end
+			ctx.Remotes.Push:FireClient(player, "dialog", { npc = "Unc Hank", text = string.format(Content.Rookie.done, coins), reward = 0 })
+		else
+			GameService.toast(player, string.format(Content.Rookie.stepDone, def.label, coins), "good")
+		end
+		GameService.fx(player, "rookie", { id = def.id, step = data.rookie.claimed, total = #Config.RookieSteps, coins = coins, last = last, cheer = Content.Rookie.cheers[(data.rookie.claimed - 1) % #Content.Rookie.cheers + 1] })
+		GameService.markDirty(player)
+	end
+end
+
 local function handle(player: Player, action: any, a: any, b: any, c: any): (boolean, string?)
 	if type(action) ~= "string" or #action > 24 then
 		return false, "Bad request."
@@ -1196,6 +1246,9 @@ local function handle(player: Player, action: any, a: any, b: any, c: any): (boo
 	if not ok then
 		warn("[GameService] action " .. action .. " errored: " .. tostring(res))
 		return false, "Something went wrong."
+	end
+	if res then
+		GameService.checkRookie(player, data)
 	end
 	GameService.markDirty(player)
 	return res, msg
@@ -1230,6 +1283,7 @@ function GameService.start()
 				if data then
 					advanceAll(player, data, t, true)
 					data.playSeconds += 1
+					GameService.checkRookie(player, data) -- catches goals met through world prompts too
 					-- day rollover while playing
 					local d = today()
 					if d ~= r.today then

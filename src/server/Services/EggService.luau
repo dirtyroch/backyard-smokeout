@@ -304,7 +304,9 @@ end
 
 handlers["landmark:bell"] = function(player, data)
 	local d = today()
+	data.stats.bells += 1
 	ctx.Game.fx(player, "bell", {})
+	ctx.Game.checkRookie(player, data)
 	checkDinnerBell(player)
 	local line = BELL_LINES[rng:NextInteger(1, #BELL_LINES)]
 	if data.daily.bellDay ~= d then

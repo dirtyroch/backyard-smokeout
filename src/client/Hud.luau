@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local UI = require(script.Parent.UI)
+local Sfx = require(script.Parent.Sfx)
 local Net = require(script.Parent.Net)
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -187,7 +188,9 @@ function Hud.cardAction(key: string)
 	end
 	local _, _, done = Hud.view(st, s.boost)
 	if done then
-		Net.act("Collect", key)
+		if Net.act("Collect", key) then
+			Sfx.play("popAiry", 0.95 + math.random() * 0.15)
+		end
 	elseif st.meat == "burger" and not st.flip then
 		Net.act("Flip", key)
 	end
@@ -283,6 +286,24 @@ function Hud.update()
 	else
 		refs.hint.Text = ""
 	end
+
+	-- the grill sizzles while anything is cooking on it
+	local grilling = false
+	for key, st in pairs(s.stations) do
+		if string.sub(key, 1, 1) == "g" and not st.burnt then
+			local _, _, gdone = Hud.view(st, s.boost)
+			grilling = grilling or not gdone
+		end
+	end
+	local gtop: BasePart? = nil
+	local map = workspace:FindFirstChild("Map")
+	local plot = map and s.plot and map:FindFirstChild("Plots") and map.Plots:FindFirstChild("Plot" .. s.plot)
+	local grill = plot and plot:FindFirstChild("Grill")
+	local top = grill and grill:FindFirstChild("Top")
+	if top and top:IsA("BasePart") then
+		gtop = top
+	end
+	Sfx.setSizzle(grilling, gtop)
 
 	for key, c in pairs(cards) do
 		local kind = string.sub(key, 1, 1) == "s" and "smoker" or "grill"

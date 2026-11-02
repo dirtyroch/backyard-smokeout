@@ -114,6 +114,20 @@ Content.TurkeyDay = {
 	},
 }
 
+-- Unc Hank's Rookie List (Config.RookieSteps). Unc's voice: warm, a little corny, never pushy.
+Content.Rookie = {
+	title = "📋 Unc's Rookie List",
+	start = "Look at you, feedin' critters already! I wrote you a little list (top right). Five quick things and you're a real pitmaster. Follow the gold arrow!",
+	cheers = {
+		"Unc Hank: \"That's what I'm talkin' about!\"",
+		"Unc Hank: \"Okay, okay, I see you!\"",
+		"Unc Hank: \"Clean work. Your grandmama would be proud.\"",
+		"Unc Hank: \"You're cookin' now. Literally.\"",
+	},
+	done = "Rookie List: done! You're officially Rookie of the Ranch. Wear that bandana with pride.\n\n+%d coins, the Rookie of the Ranch Bandana, and a new title: Rookie of the Ranch.",
+	stepDone = "✅ %s  +%d coins",
+}
+
 Content.Signs = {
 	hub = "ROCHIN' RANCH RD.",
 	shop = "ROCH & ROLL SAUCE SHACK",

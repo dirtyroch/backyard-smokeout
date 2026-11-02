@@ -18,6 +18,8 @@ local SessionLock = require("../src/shared/Logic/SessionLock")
 local TimeUtil = require("../src/shared/Logic/TimeUtil")
 local Hype = require("../src/shared/Logic/Hype")
 local Holiday = require("../src/shared/Logic/Holiday")
+local Rookie = require("../src/shared/Logic/Rookie")
+local SfxIds = require("../src/shared/SfxIds")
 
 local passed, failed = 0, 0
 local current = ""
@@ -537,7 +539,7 @@ end)
 test("new players start in Peace Mode (snagging is opt-in)", function()
 	local fs = require("@lune/fs")
 	local src = fs.readFile("src/shared/DefaultData.luau")
-	truthy(string.find(src, "settings = { peace = true }", 1, true) ~= nil)
+	truthy(string.find(src, "settings = { peace = true", 1, true) ~= nil)
 end)
 
 -- ===== Turkey Day Smokeout (Holiday.luau) =====
@@ -626,6 +628,83 @@ test("Turkey Day reward is a free event cosmetic with copy in place", function()
 		local low = string.lower(line)
 		truthy(not string.find(low, "pilgrim", 1, true) and not string.find(low, "buy", 1, true) and not string.find(low, "robux", 1, true), "no pressure or loaded copy: " .. line)
 	end
+end)
+
+test("Rookie List: five quick, free goals that each point somewhere real", function()
+	local steps = Config.RookieSteps
+	eq(#steps, 5, "five goals")
+	local targets = { grill = true, tables = true, smoker = true, sauce = true, bell = true }
+	local dsrc = require("@lune/fs").readFile("src/shared/DefaultData.luau")
+	for _, d in ipairs(steps) do
+		truthy(targets[d.target], "known arrow target: " .. tostring(d.target))
+		truthy(string.find(dsrc, "%f[%w]" .. d.stat .. " = 0") ~= nil, "goal stat is saved: " .. d.stat)
+		truthy(d.amount >= 1 and d.amount <= 3, "first-session sized goal")
+		truthy(d.label and d.tip and d.icon)
+		local low = string.lower(d.label .. " " .. d.tip)
+		truthy(not string.find(low, "robux", 1, true) and not string.find(low, "buy now", 1, true), "no paid or pressure copy")
+		truthy(not d.reward.robux, "free rewards only")
+	end
+	local last = steps[#steps].reward
+	eq(Config.Cosmetics[last.cosmetic].source, "rookie", "bandana is earned, never sold")
+	for _, p in pairs(Monetization.Products) do
+		for _, g in ipairs(p.grants or {}) do
+			truthy(g ~= last.cosmetic, "the rookie bandana is never a Robux product")
+		end
+	end
+	-- the smoker goal must be doable on a level-1 pit with starting coins
+	truthy(Config.Meats.hotlink.unlockPit == 1 and Config.Meats.hotlink.cost <= Config.START_COINS, "Hot Link is affordable on day one")
+end)
+
+test("Rookie List: claims in order, can claim several at once, never twice", function()
+	local steps = Config.RookieSteps
+	local s = Rookie.new()
+	local stats = { flips = 0, served = 0, smokerStarts = 0, sauces = 0, bells = 0 }
+	local st = Rookie.status(s, steps, stats)
+	eq(st.step, 1)
+	eq(st.id, "flip")
+	eq(#Rookie.advance(s, steps, stats), 0, "nothing met yet")
+	stats.flips = 1
+	stats.served = 2
+	local got = Rookie.advance(s, steps, stats)
+	eq(#got, 1, "flip only (serve needs 3)")
+	eq(Rookie.status(s, steps, stats).progress, 2, "serve progress shows 2/3")
+	stats.served = 7
+	stats.sauces = 1 -- met out of order: waits for the smoker goal
+	eq(#Rookie.advance(s, steps, stats), 1, "serve claimed; sauce waits behind smoke")
+	eq(Rookie.status(s, steps, stats).id, "smoke")
+	stats.smokerStarts = 1
+	eq(#Rookie.advance(s, steps, stats), 2, "smoke + sauce claim together")
+	stats.bells = 1
+	eq(#Rookie.advance(s, steps, stats), 1)
+	truthy(Rookie.status(s, steps, stats).finished, "finished")
+	eq(#Rookie.advance(s, steps, stats), 0, "no double claims")
+	eq(Rookie.status(s, steps, stats).progress, 0)
+end)
+
+test("Rookie List: veterans skip quietly, new players don't", function()
+	local s = Rookie.new()
+	truthy(not Rookie.shouldSkip(s, false, { served = 0 }, Config.ROOKIE_VETERAN_SERVES), "brand new player gets the list")
+	truthy(not Rookie.shouldSkip(s, true, { served = 3 }, Config.ROOKIE_VETERAN_SERVES), "early player keeps the list")
+	truthy(Rookie.shouldSkip(s, true, { served = 400 }, Config.ROOKIE_VETERAN_SERVES), "veteran skips")
+	s.skipped = true
+	truthy(Rookie.status(s, Config.RookieSteps, { served = 400 }).finished, "skipped reads as finished")
+	eq(#Rookie.advance(s, Config.RookieSteps, { flips = 9 }), 0, "skipped never pays out")
+end)
+
+test("sound effects: every cue is a public Roblox-library id, sane volumes", function()
+	local n = 0
+	for name, def in pairs(SfxIds) do
+		n += 1
+		truthy(type(def.id) == "number" and def.id > 1000000, "numeric asset id: " .. name)
+		truthy(def.volume > 0 and def.volume <= 1, "volume in range: " .. name)
+	end
+	truthy(n >= 10, "a full set of cues")
+	for _, cue in ipairs({ "click", "spatula", "sear", "register", "bell", "fanfare", "ding", "sizzleLoop" }) do
+		truthy(SfxIds[cue], "cue exists: " .. cue)
+	end
+	truthy(SfxIds.sizzleLoop.loop and SfxIds.sizzleLoop.volume <= 0.25, "the sizzle loop stays quiet")
+	local fs = require("@lune/fs")
+	truthy(string.find(fs.readFile("src/shared/DefaultData.luau"), "sfx = true", 1, true) ~= nil, "sound is on by default and the toggle is saved")
 end)
 
 print(string.format("\n%d passed, %d failed", passed, failed))
