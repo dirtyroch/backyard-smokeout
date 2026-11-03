@@ -24,6 +24,10 @@
 	  * Paid perks never affect the Cook-Off leaderboard or plate snagging.
 	  * Fair Play caps (Config.FairPlay): the tip pass is +50% (not x2), and buying a speed boost
 	    gives everyone else in the server a free 5-minute Smoke Shower.
+	  * The Smokehouse Pass, tier skips, the Pit Crew Club and Premium give looks and titles only.
+	  * Event looks (Turkey Day set) go on sale only during the event week and come back the next
+	    year. The free event reward always stays free. Dates are shown plainly, never as a timer.
+	  * Roblox PolicyService decides who sees the subscription (IsEligibleToPurchaseSubscription).
 ]]
 
 export type Pass = { id: number, name: string, price: number, desc: string, icon: string }
@@ -33,7 +37,7 @@ export type Product = {
 	price: number,
 	desc: string,
 	icon: string,
-	kind: string, -- "boost" | "finish" | "cosmetic" | "bundle" | "cut"
+	kind: string, -- "boost" | "finish" | "cosmetic" | "bundle" | "cut" | "starter" | "season" | "tierskip"
 	category: string, -- shop tab
 	minutes: number?,
 	mult: number?,
@@ -42,7 +46,11 @@ export type Product = {
 	count: number?,
 	valueNote: string?,
 	rotation: boolean?,
+	event: string?, -- "turkeyday": only on sale during that event's window
+	once: boolean?, -- one per account (the first-time Pit Pack)
 }
+
+export type Subscription = { id: string, name: string, price: number, priceText: string, icon: string, desc: string, perks: { string } }
 
 local Monetization = {}
 
@@ -81,6 +89,22 @@ Monetization.Products = {
 	-- Bundles (prices shown honestly vs buying separately)
 	BundleStarter = { id = 0, name = "Pitmaster Starter Bundle", price = 199, icon = "🎁", kind = "bundle", category = "Bundles", grants = { "apron_grillmaster", "hat_pitmaster" }, minutes = 30, mult = 2, valueNote = "R$ 223 if bought separately", desc = "Grill Master Apron, Pitmaster Cowboy Hat and a 30-minute x2 speed boost." },
 	BundleGoldRush = { id = 0, name = "Gold Rush Bundle", price = 349, icon = "💛", kind = "bundle", category = "Bundles", grants = { "tool_goldenspatula", "skin_golden" }, valueNote = "R$ 398 if bought separately", desc = "Golden Spatula and Solid Gold Smoker skin." },
+	BundleWholeHog = { id = 0, name = "Whole Hog Collection", price = 499, icon = "🐖", kind = "bundle", category = "Bundles", grants = { "skin_golden", "tool_goldenspatula", "hat_pitmaster", "apron_grillmaster", "smoke_sherbet", "trail_sparkler" }, valueNote = "R$ 730 if bought separately. Costs less as a set.", desc = "Six looks: Solid Gold Smoker, Golden Spatula, Pitmaster Hat, Grill Master Apron, Rainbow Sherbet Smoke and Sparkler Trail." },
+	-- First-time Pit Pack: one per account, shown first in Bundles until you've bought anything.
+	StarterPitPack = { id = 0, name = "First-Time Pit Pack", price = 49, icon = "🧢", kind = "starter", category = "Bundles", once = true, grants = { "starter_hat" }, minutes = 30, mult = 2, cut = "tomahawk", count = 3, valueNote = "R$ 108 of boost and steaks, plus a hat only found here", desc = "One per account: Rookie Pitmaster Hat, a 30-minute x2 speed boost and 3 Tomahawk Steaks." },
+
+	-- Turkey Day look set (on sale only during the Turkey Day Smokeout, back next year; the free
+	-- Thankful & Full Apron stays free for everyone who shares a dish)
+	TD_HatCornucopia = { id = 0, name = "Cornucopia Cowboy Hat", price = 79, icon = "🌽", kind = "cosmetic", category = "Turkey Day", event = "turkeyday", grants = { "td_hat_cornucopia" }, desc = "A harvest-brown hat with a corn-gold band." },
+	TD_SmokeCranberry = { id = 0, name = "Cranberry Smoke", price = 49, icon = "🫐", kind = "cosmetic", category = "Turkey Day", event = "turkeyday", grants = { "td_smoke_cranberry" }, desc = "Deep cranberry-red smoke." },
+	TD_TrailLeaves = { id = 0, name = "Falling Leaves Trail", price = 79, icon = "🍁", kind = "cosmetic", category = "Turkey Day", event = "turkeyday", grants = { "td_trail_leaves" }, desc = "Autumn leaves drift behind you." },
+	TD_SkinPecan = { id = 0, name = "Pecan Pie Smoker", price = 99, icon = "🥧", kind = "cosmetic", category = "Turkey Day", event = "turkeyday", grants = { "td_skin_pecan" }, desc = "Toasty pecan-brown smokers." },
+	TD_BundleFeast = { id = 0, name = "Turkey Day Look Set", price = 229, icon = "🦃", kind = "bundle", category = "Turkey Day", event = "turkeyday", grants = { "td_hat_cornucopia", "td_smoke_cranberry", "td_trail_leaves", "td_skin_pecan" }, valueNote = "R$ 306 if bought separately", desc = "All four Turkey Day looks: hat, smoke, trail and smoker." },
+
+	-- Smokehouse Pass (one per season; looks and titles only) and tier skips
+	SeasonPass = { id = 0, name = "Smokehouse Pass", price = 399, icon = "🎟️", kind = "season", category = "Season", desc = "Unlocks this season's paid track: a look or title at every tier. Every paid reward you've already reached is yours right away." },
+	TierSkip1 = { id = 0, name = "Skip 1 Tier", price = 49, icon = "⏭️", kind = "tierskip", category = "Season", count = 1, desc = "Move up one Smokehouse Pass tier. Looks and titles only." },
+	TierSkip5 = { id = 0, name = "Skip 5 Tiers", price = 199, icon = "⏭️", kind = "tierskip", category = "Season", count = 5, valueNote = "R$ 245 as five single skips", desc = "Move up five Smokehouse Pass tiers. Looks and titles only." },
 
 	-- Weekly rotation (limited-time looks; every one comes back in a later rotation)
 	Rot_ApronHarvest = { id = 0, name = "Harvest Plaid Apron", price = 75, icon = "🍂", kind = "cosmetic", category = "This Week", grants = { "apron_harvest" }, rotation = true, desc = "Cozy plaid apron for the Harvest season." },
@@ -89,6 +113,32 @@ Monetization.Products = {
 	Rot_TrailFirework = { id = 0, name = "Firework Trail", price = 99, icon = "🎆", kind = "cosmetic", category = "This Week", grants = { "trail_firework" }, rotation = true, desc = "A celebratory firework streak." },
 	Rot_HatTurkey = { id = 0, name = "Gobble Hat", price = 59, icon = "🦃", kind = "cosmetic", category = "This Week", grants = { "hat_turkey" }, rotation = true, desc = "A silly turkey hat. Gobble gobble." },
 } :: { [string]: Product }
+
+-- ROBLOX SUBSCRIPTION (Creator Dashboard > Monetization > Subscriptions). The ID is a string
+-- like "EXP-1234567890". Leave "" to hide it. Shown only to players Roblox says can subscribe.
+Monetization.Subscriptions = {
+	PitCrewClub = {
+		id = "",
+		name = "Pit Crew Club",
+		price = 4.99,
+		priceText = "$4.99 a month, shown in your local price at checkout. Cancel any time in Roblox settings.",
+		icon = "🔧",
+		desc = "A monthly members' club for the ranch. Looks and friendly perks only, no coins.",
+		perks = {
+			"A new Pit Crew look every month you're a member, yours to keep",
+			"A Pit Crew tag over your name",
+			"Share a free Smoke Shower with your whole server once a day",
+			"One free Smokehouse Pass tier every month",
+		},
+	},
+} :: { [string]: Subscription }
+
+-- ROBLOX PREMIUM: members get Config.Premium.look free. The game earns Premium Payouts from
+-- the time Premium members spend playing (no setup needed).
+Monetization.Premium = { name = "Roblox Premium", icon = "⭐", desc = "Premium members get the Premium Pitmaster Bandana free. Looks only." }
+
+-- PRIVATE SERVERS: set this price on the Creator Dashboard (see PUBLISHING.md section 4b).
+Monetization.PrivateServer = { price = 100, desc = "Your own ranch server for you and your friends, R$ 100 a month. The host gets a Ranch Host tag and can share a Smoke Shower every 10 minutes." }
 
 -- Optional badges (Creator Dashboard > Associated Items > Badges). 0 = skip.
 Monetization.Badges = {

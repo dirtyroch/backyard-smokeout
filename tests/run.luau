@@ -21,6 +21,9 @@ local Holiday = require("../src/shared/Logic/Holiday")
 local Rookie = require("../src/shared/Logic/Rookie")
 local SfxIds = require("../src/shared/SfxIds")
 local Gifting = require("../src/shared/Logic/Gifting")
+local SeasonPass = require("../src/shared/Logic/SeasonPass")
+local Storefront = require("../src/shared/Logic/Storefront")
+local Funnels = require("../src/shared/Logic/Funnels")
 
 local passed, failed = 0, 0
 local current = ""
@@ -756,6 +759,305 @@ test("held gifts (recipient left) are kept and sent later, one at a time", funct
 	local fs = require("@lune/fs")
 	truthy(string.find(fs.readFile("src/shared/DefaultData.luau"), "giftsHeld = {}", 1, true) ~= nil, "held gifts are saved")
 	truthy(Config.Gifting and Config.Gifting.ttlSeconds > 0 and Config.Gifting.firstGiftTitle ~= "", "gifting config")
+end)
+
+print("Profitability: season pass, offers, club, analytics")
+local SP = Config.SeasonPass
+local function stats0()
+	return { served = 0, cooks = 0, smoked = 0, perfectFlips = 0, cookoffs = 0, bells = 0 }
+end
+test("Smokehouse Pass: 6-week seasons from Mon Nov 2 2026, plain start/end dates", function()
+	eq(SP.epochDay, Holiday.daysFromCivil(2026, 11, 2))
+	eq(Holiday.weekdayOf(SP.epochDay), Holiday.weekdayOf(Holiday.daysFromCivil(2026, 11, 9)), "starts on a Monday-aligned day")
+	local a = SeasonPass.seasonAt(SP.epochDay, SP)
+	eq(a.index, 1)
+	eq(a.def.id, "s1")
+	eq(Holiday.label(a.endDay), "Dec 13")
+	local b = SeasonPass.seasonAt(SP.epochDay + 42, SP)
+	eq(b.def.id, "s2")
+	eq(Holiday.label(b.startDay), "Dec 14")
+	truthy(SeasonPass.seasonAt(SP.epochDay - 1, SP).def == nil, "nothing before launch")
+	truthy(SeasonPass.seasonAt(SP.epochDay + 84, SP).def == nil, "no made-up season 3")
+end)
+test("Smokehouse Pass: both tracks are looks and titles only, every look exists, no repeats", function()
+	local seen = {}
+	for _, def in ipairs(SP.seasons) do
+		eq(#def.paid, 15, def.id .. " paid tiers")
+		for tier in pairs(def.free) do
+			truthy(tier >= 1 and tier <= #def.paid, "free tier in range")
+			truthy(def.paid[tier] ~= nil)
+		end
+		local function check(r, src)
+			local keys = 0
+			for k in pairs(r) do
+				keys += 1
+				truthy(k == "cosmetic" or k == "title", "only looks or titles, got " .. k)
+			end
+			eq(keys, 1)
+			if r.cosmetic then
+				local c = Config.Cosmetics[r.cosmetic]
+				truthy(c, "unknown cosmetic " .. r.cosmetic)
+				eq(c.source, src, r.cosmetic)
+				truthy(not seen[r.cosmetic], "repeat " .. r.cosmetic)
+				seen[r.cosmetic] = true
+			end
+		end
+		for _, r in pairs(def.free) do
+			check(r, "seasonfree")
+		end
+		for _, r in ipairs(def.paid) do
+			check(r, "season")
+		end
+	end
+end)
+test("Smokehouse Pass: XP comes from normal play since the season started, plus a daily visit", function()
+	local s = SeasonPass.new()
+	local st = stats0()
+	st.served = 500 -- lifetime stats from before the season don't count
+	truthy(SeasonPass.sync(s, "s1", st, SP, 100), "new season resets")
+	eq(SeasonPass.xp(s, st, SP), SP.dailyXP)
+	truthy(not SeasonPass.sync(s, "s1", st, SP, 100), "same day, same season")
+	eq(s.days, 1)
+	SeasonPass.sync(s, "s1", st, SP, 101)
+	eq(s.days, 2)
+	st.served += 10
+	st.smoked += 5
+	eq(SeasonPass.xp(s, st, SP), 2 * SP.dailyXP + 10 * SP.xp.served + 5 * SP.xp.smoked)
+	-- a typical ~20 minute day reaches the top tier well inside the 6 weeks
+	local perDay = SP.dailyXP + 40 * SP.xp.served + 8 * SP.xp.cooks + 4 * SP.xp.smoked + 8 * SP.xp.perfectFlips
+	local days = (15 * SP.tierXP) / perDay
+	truthy(days < SP.lengthDays * 0.85, string.format("top tier in %.1f days of regular play", days))
+	truthy(days > 14, "but it's a season, not an afternoon")
+end)
+test("Smokehouse Pass: free rewards for everyone; buying the pass hands over reached paid tiers", function()
+	local def = SP.seasons[1]
+	local s = SeasonPass.new()
+	local st = stats0()
+	SeasonPass.sync(s, "s1", st, SP, 1)
+	st.served = math.ceil((6 * SP.tierXP - SP.dailyXP) / SP.xp.served) -- reach tier 6
+	eq(SeasonPass.tier(SeasonPass.xp(s, st, SP), def, SP), 6)
+	local got = SeasonPass.claim(s, st, def, SP)
+	eq(#got, 2, "free tiers 3 and 6")
+	eq(got[1].track, "free")
+	eq(#SeasonPass.claim(s, st, def, SP), 0, "never twice")
+	s.paid = true
+	local paid = SeasonPass.claim(s, st, def, SP)
+	eq(#paid, 6, "paid tiers 1-6 right away")
+	eq(paid[6].reward.title, "Smoke Season")
+end)
+test("Smokehouse Pass: tier skips add whole tiers and can't go past the top", function()
+	local def = SP.seasons[1]
+	local s = SeasonPass.new()
+	local st = stats0()
+	SeasonPass.sync(s, "s1", st, SP, 1)
+	truthy(SeasonPass.canSkip(s, st, def, SP, 5))
+	SeasonPass.addSkips(s, 5)
+	eq(SeasonPass.tier(SeasonPass.xp(s, st, SP), def, SP), 5)
+	SeasonPass.addSkips(s, 9)
+	eq(SeasonPass.tier(SeasonPass.xp(s, st, SP), def, SP), 14)
+	truthy(SeasonPass.canSkip(s, st, def, SP, 1))
+	truthy(not SeasonPass.canSkip(s, st, def, SP, 5), "would pass the top")
+	SeasonPass.addSkips(s, 1)
+	eq(SeasonPass.tier(SeasonPass.xp(s, st, SP), def, SP), 15)
+	local a, b = SeasonPass.progress(SeasonPass.xp(s, st, SP), def, SP)
+	eq(a, 0)
+	eq(b, 0)
+	-- a new season starts clean
+	SeasonPass.sync(s, "s2", st, SP, 50)
+	eq(s.skips, 0)
+	eq(s.paid, false)
+	eq(SeasonPass.tier(SeasonPass.xp(s, st, SP), SP.seasons[2], SP), 0)
+end)
+test("Robux never buys coins: no product, skip, pack, club perk or season reward gives coins", function()
+	for key, p in pairs(Monetization.Products) do
+		truthy(p.coins == nil, key .. " gives coins")
+		truthy(p.kind ~= "coins" and p.kind ~= "currency", key)
+		truthy(not string.find(string.lower(p.desc), "coins", 1, true) or p.kind == "boost" or key == "DoubleTips", key .. " mentions coins")
+	end
+	for _, def in ipairs(SP.seasons) do
+		for _, r in ipairs(def.paid) do
+			truthy(r.coins == nil)
+		end
+	end
+	for _, perk in ipairs(Monetization.Subscriptions.PitCrewClub.perks) do
+		truthy(not string.find(string.lower(perk), "coin", 1, true), "club perk mentions coins: " .. perk)
+	end
+end)
+test("no paid random items: every product kind is a fixed, shown reward", function()
+	local fixed = { boost = true, finish = true, cosmetic = true, bundle = true, cut = true, starter = true, season = true, tierskip = true }
+	for key, p in pairs(Monetization.Products) do
+		truthy(fixed[p.kind], key .. " has an unknown (maybe random) kind " .. tostring(p.kind))
+		truthy(p.odds == nil and p.random == nil and p.pool == nil, key .. " looks random")
+	end
+end)
+test("value notes add up: Whole Hog R$499 vs R$730, Turkey set, starter pack, 5 skips", function()
+	local P = Monetization.Products
+	local function sum(grants)
+		local t = 0
+		for _, g in ipairs(grants) do
+			for _, p in pairs(P) do
+				if p.kind == "cosmetic" and p.grants and #p.grants == 1 and p.grants[1] == g then
+					t += p.price
+				end
+			end
+		end
+		return t
+	end
+	eq(P.BundleWholeHog.price, 499)
+	eq(sum(P.BundleWholeHog.grants), 730)
+	truthy(string.find(P.BundleWholeHog.valueNote, "730", 1, true) and string.find(P.BundleWholeHog.valueNote, "less as a set", 1, true))
+	eq(sum(P.TD_BundleFeast.grants), 306)
+	truthy(string.find(P.TD_BundleFeast.valueNote, "306", 1, true) and P.TD_BundleFeast.price < 306)
+	eq(P.Boost30.price + P.TomahawkPack.price, 108)
+	truthy(string.find(P.StarterPitPack.valueNote, "108", 1, true) and P.StarterPitPack.price < 108)
+	eq(P.TierSkip1.price * 5, 245)
+	truthy(string.find(P.TierSkip5.valueNote, "245", 1, true) and P.TierSkip5.price < 245)
+	-- price ladder: entry under R$80, a middle, and a top anchor
+	local low, top = math.huge, 0
+	for _, p in pairs(P) do
+		low = math.min(low, p.price)
+		top = math.max(top, p.price)
+	end
+	truthy(low < 80 and top == 499, "ladder from under R$80 to R$499")
+end)
+test("all new IDs are placeholders: products/passes 0, subscription empty string", function()
+	for key, p in pairs(Monetization.Products) do
+		eq(p.id, 0, key)
+	end
+	for key, sub in pairs(Monetization.Subscriptions) do
+		eq(sub.id, "", key)
+		truthy(sub.priceText ~= "" and string.find(sub.priceText, "month", 1, true), "price and length shown")
+	end
+	truthy(Monetization.PrivateServer.price > 0)
+	local fs = require("@lune/fs")
+	local pub = fs.readFile("PUBLISHING.md")
+	for key in pairs(Monetization.Products) do
+		truthy(string.find(pub, key, 1, true), "PUBLISHING.md lists " .. key)
+	end
+	truthy(string.find(pub, "PitCrewClub", 1, true) and string.find(pub, "Private Server", 1, true), "subscription and private server documented")
+end)
+test("no pressure copy on any new offer (no countdowns, no hurry words)", function()
+	local banned = { "now", "last chance", "hurry", "limited time", "don't miss", "before it's gone", "only today", "ends in", "left!", "act fast" }
+	local lines = {}
+	for _, p in pairs(Monetization.Products) do
+		table.insert(lines, p.name)
+		table.insert(lines, p.desc)
+		table.insert(lines, p.valueNote or "")
+	end
+	local c = Monetization.Subscriptions.PitCrewClub
+	for _, l in ipairs({ c.name, c.desc, c.priceText, Monetization.Premium.desc, Monetization.PrivateServer.desc }) do
+		table.insert(lines, l)
+	end
+	for _, l in ipairs(c.perks) do
+		table.insert(lines, l)
+	end
+	for _, l in ipairs(lines) do
+		local low = string.lower(l)
+		for _, w in ipairs(banned) do
+			truthy(not string.find(low, "%f[%w]" .. w:gsub("'", "'"):gsub("!", "%%!") .. (w:sub(-1):match("%w") and "%f[%W]" or "")), "pressure copy: " .. l)
+		end
+		truthy(not string.find(low, "pilgrim", 1, true), "no loaded holiday copy: " .. l)
+	end
+end)
+test("Turkey Day looks: on sale only in Thanksgiving week, the free apron stays free", function()
+	local P = Monetization.Products
+	local base = { owned = {}, featured = {}, onceBought = {}, cooking = false, seasonActive = true, seasonPaid = false, canSkip = function()
+		return true
+	end }
+	local n = 0
+	for key, p in pairs(P) do
+		if p.event == "turkeyday" then
+			n += 1
+			base.eventActive = false
+			local ok, why = Storefront.canBuy(key, p, base)
+			truthy(not ok and string.find(why, "next year", 1, true), key .. " blocked outside the week")
+			base.eventActive = true
+			truthy((Storefront.canBuy(key, p, base)), key .. " buyable in the week")
+			for _, g in ipairs(p.grants) do
+				truthy(g ~= Config.TurkeyDay.reward, "free event apron is never sold")
+				eq(Config.Cosmetics[g].source, "eventshop")
+			end
+		end
+	end
+	eq(n, 5)
+	local w = Holiday.turkeyWeek(Holiday.daysFromCivil(2026, 11, 25), Config.TurkeyDay.daysBefore, Config.TurkeyDay.daysAfter)
+	truthy(w.active and Holiday.label(w.startDay) == "Nov 23" and Holiday.label(w.endDay) == "Nov 29")
+end)
+test("First-Time Pit Pack: one per account, not giftable, nothing random", function()
+	local p = Monetization.Products.StarterPitPack
+	local c = { owned = {}, featured = {}, onceBought = {}, eventActive = false, cooking = false, seasonActive = false, seasonPaid = false, canSkip = function()
+		return false
+	end }
+	truthy((Storefront.canBuy("StarterPitPack", p, c)))
+	c.onceBought.StarterPitPack = true
+	local ok, why = Storefront.canBuy("StarterPitPack", p, c)
+	truthy(not ok and why ~= nil)
+	truthy(not Gifting.giftable(p), "not a gift")
+	truthy(p.price < 80, "entry price")
+	eq(Config.Cosmetics.starter_hat.source, "starter")
+	local fs = require("@lune/fs")
+	truthy(string.find(fs.readFile("src/shared/DefaultData.luau"), "purchases = { once = {}", 1, true), "saved per account")
+end)
+test("Storefront: owned bundles, season limits and rotation say no calmly", function()
+	local P = Monetization.Products
+	local c = { owned = {}, featured = {}, onceBought = {}, eventActive = false, cooking = false, seasonActive = true, seasonPaid = false, canSkip = function(n)
+		return n <= 1
+	end }
+	truthy((Storefront.canBuy("SeasonPass", P.SeasonPass, c)))
+	c.seasonPaid = true
+	truthy(not Storefront.canBuy("SeasonPass", P.SeasonPass, c), "one pass per season")
+	truthy((Storefront.canBuy("TierSkip1", P.TierSkip1, c)))
+	truthy(not Storefront.canBuy("TierSkip5", P.TierSkip5, c), "no skipping past the top")
+	c.seasonActive = false
+	truthy(not Storefront.canBuy("TierSkip1", P.TierSkip1, c), "no season, no skips")
+	for _, g in ipairs(P.BundleWholeHog.grants) do
+		c.owned[g] = true
+	end
+	truthy(not Storefront.canBuy("BundleWholeHog", P.BundleWholeHog, c))
+	eq(Storefront.ownedCount({ skin_golden = true, hat_pitmaster = true }, P.BundleWholeHog.grants), 2)
+	truthy(not Storefront.canBuy("Rot_SkinSnowy", P.Rot_SkinSnowy, c), "rotation still enforced")
+	truthy(not Gifting.giftable(P.SeasonPass) and not Gifting.giftable(P.TierSkip1), "pass and skips aren't gifts")
+end)
+test("Pit Crew Club: same monthly look for everyone, cycles all six, looks only", function()
+	local looks = Config.Club.looks
+	eq(#looks, 6)
+	local seen = {}
+	for m = 1, 6 do
+		local id = Storefront.clubLook(looks, 2026, m)
+		truthy(not seen[id])
+		seen[id] = true
+		eq(Config.Cosmetics[id].source, "club")
+	end
+	eq(Storefront.clubLook(looks, 2026, 1), Storefront.clubLook(looks, 2026, 7), "repeats after 6 months")
+	truthy(Storefront.monthKey(2026, 12) + 1 == Storefront.monthKey(2027, 1))
+	eq(Config.Cosmetics[Config.Premium.look].source, "premium")
+	local fs = require("@lune/fs")
+	local src = fs.readFile("src/server/Services/MembershipService.luau")
+	truthy(string.find(src, "IsEligibleToPurchaseSubscription", 1, true), "PolicyService gate")
+	truthy(string.find(src, "UserSubscriptionStatusChanged", 1, true) and string.find(src, "GetUserSubscriptionStatusAsync", 1, true))
+	truthy(not string.find(src, "addCoins", 1, true), "the club never gives coins")
+end)
+test("Analytics: onboarding steps log once each, in order; coin flows are batched", function()
+	local steps = Funnels.onboardingSteps(Config.RookieSteps)
+	eq(#steps, 4 + #Config.RookieSteps)
+	local data = { tutorial = { firstBrisket = false, done = false }, stats = { served = 0 }, rookie = { claimed = 0, skipped = false } }
+	eq(Funnels.onboardingReached(data, Config.RookieSteps), 1)
+	data.tutorial.firstBrisket = true
+	data.stats.served = 1
+	data.tutorial.done = true
+	data.rookie.claimed = 2
+	eq(Funnels.onboardingReached(data, Config.RookieSteps), 6)
+	local new = Funnels.newSteps(1, 6)
+	eq(#new, 5)
+	eq(new[1], 2)
+	eq(#Funnels.newSteps(6, 6), 0)
+	local b = {}
+	Funnels.addCoins(b, 50, "Gameplay", "Earned")
+	Funnels.addCoins(b, 25, "Gameplay", "Earned")
+	Funnels.addCoins(b, -40, "Shop", "Sauce")
+	eq(b["Source|Gameplay|Earned"].amount, 75)
+	eq(b["Sink|Shop|Sauce"].amount, 40)
+	eq(#Funnels.SHOP, 4)
 end)
 
 print(string.format("\n%d passed, %d failed", passed, failed))

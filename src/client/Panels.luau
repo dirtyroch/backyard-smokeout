@@ -17,6 +17,7 @@ local Economy = require(Shared.Logic.Economy)
 local TimeUtil = require(Shared.Logic.TimeUtil)
 local Holiday = require(Shared.Logic.Holiday)
 local Gifting = require(Shared.Logic.Gifting)
+local Storefront = require(Shared.Logic.Storefront)
 local T = UI.Theme
 
 local player = Players.LocalPlayer
@@ -31,6 +32,7 @@ local tabState: { [string]: string } = {}
 local lastRender = 0
 local sauceOdds: { [string]: number }? = nil
 local freshOpen = false
+local loggedTab: string? = nil
 
 local EGGS = {
 	{ id = "blessed", hint = "Sunday folks set a table by the hub. Look closely at what's on it." },
@@ -212,6 +214,13 @@ local function shopCard(parent: Instance, order: number, kind: string, key: stri
 		owned = s.passes[key] == true
 	elseif item.kind == "cosmetic" or item.kind == "bundle" then
 		owned = ownsAll(s, item.grants)
+		local have = Storefront.ownedCount(s.owned, item.grants)
+		if item.kind == "bundle" and not owned and have > 0 then
+			-- honest heads-up: the bundle price doesn't change if you already own some of it
+			lbl(f, string.format("You already own %d of %d", have, #(item.grants :: any)), { Position = UDim2.new(0, 0, 0, 178), Size = UDim2.new(1, 0, 0, 16), TextSize = 11, Font = T.body, TextColor3 = T.dim, TextXAlignment = Enum.TextXAlignment.Center })
+		end
+	elseif item.once then
+		owned = s.onceBought ~= nil and s.onceBought[key] == true
 	end
 	local idIsZero = item.id == 0
 	local text = owned and "Owned ✓" or (idIsZero and "Studio test (free)" or ("Buy for R$ " .. item.price))
@@ -234,11 +243,45 @@ local function shopCard(parent: Instance, order: number, kind: string, key: stri
 	return true
 end
 
+local function infoCard(parent: Instance, order: number, icon: string, name: string, desc: string, note: string?, label: string, color: Color3, fn: (() -> ())?)
+	local f = UI.frame({ BackgroundColor3 = T.card, LayoutOrder = order, ZIndex = 22, Parent = parent })
+	UI.corner(f, 14)
+	UI.pad(f, 8)
+	lbl(f, icon, { Size = UDim2.new(1, 0, 0, 44), TextSize = 38, TextXAlignment = Enum.TextXAlignment.Center })
+	lbl(f, name, { Position = UDim2.new(0, 0, 0, 46), Size = UDim2.new(1, 0, 0, 40), TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center })
+	lbl(f, desc, { Position = UDim2.new(0, 0, 0, 86), Size = UDim2.new(1, 0, 0, 64), TextSize = 12, Font = T.body, TextColor3 = T.dim, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top })
+	if note then
+		lbl(f, note, { Position = UDim2.new(0, 0, 0, 150), Size = UDim2.new(1, 0, 0, 40), TextSize = 11, Font = T.body, TextColor3 = T.gold, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top })
+	end
+	btn(f, label, color, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 36), TextSize = 15, AutoButtonColor = fn ~= nil }, fn)
+	return f
+end
+
+local function byPrice(keys: { string })
+	table.sort(keys, function(a, b)
+		local pa, pb = Monetization.Products[a], Monetization.Products[b]
+		if (pa.once == true) ~= (pb.once == true) then
+			return pa.once == true -- the one-time pack goes first
+		end
+		return pa.price < pb.price
+	end)
+end
+
 local function renderShop(s: any)
 	titleLabel.Text = "🛒 Pitmaster Outfitters"
 	local sel, content = tabs(body, "shop", Monetization.ShopTabs, "This Week")
+	-- analytics only (Roblox funnel: opened shop -> opened a tab -> tapped buy -> bought)
+	if freshOpen then
+		loggedTab = nil
+		task.spawn(Net.act, "ShopView", "")
+	end
+	if loggedTab ~= sel then
+		loggedTab = sel
+		task.spawn(Net.act, "ShopView", sel)
+	end
 	local sf = scroller(content, true, Vector2.new(166, 236))
 	local n = 0
+	local event = s.turkey and s.turkey.active
 	if sel == "Passes" then
 		local keys = {}
 		for k in pairs(Monetization.Passes) do
@@ -252,18 +295,50 @@ local function renderShop(s: any)
 				n += 1
 			end
 		end
+		local m = s.member or {}
+		local club = Monetization.Subscriptions.PitCrewClub
+		if m.club or m.clubOffer then
+			n += 1
+			infoCard(sf, 100, club.icon, club.name, "A new look every month (yours to keep), a Pit Crew tag, a daily Smoke Shower for your server and 1 free Season tier a month. No coins.", club.id == "" and "Studio test" or "$4.99 a month. Cancel any time.", m.club and "Member ✓" or (club.id == "" and "Studio test (free)" or "Join the Club"), m.club and T.cardHi or T.green, (not m.club) and function()
+				Net.act("Subscribe")
+			end or nil)
+		end
+		n += 1
+		local prem = Monetization.Premium
+		infoCard(sf, 101, prem.icon, prem.name, prem.desc, nil, m.premium and "Premium ✓" or "Learn about Premium", m.premium and T.cardHi or T.blue, (not m.premium) and function()
+			Net.act("PremiumInfo")
+		end or nil)
+		n += 1
+		infoCard(sf, 102, "🏠", "Private Ranch Server", Monetization.PrivateServer.desc, m.host and "You're hosting this server!" or nil, m.host and "Host ✓" or "How to get one", m.host and T.cardHi or T.card, function()
+			Net.notify("On the game's page, open Servers and tap Create Private Server. A grown-up can help with the purchase.", "info")
+		end)
 	else
 		local keys = {}
 		if sel == "This Week" then
-			keys = table.clone(s.rotation)
+			if event then
+				for k, p in pairs(Monetization.Products) do
+					if p.event == "turkeyday" then
+						table.insert(keys, k)
+					end
+				end
+				byPrice(keys)
+			end
+			for _, k in ipairs(s.rotation) do
+				table.insert(keys, k)
+			end
 		else
 			for k, p in pairs(Monetization.Products) do
-				if p.category == sel then
+				if p.category == sel and not (p.once and s.onceBought and s.onceBought[k]) then
 					table.insert(keys, k)
 				end
 			end
-			table.sort(keys, function(a, b)
-				return Monetization.Products[a].price < Monetization.Products[b].price
+			byPrice(keys)
+		end
+		if sel == "This Week" and s.seasonPass and s.seasonPass.active then
+			local sp = s.seasonPass
+			n += 1
+			infoCard(sf, 0, sp.icon, "Smokehouse Pass", string.format("Season %d: %s. Free and pass tracks of looks and titles. You're on tier %d of %d.", sp.number, sp.name, sp.tier, sp.max), sp.starts .. " to " .. sp.ends, "See the season", T.accent, function()
+				Panels.open("season")
 			end)
 		end
 		for i, k in ipairs(keys) do
@@ -275,8 +350,109 @@ local function renderShop(s: any)
 	if n == 0 then
 		lbl(sf, "Nothing here yet. Check back soon!", { Size = UDim2.new(0, 400, 0, 30) })
 	end
-	local foot = sel == "This Week" and "This week's looks rotate every Monday and come back in a later week. Looks only, no stats." or "Every purchase shows exactly what you get. No random items, ever. Tap 🎁 to gift a look to someone in your server."
+	local foot = "Every purchase shows exactly what you get. No random items, ever. Tap 🎁 to gift a look to someone in your server."
+	if sel == "This Week" then
+		foot = event and ("Turkey Day looks are on sale through " .. s.turkey.ends .. " and come back next year. The Thankful & Full Apron stays free at the potluck.") or "This week's looks rotate every Monday and come back in a later week. Looks only, no stats."
+	elseif sel == "Passes" then
+		foot = "Passes are yours forever. The Pit Crew Club and Premium are monthly and give looks and friendly perks, never coins."
+	end
 	lbl(body, foot, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 14), Size = UDim2.new(1, 0, 0, 18), TextSize = 12, Font = T.body, TextColor3 = T.dim })
+end
+
+-- ===== Smokehouse Pass (season) =====
+local SLOT_ICON = { hat = "🤠", apron = "🦺", tool = "🥄", neck = "🧣", trail = "✨", skin = "🔥", smoke = "💨", feet = "🧦", patio = "💡" }
+
+local function seasonCell(parent: Instance, y: number, reward: any?, reached: boolean, locked: boolean, paidRow: boolean)
+	local f = UI.frame({ BackgroundColor3 = reward and (reached and (locked and T.panel or T.cardHi) or T.card) or T.panel, BackgroundTransparency = reward and 0 or 0.6, Position = UDim2.new(0, 0, 0, y), Size = UDim2.new(1, 0, 0, 96), ZIndex = 23, Parent = parent })
+	UI.corner(f, 10)
+	if paidRow and reward then
+		UI.stroke(f, T.gold, reached and not locked and 2 or 1)
+	end
+	if not reward then
+		return
+	end
+	local icon, name = "🏷️", ""
+	if reward.cosmetic then
+		local def = Config.Cosmetics[reward.cosmetic]
+		icon = def and SLOT_ICON[def.slot] or "🎁"
+		name = def and def.name or reward.cosmetic
+	else
+		name = '"' .. tostring(reward.title) .. '"'
+	end
+	lbl(f, icon, { Position = UDim2.new(0, 0, 0, 4), Size = UDim2.new(1, 0, 0, 34), TextSize = 28, ZIndex = 24, TextXAlignment = Enum.TextXAlignment.Center })
+	lbl(f, name, { Position = UDim2.new(0, 4, 0, 40), Size = UDim2.new(1, -8, 0, 36), TextSize = 12, Font = T.body, ZIndex = 24, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top })
+	local status = reached and (locked and "🔒 pass" or "✓ yours") or ""
+	if status ~= "" then
+		lbl(f, status, { Position = UDim2.new(0, 0, 1, -20), Size = UDim2.new(1, 0, 0, 16), TextSize = 11, ZIndex = 24, TextColor3 = locked and T.dim or T.green, TextXAlignment = Enum.TextXAlignment.Center })
+	end
+end
+
+local function renderSeason(s: any)
+	local sp = s.seasonPass
+	titleLabel.Text = "🎟️ Smokehouse Pass"
+	if not sp or not sp.active then
+		lbl(body, "The next season starts " .. ((sp and sp.nextLabel) or "soon") .. ". The Pitmaster Path and the weekly looks keep going in the meantime.", { Size = UDim2.new(1, 0, 0, 60), TextSize = 18 })
+		return
+	end
+	local def
+	for _, d in ipairs(Config.SeasonPass.seasons) do
+		if d.id == sp.id then
+			def = d
+		end
+	end
+	if not def then
+		return
+	end
+	lbl(body, string.format("%s Season %d: %s", sp.icon, sp.number, sp.name), { Size = UDim2.new(1, -240, 0, 28), TextSize = 22, TextColor3 = T.gold })
+	local sub = sp.need > 0 and string.format("%s to %s  •  Tier %d of %d  •  %d / %d XP to the next tier", sp.starts, sp.ends, sp.tier, sp.max, sp.into, sp.need) or string.format("%s to %s  •  Top tier reached! Nice smokin'.", sp.starts, sp.ends)
+	lbl(body, sub, { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -240, 0, 20), TextSize = 13, Font = T.body, TextColor3 = T.dim })
+	local _, fill = UI.bar(body, T.gold, { Position = UDim2.new(0, 0, 0, 50), Size = UDim2.new(1, -240, 0, 10), ZIndex = 22 })
+	fill.ZIndex = 23
+	fill.Size = UDim2.fromScale(sp.need > 0 and math.clamp(sp.into / sp.need, 0, 1) or 1, 1)
+	local pass = Monetization.Products.SeasonPass
+	local avail = s.productIds.products.SeasonPass
+	if sp.paid then
+		btn(body, "🎟️ Pass ✓", T.cardHi, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 4), Size = UDim2.new(0, 226, 0, 52), TextSize = 18, AutoButtonColor = false })
+	elseif avail then
+		btn(body, pass.id == 0 and "🎟️ Get the pass (Studio test)" or ("🎟️ Get the pass  R$ " .. pass.price), T.green, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 4), Size = UDim2.new(0, 226, 0, 52), TextSize = 16 }, function()
+			Net.act("Prompt", "product", "SeasonPass")
+		end)
+	end
+	-- the two tracks
+	local rows = UI.frame({ BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 70), Size = UDim2.new(0, 58, 0, 230), ZIndex = 22, Parent = body })
+	lbl(rows, "FREE", { Position = UDim2.new(0, 0, 0, 24), Size = UDim2.new(1, 0, 0, 96), TextSize = 15, TextColor3 = T.text })
+	lbl(rows, "PASS", { Position = UDim2.new(0, 0, 0, 126), Size = UDim2.new(1, 0, 0, 96), TextSize = 15, TextColor3 = T.gold })
+	local track = UI.new("ScrollingFrame", { BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 60, 0, 70), Size = UDim2.new(1, -60, 0, 236), AutomaticCanvasSize = Enum.AutomaticSize.X, CanvasSize = UDim2.new(), ScrollingDirection = Enum.ScrollingDirection.X, ScrollBarThickness = 6, ZIndex = 22, Parent = body })
+	UI.list(track, Enum.FillDirection.Horizontal, 6)
+	for i = 1, sp.max do
+		local reached = i <= sp.tier
+		local col = UI.frame({ BackgroundTransparency = 1, Size = UDim2.new(0, 104, 0, 224), LayoutOrder = i, ZIndex = 22, Parent = track })
+		lbl(col, tostring(i), { Size = UDim2.new(1, 0, 0, 20), TextSize = 14, TextColor3 = reached and T.gold or T.dim, TextXAlignment = Enum.TextXAlignment.Center })
+		seasonCell(col, 24, def.free[i], reached, false, false)
+		seasonCell(col, 126, def.paid[i], reached, not sp.paid, true)
+	end
+	if freshOpen then
+		task.defer(function()
+			track.CanvasPosition = Vector2.new(math.max(0, (sp.tier - 2) * 110), 0)
+		end)
+	end
+	-- tier skips (looks and titles only)
+	local skipRow = UI.frame({ BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 316), Size = UDim2.new(1, 0, 0, 44), ZIndex = 22, Parent = body })
+	UI.list(skipRow, Enum.FillDirection.Horizontal, 8)
+	for i, key in ipairs({ "TierSkip1", "TierSkip5" }) do
+		local p = Monetization.Products[key]
+		if s.productIds.products[key] and sp.tier + (p.count or 1) <= sp.max then
+			local text = p.id == 0 and (p.icon .. " " .. p.name .. " (Studio test)") or string.format("%s %s  R$ %d", p.icon, p.name, p.price)
+			btn(skipRow, text, T.blue, { Size = UDim2.new(0, 250, 0, 40), TextSize = 15, LayoutOrder = i }, function()
+				Net.act("Prompt", "product", key)
+			end)
+		end
+	end
+	local skip5 = Monetization.Products.TierSkip5
+	if skip5.valueNote then
+		lbl(skipRow, skip5.valueNote, { Size = UDim2.new(0, 200, 0, 40), TextSize = 12, Font = T.body, TextColor3 = T.gold, LayoutOrder = 3 })
+	end
+	lbl(body, "Looks and titles only. Season XP comes from things you already do: serving, cooking, perfect flips, Cook-Offs, the dinner bell and a daily visit. Tiers you reach are yours to keep.", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 14), Size = UDim2.new(1, 0, 0, 34), TextSize = 12, Font = T.body, TextColor3 = T.dim, TextWrapped = true })
 end
 
 -- ===== Gift picker (looks only, to someone in this server) =====
@@ -640,6 +816,21 @@ local function renderDaily(s: any)
 	btn(wrap, "👴 Hear Unc Hank's joke of the day", T.blue, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 262), Size = UDim2.new(0, 340, 0, 44), TextSize = 17 }, function()
 		Net.act("HearJoke")
 	end)
+	local m = s.member or {}
+	if m.club or m.host then
+		local perks = UI.frame({ BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 366), Size = UDim2.new(1, 0, 0, 40), ZIndex = 22, Parent = wrap })
+		UI.list(perks, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Center)
+		if m.club then
+			btn(perks, m.clubShowerReady and "🔧 Share today's Pit Crew Smoke Shower" or "🔧 Smoke Shower shared today ✓", m.clubShowerReady and T.green or T.cardHi, { Size = UDim2.new(0, 330, 0, 40), TextSize = 15, LayoutOrder = 1 }, function()
+				Net.act("ClubShower")
+			end)
+		end
+		if m.host then
+			btn(perks, m.hostShowerReady and "🏠 Host's Smoke Shower" or "🏠 Smoker warming up", m.hostShowerReady and T.green or T.cardHi, { Size = UDim2.new(0, 250, 0, 40), TextSize = 15, LayoutOrder = 2 }, function()
+				Net.act("HostShower")
+			end)
+		end
+	end
 	lbl(wrap, "Also today: 🧪 sauce restocks every 5 min  •  🏆 Saturday Cook-Off  •  🫧 Suds weekend pups  •  🦟 mosquitoes at dusk", { Position = UDim2.new(0, 0, 0, 320), Size = UDim2.new(1, 0, 0, 40), TextSize = 13, Font = T.body, TextColor3 = T.dim, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 22 })
 end
 
@@ -815,6 +1006,8 @@ function Panels.render()
 			renderShop(s)
 		elseif current == "gift" then
 			renderGift(s)
+		elseif current == "season" then
+			renderSeason(s)
 		elseif current == "sauce" then
 			renderSauce(s)
 		elseif current == "cook" then

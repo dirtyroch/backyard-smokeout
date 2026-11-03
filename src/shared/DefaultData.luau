@@ -59,6 +59,10 @@ return {
 	forceCritter = "",
 	combo = 0,
 	receipts = {},
+	seasonPass = { id = "", base = {}, days = 0, lastDay = -1, skips = 0, paid = false, freeClaimed = 0, paidClaimed = 0 }, -- Logic/SeasonPass
+	club = { month = -1, showerDay = -1 }, -- Pit Crew Club monthly look + daily shower
+	purchases = { once = {}, count = 0 }, -- one-per-account packs; count of Robux purchases
+	analytics = { onboard = 0 }, -- last onboarding funnel step logged (InsightsService)
 	giftsHeld = {}, -- paid gifts whose recipient left before the receipt; send later for free (Logic/Gifting)
 	lastSeen = 0,
 	playSeconds = 0,

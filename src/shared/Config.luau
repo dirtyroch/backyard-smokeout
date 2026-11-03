@@ -234,6 +234,53 @@ Config.Cosmetics = {
 	bandana_gold = { name = "Golden Bandana", slot = "neck", source = "suds", color = "#F1C40F" },
 	bandana_rookie = { name = "Rookie of the Ranch Bandana", slot = "neck", source = "rookie", color = "#E8590C" },
 	vip_lights = { name = "VIP Patio Lights", slot = "patio", source = "pass", color = "#FFE9A8" },
+	-- Smokehouse Pass seasons (Config.SeasonPass). "seasonfree" = free track, "season" = paid track.
+	s1_bandana_acorn = { name = "Acorn Bandana", slot = "neck", source = "seasonfree", color = "#8B5A2B" },
+	s1_hat_hayride = { name = "Hayride Cowboy Hat", slot = "hat", source = "seasonfree", color = "#C8A165" },
+	s1_trail_hayride = { name = "Hayride Trail", slot = "trail", source = "seasonfree", color = "#E3B448" },
+	s1_apron_free = { name = "Season One Apron", slot = "apron", source = "seasonfree", color = "#6B8E23", text = "SEASON 1 SMOKER" },
+	s1_smoke_applewood = { name = "Applewood Smoke", slot = "smoke", source = "season", color = "#E07B39" },
+	s1_apron_flannel = { name = "Flannel Apron", slot = "apron", source = "season", color = "#8B1E1E", text = "FLANNEL SEASON" },
+	s1_trail_ember = { name = "Ember Trail", slot = "trail", source = "season", color = "#FF6A00" },
+	s1_hat_harvestmoon = { name = "Harvest Moon Hat", slot = "hat", source = "season", color = "#5C3317" },
+	s1_skin_maple = { name = "Maple Smoker", slot = "skin", source = "season", color = "#B5651D" },
+	s1_bandana_spice = { name = "Pumpkin Spice Bandana", slot = "neck", source = "season", color = "#E2725B" },
+	s1_tool_copper = { name = "Copper Spatula", slot = "tool", source = "season", color = "#B87333" },
+	s1_smoke_cider = { name = "Hot Cider Smoke", slot = "smoke", source = "season", color = "#C68E17" },
+	s1_trail_moon = { name = "Harvest Moon Trail", slot = "trail", source = "season", color = "#FFC857" },
+	s1_apron_boss = { name = "Harvest Boss Apron", slot = "apron", source = "season", color = "#3E2723", text = "HARVEST BOSS" },
+	s1_skin_harvestgold = { name = "Harvest Gold Smoker", slot = "skin", source = "season", color = "#DAA520", gold = true },
+	s2_bandana_frost = { name = "Frost Bandana", slot = "neck", source = "seasonfree", color = "#A7C7E7" },
+	s2_hat_frost = { name = "Frosty Cowboy Hat", slot = "hat", source = "seasonfree", color = "#DDE7F0" },
+	s2_trail_flurry = { name = "Flurry Trail", slot = "trail", source = "seasonfree", color = "#FFFFFF" },
+	s2_apron_free = { name = "Season Two Apron", slot = "apron", source = "seasonfree", color = "#2E5984", text = "SEASON 2 SMOKER" },
+	s2_smoke_peppermint = { name = "Peppermint Smoke", slot = "smoke", source = "season", color = "#FF4D6D" },
+	s2_apron_sweater = { name = "Ugly Sweater Apron", slot = "apron", source = "season", color = "#1B5E20", text = "UGLY SWEATER" },
+	s2_trail_aurora = { name = "Aurora Trail", slot = "trail", source = "season", color = "#7CFFCB" },
+	s2_hat_snowcap = { name = "Snowcap Cowboy Hat", slot = "hat", source = "season", color = "#F5F5F5" },
+	s2_skin_gingerbread = { name = "Gingerbread Smoker", slot = "skin", source = "season", color = "#A0522D" },
+	s2_bandana_candycane = { name = "Candy Cane Bandana", slot = "neck", source = "season", color = "#E63946" },
+	s2_tool_icicle = { name = "Icicle Spatula", slot = "tool", source = "season", color = "#BDE0FE", neon = true },
+	s2_smoke_cocoa = { name = "Hot Cocoa Smoke", slot = "smoke", source = "season", color = "#6F4E37" },
+	s2_trail_snowflake = { name = "Snowflake Trail", slot = "trail", source = "season", color = "#CFE8FF" },
+	s2_apron_lodge = { name = "Lodge Apron", slot = "apron", source = "season", color = "#4E342E", text = "SMOKEHOUSE LODGE" },
+	s2_skin_aurora = { name = "Aurora Smoker", slot = "skin", source = "season", color = "#5E60CE", neon = true },
+	-- Turkey Day look set (Robux, only on sale during the Turkey Day Smokeout; the free apron stays free)
+	td_hat_cornucopia = { name = "Cornucopia Cowboy Hat", slot = "hat", source = "eventshop", color = "#8B4513" },
+	td_smoke_cranberry = { name = "Cranberry Smoke", slot = "smoke", source = "eventshop", color = "#9B1B30" },
+	td_trail_leaves = { name = "Falling Leaves Trail", slot = "trail", source = "eventshop", color = "#D2691E" },
+	td_skin_pecan = { name = "Pecan Pie Smoker", slot = "skin", source = "eventshop", color = "#7B4B2A" },
+	-- Pit Crew Club (Roblox subscription): one members' look each month, kept forever
+	club_apron = { name = "Pit Crew Apron", slot = "apron", source = "club", color = "#1D3557", text = "PIT CREW" },
+	club_hat = { name = "Pit Crew Hat", slot = "hat", source = "club", color = "#264653" },
+	club_trail = { name = "Pit Crew Trail", slot = "trail", source = "club", color = "#E9C46A" },
+	club_smoke = { name = "Pit Crew Smoke", slot = "smoke", source = "club", color = "#F4A261" },
+	club_skin = { name = "Pit Crew Smoker", slot = "skin", source = "club", color = "#2A9D8F" },
+	club_bandana = { name = "Pit Crew Bandana", slot = "neck", source = "club", color = "#E76F51" },
+	-- Roblox Premium members get this free (Premium Payouts reward time played by members)
+	premium_bandana = { name = "Premium Pitmaster Bandana", slot = "neck", source = "premium", color = "#E2B714" },
+	-- First-time Pit Pack (one per account)
+	starter_hat = { name = "Rookie Pitmaster Hat", slot = "hat", source = "starter", color = "#E8590C" },
 }
 Config.CosmeticSlots = { "hat", "apron", "tool", "neck", "feet", "trail", "skin", "smoke", "patio" }
 
@@ -286,6 +333,65 @@ Config.Crew = { perFriend = 0.10, maxFriends = 3 }
 --   * snagging is opt-in: new players start in Peace Mode
 -- Gifting: buy a look for someone in your server (Logic/Gifting). Looks only, never boosts or passes.
 Config.Gifting = { ttlSeconds = 180, firstGiftTitle = "Good Neighbor" }
+
+-- Smokehouse Pass: a 6-week season with a free track and a paid track. Rewards are looks and
+-- titles only (never coins, cuts, boosts or anything that helps in the Cook-Off). Season XP is
+-- worked out from what you already do (serving, cooking, flips, Cook-Offs, bells, a daily visit),
+-- so there's nothing extra to grind. Tier skips are honest shortcuts: one tier = tierXP.
+local function L(id: string): any
+	return { cosmetic = id }
+end
+local function Ti(t: string): any
+	return { title = t }
+end
+Config.SeasonPass = {
+	epochDay = 20759, -- Monday Nov 2, 2026 (Texas day number); season n starts epochDay + (n-1) * lengthDays
+	lengthDays = 42,
+	tierXP = 400,
+	dailyXP = 40, -- first visit each Texas day
+	xp = { served = 2, cooks = 4, smoked = 6, perfectFlips = 1, cookoffs = 25, bells = 10 },
+	seasons = {
+		{
+			id = "s1",
+			name = "Harvest Smoke",
+			icon = "🍂",
+			free = { [3] = L("s1_bandana_acorn"), [6] = Ti("Harvest Helper"), [9] = L("s1_hat_hayride"), [12] = L("s1_trail_hayride"), [15] = L("s1_apron_free") },
+			paid = {
+				L("s1_smoke_applewood"), Ti("Low & Slow"), L("s1_apron_flannel"), L("s1_trail_ember"), L("s1_hat_harvestmoon"),
+				Ti("Smoke Season"), L("s1_skin_maple"), L("s1_bandana_spice"), L("s1_tool_copper"), Ti("Bark Boss"),
+				L("s1_smoke_cider"), L("s1_trail_moon"), L("s1_apron_boss"), Ti("Hickory Hero"), L("s1_skin_harvestgold"),
+			},
+		},
+		{
+			id = "s2",
+			name = "Winter Smoke",
+			icon = "❄️",
+			free = { [3] = L("s2_bandana_frost"), [6] = Ti("Snow Day Smoker"), [9] = L("s2_hat_frost"), [12] = L("s2_trail_flurry"), [15] = L("s2_apron_free") },
+			paid = {
+				L("s2_smoke_peppermint"), Ti("Cold Smoke"), L("s2_apron_sweater"), L("s2_trail_aurora"), L("s2_hat_snowcap"),
+				Ti("Hot Cocoa Hand"), L("s2_skin_gingerbread"), L("s2_bandana_candycane"), L("s2_tool_icicle"), Ti("Frosty Flipper"),
+				L("s2_smoke_cocoa"), L("s2_trail_snowflake"), L("s2_apron_lodge"), Ti("Winter Pitmaster"), L("s2_skin_aurora"),
+			},
+		},
+	},
+}
+
+-- Pit Crew Club (Roblox subscription, monthly). Perks are looks and a friendly server-wide
+-- Smoke Shower, never coins or Cook-Off help. Members keep every monthly look they got.
+Config.Club = {
+	looks = { "club_apron", "club_hat", "club_trail", "club_smoke", "club_skin", "club_bandana" },
+	title = "Pit Crew",
+	monthlyTierSkips = 1, -- one free Smokehouse Pass tier each month you're a member
+	showerMinutes = 5, -- the once-a-day Pit Crew Smoke Shower for everyone in the server
+}
+
+-- Roblox Premium: a free look for members. No coins, no stats.
+Config.Premium = { look = "premium_bandana" }
+
+-- Private servers (price is set on the Creator Dashboard, see PUBLISHING.md). The owner gets a
+-- "Host" tag and can share a Smoke Shower with everyone in their server every 10 minutes.
+-- Cook speed only; the Cook-Off and snagging aren't touched.
+Config.PrivateServer = { hostShowerCooldown = 600, hostTitle = "Ranch Host" }
 Config.FairPlay = { passTipMult = 1.5, passTipCap = 1.5, showerMinutes = 5, showerMult = 1.25 }
 
 -- Big Bertha's Dinner Bell: 3 different players ring the bell within 20 s, and the whole server

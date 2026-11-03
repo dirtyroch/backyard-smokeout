@@ -195,9 +195,12 @@ local function validKey(player: Player, data: any, key: any): string?
 	return kind
 end
 
-function GameService.addCoins(player: Player, data: any, amount: number, earned: boolean)
+function GameService.addCoins(player: Player, data: any, amount: number, earned: boolean, sku: string?)
 	amount = math.floor(amount)
 	data.coins += amount
+	if ctx.Insights and amount ~= 0 then
+		ctx.Insights.coins(player, amount, amount > 0 and "Gameplay" or "Shop", sku or (amount > 0 and "Earned" or "Spent"))
+	end
 	if earned and amount > 0 then
 		data.runCoins += amount
 		data.lifetimeCoins += amount
@@ -329,6 +332,7 @@ GameService.addPlate = addPlate
 
 -- ===== Actions =====
 local Actions: { [string]: (Player, any, any, any) -> (boolean, string?) } = {}
+GameService.Actions = Actions -- other services (Membership) add their actions here in init()
 
 local function meatAvailable(player: Player, data: any, meat: any): (boolean, string?)
 	if meat.hidden then
@@ -372,7 +376,7 @@ Actions.StartCook = function(player, data, key, meatId)
 	if data.coins < cost then
 		return false, string.format("You need %d coins for that.", cost)
 	end
-	GameService.addCoins(player, data, -cost, false)
+	GameService.addCoins(player, data, -cost, false, "Meat")
 	if meat.premium and not GameService.hasPass(player, "PremiumCuts") and not (meat.id == "tomahawk" and data.unlocks.tomahawk) then
 		data.cuts[meat.id] -= 1
 	end
@@ -721,7 +725,7 @@ Actions.BuySauce = function(player, data, sauceId)
 	if data.coins < price then
 		return false, string.format("You need %d coins.", price)
 	end
-	GameService.addCoins(player, data, -price, false)
+	GameService.addCoins(player, data, -price, false, "Sauce")
 	data.restock.bought[sauceId] = bought + 1
 	GameService.addSauce(data, sauceId)
 	data.stats.sauces += 1
@@ -737,7 +741,7 @@ Actions.UpgradePit = function(player, data)
 	if data.coins < cost then
 		return false, string.format("You need %d coins.", cost)
 	end
-	GameService.addCoins(player, data, -cost, false)
+	GameService.addCoins(player, data, -cost, false, "PitUpgrade")
 	data.pitLevel += 1
 	data.stats.upgrades += 1
 	GameService.toast(player, "Pit upgraded to " .. pit(data).name .. "!", "good")
@@ -762,7 +766,7 @@ Actions.BuySlot = function(player, data, kind)
 	if data.coins < cost then
 		return false, string.format("You need %d coins.", cost)
 	end
-	GameService.addCoins(player, data, -cost, false)
+	GameService.addCoins(player, data, -cost, false, "Slot")
 	data[boughtKey] += 1
 	data.stats.upgrades += 1
 	ctx.World.refreshStations(player)
@@ -961,6 +965,19 @@ Actions.Prompt = function(player, _data, kind, key)
 	return ctx.Purchase.prompt(player, kind, key)
 end
 
+-- Analytics only: which shop tab was opened (nothing changes for the player).
+Actions.ShopView = function(player, _data, tab)
+	if type(tab) ~= "string" or #tab > 24 then
+		return false, nil
+	end
+	if tab == "" then
+		ctx.Insights.shopOpened(player)
+	else
+		ctx.Insights.shopTab(player, tab)
+	end
+	return true, nil
+end
+
 Actions.Gift = function(player, _data, key, recipientUserId)
 	if type(key) ~= "string" or type(recipientUserId) ~= "number" then
 		return false, "Bad request."
@@ -1056,6 +1073,10 @@ local function snapshot(player: Player, data: any): any
 		studio = RunService:IsStudio(),
 		productIds = ctx.Purchase.availability(),
 		giftsHeld = data.giftsHeld,
+		onceBought = data.purchases.once,
+		boughtAny = data.purchases.count > 0,
+		seasonPass = ctx.Season.snapshot(data),
+		member = ctx.Membership.snapshot(player, data),
 		plot = r.plot,
 	}
 end
@@ -1164,6 +1185,8 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 	end
 
 	PitmasterPath.registerPlayDay(data.path, r.today)
+	ctx.Season.sync(player, data)
+	ctx.Membership.onLoaded(player, data)
 	local rank = Config.Ranks[data.rank]
 	if rank and rank.unlock then
 		data.owned[rank.unlock] = true
@@ -1292,11 +1315,15 @@ function GameService.start()
 					advanceAll(player, data, t, true)
 					data.playSeconds += 1
 					GameService.checkRookie(player, data) -- catches goals met through world prompts too
+					ctx.Season.check(player, data)
+					ctx.Insights.onboarding(player, data)
 					-- day rollover while playing
 					local d = today()
 					if d ~= r.today then
 						r.today = d
 						PitmasterPath.registerPlayDay(data.path, d)
+						ctx.Season.sync(player, data)
+						ctx.Membership.onNewDay(player, data)
 						GameService.toast(player, "A new day at the ranch! Daily reward and a new Path step are ready.", "good")
 						r.dirty = true
 					end

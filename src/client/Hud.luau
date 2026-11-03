@@ -49,10 +49,10 @@ local function topPill(parent: Instance, icon: string, order: number, color: Col
 end
 
 local function menuButton(parent: Instance, icon: string, text: string, order: number, panel: string): TextButton
-	local b = UI.button("", T.bg, { Size = UDim2.new(0, 64, 0, 64), LayoutOrder = order, BackgroundTransparency = 0.1, Parent = parent }, function()
+	local b = UI.button("", T.bg, { Size = UDim2.new(0, 64, 0, 60), LayoutOrder = order, BackgroundTransparency = 0.1, Parent = parent }, function()
 		Panels.toggle(panel)
 	end)
-	UI.label(icon, { Size = UDim2.new(1, 0, 0, 36), Position = UDim2.new(0, 0, 0, 4), TextSize = 30, TextXAlignment = Enum.TextXAlignment.Center, Parent = b })
+	UI.label(icon, { Size = UDim2.new(1, 0, 0, 34), Position = UDim2.new(0, 0, 0, 3), TextSize = 28, TextXAlignment = Enum.TextXAlignment.Center, Parent = b })
 	UI.label(text, { Size = UDim2.new(1, 0, 0, 18), Position = UDim2.new(0, 0, 1, -22), TextSize = 13, TextXAlignment = Enum.TextXAlignment.Center, Parent = b })
 	local dot = UI.frame({ Name = "Dot", BackgroundColor3 = T.red, Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(1, -12, 0, -2), Visible = false, Parent = b })
 	UI.corner(dot, 7)
@@ -75,16 +75,17 @@ function Hud.mount(screen: GuiObject, panels: any)
 	refs.boost.Parent.Visible = false
 
 	-- left: menu
-	local menu = UI.frame({ BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0.5, -270), Size = UDim2.new(0, 70, 0, 560), Parent = root })
-	UI.list(menu, nil, 6)
+	local menu = UI.frame({ BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0.5, -290), Size = UDim2.new(0, 70, 0, 580), Parent = root })
+	UI.list(menu, nil, 5)
 	refs.btnShop = menuButton(menu, "🛒", "Pit Shop", 1, "shop")
-	refs.btnSauce = menuButton(menu, "🥫", "Sauce", 2, "sauce")
-	refs.btnIndex = menuButton(menu, "📖", "Index", 3, "index")
-	refs.btnPath = menuButton(menu, "🗺️", "Path", 4, "path")
-	refs.btnUp = menuButton(menu, "⬆️", "Upgrade", 5, "upgrades")
-	refs.btnDaily = menuButton(menu, "🎁", "Daily", 6, "daily")
-	refs.btnSettings = menuButton(menu, "⚙️", "Settings", 7, "settings")
-	refs.btnInvite = menuButton(menu, "👋", "Invite", 8, "invite")
+	refs.btnSeason = menuButton(menu, "🎟️", "Season", 2, "season")
+	refs.btnSauce = menuButton(menu, "🥫", "Sauce", 3, "sauce")
+	refs.btnIndex = menuButton(menu, "📖", "Index", 4, "index")
+	refs.btnPath = menuButton(menu, "🗺️", "Path", 5, "path")
+	refs.btnUp = menuButton(menu, "⬆️", "Upgrade", 6, "upgrades")
+	refs.btnDaily = menuButton(menu, "🎁", "Daily", 7, "daily")
+	refs.btnSettings = menuButton(menu, "⚙️", "Settings", 8, "settings")
+	refs.btnInvite = menuButton(menu, "👋", "Invite", 9, "invite")
 
 	-- right: big actions
 	local right = UI.frame({ BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -12, 1, -170), Size = UDim2.new(0, 170, 0, 150), Parent = root })
@@ -248,6 +249,9 @@ function Hud.update()
 	end
 	refs.btnDaily.Dot.Visible = s.canClaimDaily
 	refs.btnPath.Dot.Visible = s.pathStatus.complete
+	-- one gentle dot for the one-time Pit Pack, only after the Rookie List and before any purchase
+	local rookieDone = s.rookie == nil or s.rookie.finished
+	refs.btnShop.Dot.Visible = rookieDone and not s.boughtAny and s.onceBought ~= nil and not s.onceBought.StarterPitPack and s.productIds.products.StarterPitPack == true
 	refs.serveAll.Text = "🍽️ Serve All" .. (#s.customers > 0 and (" (" .. #s.customers .. ")") or "")
 	refs.customers.Text = #s.customers > 0 and (#s.customers .. " hungry critter" .. (#s.customers == 1 and "" or "s") .. " waiting") or ""
 	if s.rush then

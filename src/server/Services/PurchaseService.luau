@@ -7,6 +7,10 @@
 	  * IDs live in ReplicatedStorage.Shared.Monetization. Items with id 0 are hidden in the
 	    live game; in Studio they get a free "Studio test" grant so you can try everything.
 	  * Nothing sold here is random. Robux never buys coins.
+	  * Every "can I buy this?" rule is in Shared.Logic.Storefront (unit-tested): weekly rotation,
+	    Turkey Day week only, one-per-account packs, nothing you already own, season limits.
+	  * Roblox PolicyService info is fetched per player; MembershipService uses
+	    IsEligibleToPurchaseSubscription to decide who sees the Pit Crew Club.
 ]]
 local MarketplaceService = game:GetService("MarketplaceService")
 local PolicyService = game:GetService("PolicyService")
@@ -22,6 +26,7 @@ local CookLogic = require(Shared.Logic.CookLogic)
 local CookOff = require(Shared.Logic.CookOff)
 local TimeUtil = require(Shared.Logic.TimeUtil)
 local Gifting = require(Shared.Logic.Gifting)
+local Storefront = require(Shared.Logic.Storefront)
 
 local PurchaseService = {}
 local ctx: any = nil
@@ -104,6 +109,26 @@ function PurchaseService.policy(player: Player): any?
 	return policies[player]
 end
 
+local function storeCtx(_player: Player, data: any): Storefront.Ctx
+	local cooking = false
+	for _, cook in pairs(data.stations) do
+		if type(cook) == "table" and not CookLogic.isDone(cook) then
+			cooking = true
+		end
+	end
+	local active, paid, canSkip = ctx.Season.storeState(data)
+	return {
+		owned = data.owned,
+		featured = featuredNow(),
+		eventActive = ctx.Game.turkeyWeek().active,
+		onceBought = data.purchases.once,
+		cooking = cooking,
+		seasonActive = active,
+		seasonPaid = paid,
+		canSkip = canSkip,
+	}
+end
+
 local function cosmeticsOwned(data: any, grants: { string }?): boolean
 	if not grants or #grants == 0 then
 		return false
@@ -141,14 +166,26 @@ local function grantProduct(player: Player, data: any, key: string): string
 		end
 	elseif p.kind == "cut" and p.cut then
 		data.cuts[p.cut] = (data.cuts[p.cut] or 0) + (p.count or 1)
-	elseif p.kind == "cosmetic" or p.kind == "bundle" then
+	elseif p.kind == "cosmetic" or p.kind == "bundle" or p.kind == "starter" then
 		for _, id in ipairs(p.grants or {}) do
 			ctx.Game.grantCosmetic(player, data, id)
 		end
-		if p.kind == "bundle" and p.minutes then
+		if (p.kind == "bundle" or p.kind == "starter") and p.minutes then
 			ctx.Game.addBoost(data, p.minutes, p.mult or 2)
 		end
+		if p.kind == "starter" and p.cut then
+			data.cuts[p.cut] = (data.cuts[p.cut] or 0) + (p.count or 1)
+		end
+	elseif p.kind == "season" then
+		ctx.Season.grantPaid(player, data)
+	elseif p.kind == "tierskip" then
+		ctx.Season.grantSkips(player, data, p.count or 1)
 	end
+	if p.once then
+		data.purchases.once[key] = true
+	end
+	data.purchases.count += 1
+	ctx.Insights.shopBought(player, key)
 	ctx.Game.markDirty(player)
 	return "Thanks! " .. p.icon .. " " .. p.name .. " is yours."
 end
@@ -198,23 +235,11 @@ function PurchaseService.prompt(player: Player, kind: string, key: string): (boo
 	if not p then
 		return false, "Not found."
 	end
-	if p.rotation and not featuredNow()[key] then
-		return false, "That one's not in this week's rotation. It'll be back!"
+	local ok, why = Storefront.canBuy(key, p, storeCtx(player, data))
+	if not ok then
+		return false, why
 	end
-	if (p.kind == "cosmetic" or p.kind == "bundle") and cosmeticsOwned(data, p.grants) then
-		return false, "You already own everything in this."
-	end
-	if p.kind == "finish" then
-		local any = false
-		for _, cook in pairs(data.stations) do
-			if type(cook) == "table" and not CookLogic.isDone(cook) then
-				any = true
-			end
-		end
-		if not any then
-			return false, "Nothing is cooking right now."
-		end
-	end
+	ctx.Insights.shopPrompt(player, key)
 	if p.id == 0 then
 		if IS_STUDIO then
 			local msg = grantProduct(player, data, key)
@@ -266,6 +291,9 @@ function PurchaseService.promptGift(player: Player, key: string, recipientUserId
 	end
 	if p.rotation and not featuredNow()[key] then
 		return false, "That one's not in this week's rotation. It'll be back!"
+	end
+	if p.event == "turkeyday" and not ctx.Game.turkeyWeek().active then
+		return false, "The Turkey Day looks are on sale during Thanksgiving week. They come back next year."
 	end
 	local recipient = Players:GetPlayerByUserId(recipientUserId)
 	local rdata = recipient and ctx.Game.dataOf(recipient) or nil
@@ -329,6 +357,8 @@ local function processReceipt(info: any): Enum.ProductPurchaseDecision
 			return Enum.ProductPurchaseDecision.NotProcessedYet
 		end
 		ReceiptLedger.add(data.receipts, purchaseId, RECEIPT_MEMORY)
+		data.purchases.count += 1
+		ctx.Insights.shopBought(player, "Gift:" .. key)
 		ctx.Game.markDirty(player)
 		if not ctx.Data.save(profile, false) then
 			return Enum.ProductPurchaseDecision.NotProcessedYet

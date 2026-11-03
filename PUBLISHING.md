@@ -102,11 +102,45 @@ Go to **Monetization > Developer Products > Create a Developer Product**. For ea
 | `Rot_SkinSnowy` | Snowy Smoker (weekly) | R$ 99 |
 | `Rot_SmokePumpkin` | Pumpkin Patch Smoke (weekly) | R$ 49 |
 | `Rot_TrailFirework` | Firework Trail (weekly) | R$ 99 |
+| `BundleWholeHog` | Whole Hog Collection (6 looks, top bundle) | R$ 499 |
+| `StarterPitPack` | First-Time Pit Pack (one per account) | R$ 49 |
+| `TD_HatCornucopia` | Cornucopia Cowboy Hat (Turkey Day week) | R$ 79 |
+| `TD_SmokeCranberry` | Cranberry Smoke (Turkey Day week) | R$ 49 |
+| `TD_TrailLeaves` | Falling Leaves Trail (Turkey Day week) | R$ 79 |
+| `TD_SkinPecan` | Pecan Pie Smoker (Turkey Day week) | R$ 99 |
+| `TD_BundleFeast` | Turkey Day Look Set (all four) | R$ 229 |
+| `SeasonPass` | Smokehouse Pass (this season's paid track) | R$ 399 |
+| `TierSkip1` | Skip 1 Tier | R$ 49 |
+| `TierSkip5` | Skip 5 Tiers | R$ 199 |
 
 **Tips:**
 - Keep the prices in the file the same as on the dashboard. The shop shows the price from the file.
 - The "weekly" items rotate in the shop by themselves every Monday. Create all of them once, and the game handles the rotation.
 - Optional badges: go to **Engagement > Badges**, create them and paste their IDs into `Monetization.Badges`. Badge IDs left at `0` are skipped.
+
+- **Smokehouse Pass and tier skips:** make each one a Developer Product, not a Game Pass. The game tracks which season you bought it for, so one product works for every season. Create the product once.
+- **Turkey Day items** are only for sale from Monday to Sunday of Thanksgiving week (Nov 23–29 in 2026). The free Harvest Apron stays free. You can create these products at any time.
+- **First-Time Pit Pack** is a Developer Product. The game makes sure each account can buy it only once.
+
+### 6b. Pit Crew Club (Roblox subscription, $4.99 a month)
+
+1. On the Creator Dashboard, go to **Monetization > Subscriptions > Create a Subscription**.
+2. Name: **Pit Crew Club**. Price: **$4.99 per month**. Pick the type that fits durable perks (monthly looks plus an in-game perk), not currency. Use the description from `Monetization.Subscriptions.PitCrewClub.perks`:
+   - a new club look every month (yours to keep),
+   - 1 free Smokehouse Pass tier skip each month,
+   - a "Pit Crew" name tag while you're a member,
+   - a 5-minute Smoke Shower for your whole ranch once a day.
+3. Copy the ID. It starts with `EXP-`. In **Monetization**, replace `id = ""` under `PitCrewClub` with `id = "EXP-..."`.
+4. While the ID is `""`, the live game hides the Club card. Roblox only shows the subscription to players allowed to buy it (`PolicyService.IsEligibleToPurchaseSubscription`). In Studio you can test the Club perks by setting `owned["sub:PitCrewClub"] = true`.
+5. Roblox rules for subscriptions: the perks must keep matching the description, and you can't take away things members already earned. The monthly looks stay with the player after they cancel.
+
+### 6c. Private Server price
+
+Go to **Monetization > Private Servers**, turn them on and set the price to **R$ 100 a month** (`Monetization.PrivateServer.price`). Whoever owns the private server gets a "🏠 Ranch Host" tag and a **Host Smoke Shower** button. The shower speeds up everyone else's smokers on that ranch for 5 minutes and can be used every 10 minutes. It's a party perk. It never affects cook-offs or leaderboards.
+
+### 6d. Roblox Premium
+
+There's nothing to set up. Premium Payouts are paid automatically based on how long Premium members play. Premium members also get a free **Premium Bandana** look. The shop's "Passes" tab has a Premium card that opens Roblox's own Premium page. It only shows for players who can buy Premium.
 
 When you're done, choose **File > Publish to Roblox** again so the live game gets the new IDs.
 
@@ -171,5 +205,8 @@ To take a clean Studio screenshot:
 ## 9. After launch
 
 - Check **Analytics** on the dashboard after a day. Look at **Day 1 retention** and **Average session time**.
+- **Funnels** (Analytics > Funnels): **Onboarding** shows where new players stop (joined, first brisket, first plate, tutorial, each Rookie goal). **PitShop** shows opened shop, opened a tab, tapped buy and bought. Use them to see whether a price is too high before you change it.
+- **Economy** (Analytics > Economy): coin sources (tips, rewards) and sinks (meat, sauce, upgrades, slots). Use it to check that the coin economy stays balanced.
+- **Seasons:** Season 1 (Harvest Smoke) runs Nov 2 to Dec 13, 2026, and Season 2 (Winter Smoke) runs Dec 14, 2026 to Jan 24, 2027. Add Season 3 to `Config.SeasonPass.seasons` (15 paid looks or titles plus 5 free ones) **before Jan 25, 2027**. If you don't, the pass hides itself until you add one.
 - Every update is the same: edit in Studio, then **File > Publish to Roblox**.
 - Want to change prices or add items later? Edit **Monetization** and create the matching item on the dashboard.

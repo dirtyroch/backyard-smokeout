@@ -174,7 +174,14 @@ local function buildTag(folder: Folder, head: BasePart, player: Player, data: an
 	title.TextColor3 = vip and hex("#FFD700") or hex("#FFE9A8")
 	local rankName = Config.Ranks[data.rank] and Config.Ranks[data.rank].name or ""
 	local t = data.title ~= "" and data.title or rankName
-	title.Text = (vip and "✨ " or "") .. t
+	local prefix = vip and "✨ " or ""
+	if ctx.Membership and ctx.Membership.isMember(player) then
+		prefix = "🔧 " .. Config.Club.title .. " · "
+		title.TextColor3 = hex("#7CD1C1")
+	elseif ctx.Membership and ctx.Membership.isHost(player) then
+		prefix = "🏠 "
+	end
+	title.Text = prefix .. t
 	title.Parent = bb
 	local sub = Instance.new("TextLabel")
 	sub.Name = "Sub"
@@ -187,7 +194,6 @@ local function buildTag(folder: Folder, head: BasePart, player: Player, data: an
 	sub.TextColor3 = Color3.new(1, 1, 1)
 	sub.Text = resting and Content.Slang.resting or ""
 	sub.Parent = bb
-	local _ = player
 end
 
 function CosmeticService.apply(player: Player)

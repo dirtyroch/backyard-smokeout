@@ -26,11 +26,14 @@ local ctx = {
 	Egg = require(Services.EggService),
 	Cosmetics = require(Services.CosmeticService),
 	Purchase = require(Services.PurchaseService),
+	Season = require(Services.SeasonService),
+	Membership = require(Services.MembershipService),
+	Insights = require(Services.InsightsService),
 	Remotes = { Action = action, Push = push },
 }
 
 -- World first: it builds the map if it wasn't baked into the place file.
-local order = { "World", "Game", "Social", "Event", "Egg", "Cosmetics", "Purchase" }
+local order = { "World", "Game", "Social", "Event", "Egg", "Cosmetics", "Purchase", "Season", "Membership", "Insights" }
 for _, name in ipairs(order) do
 	local svc = (ctx :: any)[name]
 	if svc.init then
@@ -38,7 +41,7 @@ for _, name in ipairs(order) do
 	end
 end
 ctx.Data.start()
-for _, name in ipairs({ "World", "Social", "Event", "Egg", "Cosmetics", "Purchase", "Game" }) do
+for _, name in ipairs({ "World", "Social", "Event", "Egg", "Cosmetics", "Purchase", "Season", "Membership", "Insights", "Game" }) do
 	local svc = (ctx :: any)[name]
 	if svc.start then
 		svc.start()
