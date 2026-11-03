@@ -45,6 +45,8 @@ return {
 		flips = 0,
 		smokerStarts = 0,
 		bells = 0,
+		giftsSent = 0,
+		giftsGot = 0,
 	},
 	streak = { lastDay = -1, count = 0, best = 0, freeMissWeek = -1 },
 	path = { claimed = 0, playDays = 0, lastPlayDay = -1 },
@@ -57,6 +59,7 @@ return {
 	forceCritter = "",
 	combo = 0,
 	receipts = {},
+	giftsHeld = {}, -- paid gifts whose recipient left before the receipt; send later for free (Logic/Gifting)
 	lastSeen = 0,
 	playSeconds = 0,
 }

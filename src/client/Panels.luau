@@ -16,6 +16,7 @@ local Restock = require(Shared.Logic.Restock)
 local Economy = require(Shared.Logic.Economy)
 local TimeUtil = require(Shared.Logic.TimeUtil)
 local Holiday = require(Shared.Logic.Holiday)
+local Gifting = require(Shared.Logic.Gifting)
 local T = UI.Theme
 
 local player = Players.LocalPlayer
@@ -214,7 +215,15 @@ local function shopCard(parent: Instance, order: number, kind: string, key: stri
 	end
 	local idIsZero = item.id == 0
 	local text = owned and "Owned ✓" or (idIsZero and "Studio test (free)" or ("Buy for R$ " .. item.price))
-	btn(f, text, owned and T.cardHi or T.green, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 36), TextSize = 15, AutoButtonColor = not owned }, function()
+	local canGift = kind == "product" and Gifting.giftable(item)
+	if canGift then
+		-- Gift it to someone in the server (looks only). Shows held gifts that can go out free.
+		local held = s.giftsHeld and s.giftsHeld[key] or 0
+		btn(f, held > 0 and ("🎁" .. held) or "🎁", T.gift, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, 0, 1, 0), Size = UDim2.new(0, 44, 0, 36), TextSize = held > 0 and 15 or 20 }, function()
+			Panels.open("gift", key)
+		end)
+	end
+	btn(f, text, owned and T.cardHi or T.green, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, canGift and -50 or 0, 0, 36), TextSize = 15, AutoButtonColor = not owned }, function()
 		if not owned then
 			Net.act("Prompt", kind, key)
 		end
@@ -266,8 +275,54 @@ local function renderShop(s: any)
 	if n == 0 then
 		lbl(sf, "Nothing here yet. Check back soon!", { Size = UDim2.new(0, 400, 0, 30) })
 	end
-	local foot = sel == "This Week" and "This week's looks rotate every Monday and come back in a later week. Looks only, no stats." or "Every purchase shows exactly what you get. No random items, ever. Robux never buys coins."
+	local foot = sel == "This Week" and "This week's looks rotate every Monday and come back in a later week. Looks only, no stats." or "Every purchase shows exactly what you get. No random items, ever. Tap 🎁 to gift a look to someone in your server."
 	lbl(body, foot, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 14), Size = UDim2.new(1, 0, 0, 18), TextSize = 12, Font = T.body, TextColor3 = T.dim })
+end
+
+-- ===== Gift picker (looks only, to someone in this server) =====
+local function renderGift(s: any)
+	local key = currentArg
+	local item = Monetization.Products[key]
+	if not item then
+		Panels.close()
+		return
+	end
+	titleLabel.Text = "🎁 Gift " .. item.name
+	local sf = scroller(body)
+	local held = s.giftsHeld and s.giftsHeld[key] or 0
+	local head = card(sf, 0, 44)
+	head.BackgroundTransparency = 1
+	lbl(head, held > 0 and string.format("You have %d of these saved to send. Gifting one is free.", held) or ("Pick who gets it. Looks only, no stats. R$ " .. item.price .. ", same as buying it for yourself."), { Size = UDim2.new(1, 0, 1, 0), TextSize = 16, TextColor3 = T.gold })
+	local n = 0
+	local others = Players:GetPlayers()
+	table.sort(others, function(a, b)
+		return a.DisplayName < b.DisplayName
+	end)
+	for _, other in ipairs(others) do
+		if other ~= player then
+			n += 1
+			local f = card(sf, n, 64)
+			lbl(f, other.DisplayName, { Size = UDim2.new(1, -200, 0, 26), TextSize = 20 })
+			lbl(f, "@" .. other.Name, { Position = UDim2.new(0, 0, 0, 26), Size = UDim2.new(1, -200, 0, 20), TextSize = 13, Font = T.body, TextColor3 = T.dim })
+			local label = held > 0 and "Send free 🎁" or (item.id == 0 and "Studio gift (free)" or ("Gift for R$ " .. item.price))
+			btn(f, label, T.green, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 180, 0, 44), TextSize = 16 }, function()
+				local ok = Net.act("Gift", key, other.UserId)
+				if ok then
+					Panels.open("shop")
+				end
+			end)
+		end
+	end
+	if n == 0 then
+		local f = card(sf, 1, 64)
+		lbl(f, "Nobody else is in this server yet.", { Size = UDim2.new(1, -200, 1, 0), TextSize = 18 })
+		btn(f, "Invite a friend", T.accent, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 180, 0, 44), TextSize = 16 }, function()
+			Panels.invite()
+		end)
+	end
+	btn(body, "← Back to shop", T.card, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 14), Size = UDim2.new(0, 160, 0, 30), TextSize = 14 }, function()
+		Panels.open("shop")
+	end)
 end
 
 -- ===== Sauce Shack (coins) =====
@@ -758,6 +813,8 @@ function Panels.render()
 	local ok, err = pcall(function()
 		if current == "shop" then
 			renderShop(s)
+		elseif current == "gift" then
+			renderGift(s)
 		elseif current == "sauce" then
 			renderSauce(s)
 		elseif current == "cook" then

@@ -79,8 +79,8 @@ Monetization.Products = {
 	TrailPetals = { id = 0, name = "Bluebonnet Petal Trail", price = 79, icon = "💠", kind = "cosmetic", category = "Trails", grants = { "trail_petals" }, desc = "Blue petals follow you around." },
 
 	-- Bundles (prices shown honestly vs buying separately)
-	BundleStarter = { id = 0, name = "Pitmaster Starter Bundle", price = 199, icon = "🎁", kind = "bundle", category = "Bundles", grants = { "apron_grillmaster", "hat_pitmaster" }, minutes = 30, mult = 2, valueNote = "Apron (75) + Hat (99) + 30 min Speed (49) = 223 separately", desc = "Grill Master Apron, Pitmaster Cowboy Hat and a 30-minute x2 speed boost." },
-	BundleGoldRush = { id = 0, name = "Gold Rush Bundle", price = 349, icon = "💛", kind = "bundle", category = "Bundles", grants = { "tool_goldenspatula", "skin_golden" }, valueNote = "Spatula (149) + Gold Smoker (249) = 398 separately", desc = "Golden Spatula and Solid Gold Smoker skin." },
+	BundleStarter = { id = 0, name = "Pitmaster Starter Bundle", price = 199, icon = "🎁", kind = "bundle", category = "Bundles", grants = { "apron_grillmaster", "hat_pitmaster" }, minutes = 30, mult = 2, valueNote = "R$ 223 if bought separately", desc = "Grill Master Apron, Pitmaster Cowboy Hat and a 30-minute x2 speed boost." },
+	BundleGoldRush = { id = 0, name = "Gold Rush Bundle", price = 349, icon = "💛", kind = "bundle", category = "Bundles", grants = { "tool_goldenspatula", "skin_golden" }, valueNote = "R$ 398 if bought separately", desc = "Golden Spatula and Solid Gold Smoker skin." },
 
 	-- Weekly rotation (limited-time looks; every one comes back in a later rotation)
 	Rot_ApronHarvest = { id = 0, name = "Harvest Plaid Apron", price = 75, icon = "🍂", kind = "cosmetic", category = "This Week", grants = { "apron_harvest" }, rotation = true, desc = "Cozy plaid apron for the Harvest season." },

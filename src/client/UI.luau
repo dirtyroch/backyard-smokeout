@@ -15,6 +15,7 @@ UI.Theme = {
 	green = Color3.fromHex("#1E9E4A"), -- go / collect (white label 3.5:1)
 	red = Color3.fromHex("#D93636"), -- danger (white label 4.6:1)
 	blue = Color3.fromHex("#2F7BD8"), -- info / social (white label 4.3:1)
+	gift = Color3.fromHex("#C2378A"), -- gifting (white label 5.0:1)
 	text = Color3.fromHex("#FFF6E6"), -- 13.5:1 on panel
 	dim = Color3.fromHex("#D9C4A8"), -- 8.6:1 on panel
 	font = Enum.Font.FredokaOne,

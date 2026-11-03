@@ -961,6 +961,13 @@ Actions.Prompt = function(player, _data, kind, key)
 	return ctx.Purchase.prompt(player, kind, key)
 end
 
+Actions.Gift = function(player, _data, key, recipientUserId)
+	if type(key) ~= "string" or type(recipientUserId) ~= "number" then
+		return false, "Bad request."
+	end
+	return ctx.Purchase.promptGift(player, key, recipientUserId)
+end
+
 Actions.Hello = function(player, _data)
 	GameService.markDirty(player)
 	return true, nil
@@ -1048,6 +1055,7 @@ local function snapshot(player: Player, data: any): any
 		memoryOnly = ctx.Data.isStudioMemoryMode(player),
 		studio = RunService:IsStudio(),
 		productIds = ctx.Purchase.availability(),
+		giftsHeld = data.giftsHeld,
 		plot = r.plot,
 	}
 end

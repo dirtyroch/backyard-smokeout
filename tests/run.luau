@@ -20,6 +20,7 @@ local Hype = require("../src/shared/Logic/Hype")
 local Holiday = require("../src/shared/Logic/Holiday")
 local Rookie = require("../src/shared/Logic/Rookie")
 local SfxIds = require("../src/shared/SfxIds")
+local Gifting = require("../src/shared/Logic/Gifting")
 
 local passed, failed = 0, 0
 local current = ""
@@ -705,6 +706,56 @@ test("sound effects: every cue is a public Roblox-library id, sane volumes", fun
 	truthy(SfxIds.sizzleLoop.loop and SfxIds.sizzleLoop.volume <= 0.25, "the sizzle loop stays quiet")
 	local fs = require("@lune/fs")
 	truthy(string.find(fs.readFile("src/shared/DefaultData.luau"), "sfx = true", 1, true) ~= nil, "sound is on by default and the toggle is saved")
+end)
+
+print("Gifting")
+test("only looks can be gifted: cosmetics and looks bundles, never boosts, cuts or passes", function()
+	local n = 0
+	for key, p in pairs(Monetization.Products) do
+		local g = Gifting.giftable(p)
+		if p.kind == "cosmetic" or p.kind == "bundle" then
+			truthy(g, "giftable: " .. key)
+			n += 1
+		else
+			truthy(not g, "not giftable: " .. key)
+		end
+	end
+	truthy(n >= 10, "plenty of giftable looks")
+	truthy(not Gifting.giftable(Monetization.Passes.DoubleTips), "passes are never gifts")
+end)
+
+test("gift checks: someone else, still here, doesn't already own it", function()
+	local apron = Monetization.Products.ApronGrillMaster
+	truthy(Gifting.check(1, 2, apron, false), "normal gift is fine")
+	truthy(not Gifting.check(1, 1, apron, false), "can't gift yourself")
+	truthy(not Gifting.check(1, nil, apron, false), "recipient must be in the server")
+	truthy(not Gifting.check(1, 2, apron, true), "no gifting what they already own")
+	truthy(not Gifting.check(1, 2, Monetization.Products.Boost30, false), "boosts can't be gifted")
+end)
+
+test("a pending gift is claimed once, and only while fresh", function()
+	local pending = {}
+	Gifting.remember(pending, "SkinGalaxy", 42, 1000)
+	eq(Gifting.claim(pending, "SkinGalaxy", 1010, 180), 42, "fresh claim returns the recipient")
+	eq(Gifting.claim(pending, "SkinGalaxy", 1011, 180), nil, "second claim is empty (no double gift)")
+	Gifting.remember(pending, "SkinGalaxy", 42, 1000)
+	eq(Gifting.claim(pending, "SkinGalaxy", 1000 + 181, 180), nil, "stale intent falls back to a normal purchase")
+	eq(pending.SkinGalaxy, nil, "stale intent is cleared")
+end)
+
+test("held gifts (recipient left) are kept and sent later, one at a time", function()
+	local held = {}
+	truthy(not Gifting.takeHeld(held, "TrailSauce"), "nothing held yet")
+	Gifting.hold(held, "TrailSauce")
+	Gifting.hold(held, "TrailSauce")
+	eq(held.TrailSauce, 2)
+	truthy(Gifting.takeHeld(held, "TrailSauce"))
+	truthy(Gifting.takeHeld(held, "TrailSauce"))
+	eq(held.TrailSauce, nil, "cleared when used up")
+	truthy(not Gifting.takeHeld(held, "TrailSauce"))
+	local fs = require("@lune/fs")
+	truthy(string.find(fs.readFile("src/shared/DefaultData.luau"), "giftsHeld = {}", 1, true) ~= nil, "held gifts are saved")
+	truthy(Config.Gifting and Config.Gifting.ttlSeconds > 0 and Config.Gifting.firstGiftTitle ~= "", "gifting config")
 end)
 
 print(string.format("\n%d passed, %d failed", passed, failed))

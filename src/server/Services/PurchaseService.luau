@@ -21,6 +21,7 @@ local ReceiptLedger = require(Shared.Logic.ReceiptLedger)
 local CookLogic = require(Shared.Logic.CookLogic)
 local CookOff = require(Shared.Logic.CookOff)
 local TimeUtil = require(Shared.Logic.TimeUtil)
+local Gifting = require(Shared.Logic.Gifting)
 
 local PurchaseService = {}
 local ctx: any = nil
@@ -30,6 +31,8 @@ local IS_STUDIO = RunService:IsStudio()
 local productById: { [number]: string } = {}
 local passById: { [number]: string } = {}
 local policies: { [Player]: any } = {}
+local pendingGifts: { [Player]: { [string]: Gifting.Pending } } = {}
+local deliverGift: (Player, any, Player, any, string) -> ()
 
 for key, p in pairs(Monetization.Products) do
 	if p.id ~= 0 then
@@ -220,6 +223,70 @@ function PurchaseService.prompt(player: Player, kind: string, key: string): (boo
 		end
 		return false, "Not on sale yet."
 	end
+	if pendingGifts[player] then
+		pendingGifts[player][key] = nil -- buying for yourself is never redirected to an old gift intent
+	end
+	MarketplaceService:PromptProductPurchase(player, p.id)
+	return true, nil
+end
+
+-- Hand a looks-only product to another player and celebrate it.
+deliverGift = function(giver: Player, giverData: any, recipient: Player, rdata: any, key: string)
+	local p = Monetization.Products[key]
+	for _, id in ipairs(p.grants or {}) do
+		ctx.Game.grantCosmetic(recipient, rdata, id)
+	end
+	if p.kind == "bundle" and p.minutes then
+		ctx.Game.addBoost(rdata, p.minutes, p.mult or 2)
+	end
+	rdata.stats.giftsGot = (rdata.stats.giftsGot or 0) + 1
+	giverData.stats.giftsSent = (giverData.stats.giftsSent or 0) + 1
+	local firstTitle = Config.Gifting.firstGiftTitle
+	local newTitle = not giverData.titles[firstTitle]
+	giverData.titles[firstTitle] = true
+	ctx.Game.markDirty(recipient)
+	ctx.Game.markDirty(giver)
+	ctx.Game.toast(recipient, string.format("🎁 %s gifted you %s %s! It's in your closet.", giver.DisplayName, p.icon, p.name), "good")
+	ctx.Game.toast(giver, string.format("🎁 Gift sent! %s now has %s %s.%s", recipient.DisplayName, p.icon, p.name, newTitle and ' You earned the "' .. firstTitle .. '" title.' or ""), "good")
+	ctx.Game.fx(recipient, "gift", { from = giver.DisplayName, item = p.name, icon = p.icon })
+	ctx.Game.announce(string.format("🎁 %s gifted %s to %s!", giver.DisplayName, p.name, recipient.DisplayName), "#FF8FAB")
+	ctx.Cosmetics.apply(recipient)
+	ctx.World.refreshStations(recipient)
+end
+
+-- Gift a looks-only product to another player in this server.
+function PurchaseService.promptGift(player: Player, key: string, recipientUserId: number): (boolean, string?)
+	local data = ctx.Game.dataOf(player)
+	if not data then
+		return false, "Still loading..."
+	end
+	local p = Monetization.Products[key]
+	if not p then
+		return false, "Not found."
+	end
+	if p.rotation and not featuredNow()[key] then
+		return false, "That one's not in this week's rotation. It'll be back!"
+	end
+	local recipient = Players:GetPlayerByUserId(recipientUserId)
+	local rdata = recipient and ctx.Game.dataOf(recipient) or nil
+	local ok, why = Gifting.check(player.UserId, (recipient and rdata) and recipient.UserId or nil, p, rdata ~= nil and cosmeticsOwned(rdata, p.grants))
+	if not ok then
+		return false, why
+	end
+	-- A held gift (recipient left before an earlier gift landed) goes out free.
+	if Gifting.takeHeld(data.giftsHeld, key) then
+		deliverGift(player, data, recipient :: Player, rdata, key)
+		return true, nil
+	end
+	if p.id == 0 then
+		if IS_STUDIO then
+			deliverGift(player, data, recipient :: Player, rdata, key)
+			return true, "Studio test (free gift)."
+		end
+		return false, "Not on sale yet."
+	end
+	pendingGifts[player] = pendingGifts[player] or {}
+	Gifting.remember(pendingGifts[player], key, recipientUserId, os.time())
 	MarketplaceService:PromptProductPurchase(player, p.id)
 	return true, nil
 end
@@ -242,6 +309,31 @@ local function processReceipt(info: any): Enum.ProductPurchaseDecision
 	if not key then
 		warn("[PurchaseService] unknown product id " .. tostring(info.ProductId))
 		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	-- Was this purchase a gift for someone else in the server?
+	local giftTo = pendingGifts[player] and Gifting.claim(pendingGifts[player], key, os.time(), Config.Gifting.ttlSeconds) or nil
+	if giftTo then
+		local recipient = Players:GetPlayerByUserId(giftTo)
+		local rprofile = recipient and ctx.Data.get(recipient) or nil
+		local gok, gerr = pcall(function()
+			if recipient and rprofile and ctx.Game.runtime[recipient] then
+				deliverGift(player, data, recipient, rprofile.data, key)
+				ctx.Data.save(rprofile, false)
+			else
+				Gifting.hold(data.giftsHeld, key)
+				ctx.Game.toast(player, "They left before the gift landed, so it's saved for you. Open the shop and tap Gift on " .. Monetization.Products[key].name .. " to send it to anyone, free.", "info")
+			end
+		end)
+		if not gok then
+			warn("[PurchaseService] gift failed: " .. tostring(gerr))
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		ReceiptLedger.add(data.receipts, purchaseId, RECEIPT_MEMORY)
+		ctx.Game.markDirty(player)
+		if not ctx.Data.save(profile, false) then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
 	local ok, msg = pcall(grantProduct, player, data, key)
 	if not ok then
@@ -270,8 +362,17 @@ function PurchaseService.start()
 			grantPass(player, key)
 		end
 	end)
+	MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId: number, productId: number, purchased: boolean)
+		-- A cancelled gift prompt shouldn't leave a stale intent that hijacks a later self-purchase.
+		local key = productById[productId]
+		local plr = Players:GetPlayerByUserId(userId)
+		if not purchased and key and plr and pendingGifts[plr] then
+			pendingGifts[plr][key] = nil
+		end
+	end)
 	Players.PlayerRemoving:Connect(function(p)
 		policies[p] = nil
+		pendingGifts[p] = nil
 	end)
 end
 

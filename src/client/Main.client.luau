@@ -97,6 +97,9 @@ Net.on("fx", function(p)
 		Fx.pop(d.queen and "👑 QUEEN DOWN!" or "SWAT!", UI.Theme.gold, d.queen and 44 or 26)
 	elseif p.kind == "rookie" then
 		Fx.rookie(d)
+	elseif p.kind == "gift" then
+		Sfx.play("fanfare")
+		Fx.pop("🎁 A gift from " .. tostring(d.from) .. "!", Color3.fromHex("#FF8FAB"), 40)
 	end
 end)
 

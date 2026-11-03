@@ -284,6 +284,8 @@ Config.Crew = { perFriend = 0.10, maxFriends = 3 }
 --   * the tip pass is +50% (not x2) and never applies to the Cook-Off or snagging
 --   * buying a speed boost gives everyone else in the server a free "Smoke Shower"
 --   * snagging is opt-in: new players start in Peace Mode
+-- Gifting: buy a look for someone in your server (Logic/Gifting). Looks only, never boosts or passes.
+Config.Gifting = { ttlSeconds = 180, firstGiftTitle = "Good Neighbor" }
 Config.FairPlay = { passTipMult = 1.5, passTipCap = 1.5, showerMinutes = 5, showerMult = 1.25 }
 
 -- Big Bertha's Dinner Bell: 3 different players ring the bell within 20 s, and the whole server
