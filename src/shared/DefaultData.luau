@@ -55,7 +55,7 @@ return {
 	cookoff = { week = -1, best = 0 },
 	settings = { peace = true, sfx = true }, -- snagging is opt-in (Fair Play)
 	tutorial = { firstBrisket = false, done = false },
-	rookie = { claimed = 0, skipped = false }, -- Unc Hank's Rookie List (Logic/Rookie)
+	rookie = { claimed = 0, skipped = false, resumed = false }, -- Unc Hank's Rookie List (Logic/Rookie)
 	forceCritter = "",
 	combo = 0,
 	receipts = {},

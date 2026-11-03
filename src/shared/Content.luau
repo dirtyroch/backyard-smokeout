@@ -124,7 +124,14 @@ Content.Rookie = {
 		"Unc Hank: \"Clean work. Your grandmama would be proud.\"",
 		"Unc Hank: \"You're cookin' now. Literally.\"",
 	},
-	done = "Rookie List: done! You're officially Rookie of the Ranch. Wear that bandana with pride.\n\n+%d coins, the Rookie of the Ranch Bandana, and a new title: Rookie of the Ranch.",
+	done = "Rookie List: done! You're officially Rookie of the Ranch. Wear that bandana with pride.\n\nFinish reward: +%d coins, the Rookie of the Ranch Bandana, and a new title: Rookie of the Ranch.",
+	-- %s = the finish reward, e.g. "Rookie of the Ranch Bandana + title + 250 🪙"
+	finishLine = "🏁 Finish all 5 to earn: %s",
+	skipAsk = "Skip the Rookie List? You'll miss the finish reward for now: %s. You can bring the list back any time in Settings > Game and still earn it.",
+	skipKeep = "Keep going",
+	skipYes = "Skip for now",
+	skipped = "Rookie List tucked away. Bring it back any time in Settings > Game.",
+	resumed = "Unc's Rookie List is back (top right)! Goals you already did count right away.",
 	stepDone = "✅ %s  +%d coins",
 }
 

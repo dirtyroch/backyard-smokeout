@@ -180,8 +180,12 @@ Config.RookieSteps = ({
 	{ id = "serve", stat = "served", amount = 3, target = "tables", icon = "🍽️", label = "Serve 3 hungry critters", tip = "Walk up to a critter at your picnic tables, or tap Serve All.", reward = { coins = 60 } },
 	{ id = "smoke", stat = "smokerStarts", amount = 1, target = "smoker", icon = "🌭", label = "Start a Hot Link in your smoker", tip = "Tap Cook on a smoker card. Hot Links are ready in 2 minutes.", reward = { coins = 80 } },
 	{ id = "sauce", stat = "sauces", amount = 1, target = "sauce", icon = "🥫", label = "Grab a sauce at the Sauce Shack", tip = "Sauce gives your next few plates a boost. It restocks every 5 minutes.", reward = { coins = 100 } },
-	{ id = "bell", stat = "bells", amount = 1, target = "bell", icon = "🔔", label = "Ring Big Bertha's dinner bell", tip = "She's the giant smoker in the town square. Ring it with 2 friends for bonus tips!", reward = { coins = 150, cosmetic = "bandana_rookie", title = "Rookie of the Ranch" } },
+	{ id = "bell", stat = "bells", amount = 1, target = "bell", icon = "🔔", label = "Ring Big Bertha's dinner bell", tip = "She's the giant smoker in the town square. Ring it with 2 friends for bonus tips!", reward = { coins = 150 } },
 } :: { any })
+-- The finish reward for completing all five goals (free, earned only here, never sold). It is shown
+-- on the Rookie List card from the start. Players who skip the list can bring it back from
+-- Settings > Game and still earn this.
+Config.RookieFinish = { coins = 250, cosmetic = "bandana_rookie", title = "Rookie of the Ranch" }
 Config.ROOKIE_VETERAN_SERVES = 25 -- saves from before the list existed skip it quietly
 
 -- Critter customers = the Regulars Index. All original characters.

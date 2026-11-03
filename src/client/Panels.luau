@@ -18,6 +18,7 @@ local TimeUtil = require(Shared.Logic.TimeUtil)
 local Holiday = require(Shared.Logic.Holiday)
 local Gifting = require(Shared.Logic.Gifting)
 local Storefront = require(Shared.Logic.Storefront)
+local Rookie = require(Shared.Logic.Rookie)
 local T = UI.Theme
 
 local player = Players.LocalPlayer
@@ -912,6 +913,29 @@ local function renderSettings(s: any)
 		btn(f2, "👋 Invite friends", T.blue, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 44) }, function()
 			Panels.invite()
 		end)
+		-- Unc's Rookie List: bring it back after a skip (and still earn the finish reward)
+		local rk = s.rookie
+		if rk and s.tutorial and s.tutorial.done then
+			local fin = Config.RookieFinish
+			local cdef = fin.cosmetic and Config.Cosmetics[fin.cosmetic]
+			local finText = Rookie.rewardText(fin, cdef and cdef.name or nil)
+			local fr = card(sf, 0, 84)
+			local head, desc
+			if rk.done then
+				head, desc = "📋 Unc's Rookie List: done ✓", "You earned " .. finText .. "."
+			elseif rk.skipped then
+				head, desc = "📋 Unc's Rookie List: skipped", "Bring it back to finish it. Goals you already did count right away. Finish all 5 to earn " .. finText .. "."
+			else
+				head, desc = "📋 Unc's Rookie List: on", "It's on your screen (top right). Finish all 5 to earn " .. finText .. "."
+			end
+			lbl(fr, head, { Size = UDim2.new(1, -180, 0, 26), TextSize = 20 })
+			lbl(fr, desc, { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -180, 0, 52), TextSize = 13, Font = T.body, TextColor3 = T.dim, TextYAlignment = Enum.TextYAlignment.Top })
+			if rk.skipped then
+				btn(fr, "Bring it back", T.green, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 44) }, function()
+					Net.act("RookieResume")
+				end)
+			end
+		end
 		local f3 = card(sf, 4, 60)
 		lbl(f3, s.memoryOnly and "⚠️ Studio test mode: progress is NOT saved." or "💾 Your ranch saves automatically. Smokers keep cooking while you're away.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 14, Font = T.body })
 	end

@@ -922,6 +922,26 @@ Actions.SetTitle = function(player, data, title)
 	return true, nil
 end
 
+-- Unc's Rookie List: skip it (the client asks first), or bring it back from Settings > Game.
+Actions.RookieSkip = function(player, data)
+	if not Rookie.skip(data.rookie, Config.RookieSteps) then
+		return false, "Your Rookie List is already done or tucked away."
+	end
+	GameService.toast(player, Content.Rookie.skipped, "info")
+	GameService.markDirty(player)
+	return true, nil
+end
+
+Actions.RookieResume = function(player, data)
+	if not Rookie.resume(data.rookie, Config.RookieSteps) then
+		return false, "Your Rookie List is already showing (or done)."
+	end
+	GameService.toast(player, Content.Rookie.resumed, "good")
+	GameService.checkRookie(player, data)
+	GameService.markDirty(player)
+	return true, nil
+end
+
 Actions.SetPeace = function(player, data, on)
 	local r = rt(player)
 	if type(on) ~= "boolean" or not r then
@@ -1237,12 +1257,18 @@ function GameService.checkRookie(player: Player, data: any)
 		end
 		local last = data.rookie.claimed >= #Config.RookieSteps
 		if last then
-			if rw.cosmetic then
-				GameService.grantCosmetic(player, data, rw.cosmetic)
+			-- the finish reward for all five goals (free; shown on the card from the start)
+			local fin = Config.RookieFinish
+			if fin.coins and fin.coins > 0 then
+				GameService.addCoins(player, data, fin.coins, false)
 			end
-			if rw.title then
-				data.titles[rw.title] = true
+			if fin.cosmetic then
+				GameService.grantCosmetic(player, data, fin.cosmetic)
 			end
+			if fin.title then
+				data.titles[fin.title] = true
+			end
+			coins += fin.coins or 0
 			ctx.Remotes.Push:FireClient(player, "dialog", { npc = "Unc Hank", text = string.format(Content.Rookie.done, coins), reward = 0 })
 		else
 			GameService.toast(player, string.format(Content.Rookie.stepDone, def.label, coins), "good")

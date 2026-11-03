@@ -264,8 +264,12 @@ Config.RookieSteps = ({
 	{ id = "serve", stat = "served", amount = 3, target = "tables", icon = "🍽️", label = "Serve 3 hungry critters", tip = "Walk up to a critter at your picnic tables, or tap Serve All.", reward = { coins = 60 } },
 	{ id = "smoke", stat = "smokerStarts", amount = 1, target = "smoker", icon = "🌭", label = "Start a Hot Link in your smoker", tip = "Tap Cook on a smoker card. Hot Links are ready in 2 minutes.", reward = { coins = 80 } },
 	{ id = "sauce", stat = "sauces", amount = 1, target = "sauce", icon = "🥫", label = "Grab a sauce at the Sauce Shack", tip = "Sauce gives your next few plates a boost. It restocks every 5 minutes.", reward = { coins = 100 } },
-	{ id = "bell", stat = "bells", amount = 1, target = "bell", icon = "🔔", label = "Ring Big Bertha's dinner bell", tip = "She's the giant smoker in the town square. Ring it with 2 friends for bonus tips!", reward = { coins = 150, cosmetic = "bandana_rookie", title = "Rookie of the Ranch" } },
+	{ id = "bell", stat = "bells", amount = 1, target = "bell", icon = "🔔", label = "Ring Big Bertha's dinner bell", tip = "She's the giant smoker in the town square. Ring it with 2 friends for bonus tips!", reward = { coins = 150 } },
 } :: { any })
+-- The finish reward for completing all five goals (free, earned only here, never sold). It is shown
+-- on the Rookie List card from the start. Players who skip the list can bring it back from
+-- Settings > Game and still earn this.
+Config.RookieFinish = { coins = 250, cosmetic = "bandana_rookie", title = "Rookie of the Ranch" }
 Config.ROOKIE_VETERAN_SERVES = 25 -- saves from before the list existed skip it quietly
 
 -- Critter customers = the Regulars Index. All original characters.
@@ -646,7 +650,14 @@ Content.Rookie = {
 		"Unc Hank: \"Clean work. Your grandmama would be proud.\"",
 		"Unc Hank: \"You're cookin' now. Literally.\"",
 	},
-	done = "Rookie List: done! You're officially Rookie of the Ranch. Wear that bandana with pride.\n\n+%d coins, the Rookie of the Ranch Bandana, and a new title: Rookie of the Ranch.",
+	done = "Rookie List: done! You're officially Rookie of the Ranch. Wear that bandana with pride.\n\nFinish reward: +%d coins, the Rookie of the Ranch Bandana, and a new title: Rookie of the Ranch.",
+	-- %s = the finish reward, e.g. "Rookie of the Ranch Bandana + title + 250 🪙"
+	finishLine = "🏁 Finish all 5 to earn: %s",
+	skipAsk = "Skip the Rookie List? You'll miss the finish reward for now: %s. You can bring the list back any time in Settings > Game and still earn it.",
+	skipKeep = "Keep going",
+	skipYes = "Skip for now",
+	skipped = "Rookie List tucked away. Bring it back any time in Settings > Game.",
+	resumed = "Unc's Rookie List is back (top right)! Goals you already did count right away.",
 	stepDone = "✅ %s  +%d coins",
 }
 
@@ -726,7 +737,7 @@ return {
 	cookoff = { week = -1, best = 0 },
 	settings = { peace = true, sfx = true }, -- snagging is opt-in (Fair Play)
 	tutorial = { firstBrisket = false, done = false },
-	rookie = { claimed = 0, skipped = false }, -- Unc Hank's Rookie List (Logic/Rookie)
+	rookie = { claimed = 0, skipped = false, resumed = false }, -- Unc Hank's Rookie List (Logic/Rookie)
 	forceCritter = "",
 	combo = 0,
 	receipts = {},
@@ -1729,7 +1740,7 @@ return Restock
 -- lost, and the client shows an arrow to where the goal happens. Pure logic, no Roblox APIs.
 local Rookie = {}
 
-export type State = { claimed: number, skipped: boolean? }
+export type State = { claimed: number, skipped: boolean?, resumed: boolean? }
 
 function Rookie.new(): State
 	return { claimed = 0 }
@@ -1745,13 +1756,16 @@ export type Status = {
 	label: string?,
 	target: string?,
 	reward: any?,
+	skipped: boolean, -- tucked away (by the player, or quietly for veterans) and not done yet
+	done: boolean, -- all goals claimed, finish reward earned
 }
 
 function Rookie.status(s: State, steps: { any }, stats: { [string]: number }): Status
 	local step = s.claimed + 1
 	local def = steps[step]
+	local done = s.claimed >= #steps
 	if s.skipped or not def then
-		return { step = #steps + 1, total = #steps, finished = true, progress = 0, amount = 0 }
+		return { step = #steps + 1, total = #steps, finished = true, progress = 0, amount = 0, skipped = s.skipped == true and not done, done = done }
 	end
 	local progress = math.min(stats[def.stat] or 0, def.amount)
 	return {
@@ -1764,6 +1778,8 @@ function Rookie.status(s: State, steps: { any }, stats: { [string]: number }): S
 		label = def.label,
 		target = def.target,
 		reward = def.reward,
+		skipped = false,
+		done = false,
 	}
 end
 
@@ -1785,9 +1801,63 @@ function Rookie.advance(s: State, steps: { any }, stats: { [string]: number }): 
 	return claimed
 end
 
--- Veterans from before the list existed skip it quietly (they already know the loop).
+-- Veterans from before the list existed skip it quietly (they already know the loop), unless
+-- they brought it back themselves.
 function Rookie.shouldSkip(s: State, tutorialDone: boolean, stats: { [string]: number }, veteranServes: number): boolean
-	return s.claimed == 0 and not s.skipped and tutorialDone and (stats.served or 0) >= veteranServes
+	return s.claimed == 0 and not s.skipped and not s.resumed and tutorialDone and (stats.served or 0) >= veteranServes
+end
+
+-- The player taps Skip (after a confirm). A finished list can't be skipped.
+function Rookie.skip(s: State, steps: { any }): boolean
+	if s.skipped or s.claimed >= #steps then
+		return false
+	end
+	s.skipped = true
+	return true
+end
+
+-- Bring a skipped list back (Settings > Game). Progress is lifetime stats, so goals done in the
+-- meantime are claimed on the next check, and the finish reward can still be earned.
+function Rookie.resume(s: State, steps: { any }): boolean
+	if not s.skipped or s.claimed >= #steps then
+		return false
+	end
+	s.skipped = false
+	s.resumed = true
+	return true
+end
+
+-- Short form for the small card: "Rookie of the Ranch Bandana + title + 250 🪙".
+function Rookie.rewardShort(r: any, cosmeticName: string?): string
+	local parts = {}
+	if r.cosmetic then
+		table.insert(parts, cosmeticName or r.cosmetic)
+	end
+	if r.title then
+		table.insert(parts, "title")
+	end
+	if r.coins and r.coins > 0 then
+		table.insert(parts, r.coins .. " 🪙")
+	end
+	return table.concat(parts, " + ")
+end
+
+-- Plain words for the finish reward, used in the skip confirm and in Settings.
+function Rookie.rewardText(r: any, cosmeticName: string?): string
+	local parts = {}
+	if r.cosmetic then
+		table.insert(parts, cosmeticName or r.cosmetic)
+	end
+	if r.title then
+		table.insert(parts, 'the "' .. r.title .. '" title')
+	end
+	if r.coins and r.coins > 0 then
+		table.insert(parts, "+" .. r.coins .. " 🪙")
+	end
+	if #parts <= 1 then
+		return parts[1] or ""
+	end
+	return table.concat(parts, ", ", 1, #parts - 1) .. " and " .. parts[#parts]
 end
 
 return Rookie
@@ -6519,6 +6589,26 @@ Actions.SetTitle = function(player, data, title)
 	return true, nil
 end
 
+-- Unc's Rookie List: skip it (the client asks first), or bring it back from Settings > Game.
+Actions.RookieSkip = function(player, data)
+	if not Rookie.skip(data.rookie, Config.RookieSteps) then
+		return false, "Your Rookie List is already done or tucked away."
+	end
+	GameService.toast(player, Content.Rookie.skipped, "info")
+	GameService.markDirty(player)
+	return true, nil
+end
+
+Actions.RookieResume = function(player, data)
+	if not Rookie.resume(data.rookie, Config.RookieSteps) then
+		return false, "Your Rookie List is already showing (or done)."
+	end
+	GameService.toast(player, Content.Rookie.resumed, "good")
+	GameService.checkRookie(player, data)
+	GameService.markDirty(player)
+	return true, nil
+end
+
 Actions.SetPeace = function(player, data, on)
 	local r = rt(player)
 	if type(on) ~= "boolean" or not r then
@@ -6834,12 +6924,18 @@ function GameService.checkRookie(player: Player, data: any)
 		end
 		local last = data.rookie.claimed >= #Config.RookieSteps
 		if last then
-			if rw.cosmetic then
-				GameService.grantCosmetic(player, data, rw.cosmetic)
+			-- the finish reward for all five goals (free; shown on the card from the start)
+			local fin = Config.RookieFinish
+			if fin.coins and fin.coins > 0 then
+				GameService.addCoins(player, data, fin.coins, false)
 			end
-			if rw.title then
-				data.titles[rw.title] = true
+			if fin.cosmetic then
+				GameService.grantCosmetic(player, data, fin.cosmetic)
 			end
+			if fin.title then
+				data.titles[fin.title] = true
+			end
+			coins += fin.coins or 0
 			ctx.Remotes.Push:FireClient(player, "dialog", { npc = "Unc Hank", text = string.format(Content.Rookie.done, coins), reward = 0 })
 		else
 			GameService.toast(player, string.format(Content.Rookie.stepDone, def.label, coins), "good")
@@ -9855,6 +9951,7 @@ local TimeUtil = require(Shared.Logic.TimeUtil)
 local Holiday = require(Shared.Logic.Holiday)
 local Gifting = require(Shared.Logic.Gifting)
 local Storefront = require(Shared.Logic.Storefront)
+local Rookie = require(Shared.Logic.Rookie)
 local T = UI.Theme
 
 local player = Players.LocalPlayer
@@ -10749,6 +10846,29 @@ local function renderSettings(s: any)
 		btn(f2, "👋 Invite friends", T.blue, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 44) }, function()
 			Panels.invite()
 		end)
+		-- Unc's Rookie List: bring it back after a skip (and still earn the finish reward)
+		local rk = s.rookie
+		if rk and s.tutorial and s.tutorial.done then
+			local fin = Config.RookieFinish
+			local cdef = fin.cosmetic and Config.Cosmetics[fin.cosmetic]
+			local finText = Rookie.rewardText(fin, cdef and cdef.name or nil)
+			local fr = card(sf, 0, 84)
+			local head, desc
+			if rk.done then
+				head, desc = "📋 Unc's Rookie List: done ✓", "You earned " .. finText .. "."
+			elseif rk.skipped then
+				head, desc = "📋 Unc's Rookie List: skipped", "Bring it back to finish it. Goals you already did count right away. Finish all 5 to earn " .. finText .. "."
+			else
+				head, desc = "📋 Unc's Rookie List: on", "It's on your screen (top right). Finish all 5 to earn " .. finText .. "."
+			end
+			lbl(fr, head, { Size = UDim2.new(1, -180, 0, 26), TextSize = 20 })
+			lbl(fr, desc, { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -180, 0, 52), TextSize = 13, Font = T.body, TextColor3 = T.dim, TextYAlignment = Enum.TextYAlignment.Top })
+			if rk.skipped then
+				btn(fr, "Bring it back", T.green, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 44) }, function()
+					Net.act("RookieResume")
+				end)
+			end
+		end
 		local f3 = card(sf, 4, 60)
 		lbl(f3, s.memoryOnly and "⚠️ Studio test mode: progress is NOT saved." or "💾 Your ranch saves automatically. Smokers keep cooking while you're away.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 14, Font = T.body })
 	end
@@ -10898,6 +11018,8 @@ local UI = require(script.Parent.UI)
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Content = require(Shared.Content)
+local Rookie = require(Shared.Logic.Rookie)
+local Net = require(script.Parent.Net)
 local T = UI.Theme
 
 local RookieGuide = {}
@@ -10909,22 +11031,65 @@ local lastStep = -1
 local GOLD = Color3.fromHex("#FFC83C")
 
 local NEAR = 14 -- studs: close enough that the floor line hides and only the bobbing arrow stays
+local W, H = 300, 140 -- card size
+
+-- "Rookie of the Ranch Bandana, the "Rookie of the Ranch" title and +250 🪙"
+function RookieGuide.finishText(): string
+	local fin = Config.RookieFinish
+	local c = fin.cosmetic and Config.Cosmetics[fin.cosmetic]
+	return Rookie.rewardText(fin, c and c.name or nil)
+end
+
+local function finishShort(): string
+	local fin = Config.RookieFinish
+	local c = fin.cosmetic and Config.Cosmetics[fin.cosmetic]
+	return Rookie.rewardShort(fin, c and c.name or nil)
+end
+
+local function setConfirm(on: boolean)
+	if refs.confirm then
+		refs.confirm.Visible = on
+	end
+end
 
 function RookieGuide.mount(root: GuiObject)
-	local card = UI.frame({ Name = "RookieList", BackgroundColor3 = T.bg, BackgroundTransparency = 0.08, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 62), Size = UDim2.new(0, 300, 0, 104), Visible = false, Parent = root })
+	local card = UI.frame({ Name = "RookieList", BackgroundColor3 = T.bg, BackgroundTransparency = 0.08, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 62), Size = UDim2.new(0, W, 0, H), Visible = false, Parent = root })
 	UI.corner(card, 14)
 	UI.stroke(card, GOLD, 2)
 	UI.pad(card, 8)
 	refs.card = card
-	refs.head = UI.label(Content.Rookie.title, { Size = UDim2.new(1, -60, 0, 20), TextSize = 16, TextColor3 = GOLD, Parent = card })
-	refs.count = UI.label("1/5", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0, 60, 0, 20), TextSize = 15, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.dim, Parent = card })
+	refs.head = UI.label(Content.Rookie.title, { Size = UDim2.new(1, -100, 0, 20), TextSize = 16, TextColor3 = GOLD, Parent = card })
+	refs.count = UI.label("1/5", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -54, 0, 0), Size = UDim2.new(0, 40, 0, 20), TextSize = 15, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.dim, Parent = card })
+	-- Skip (asks first). Skipped lists come back from Settings > Game.
+	local skip = UI.button("Skip", T.card, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, -1), Size = UDim2.new(0, 48, 0, 22), TextSize = 13, Parent = card }, function()
+		setConfirm(true)
+	end)
+	UI.corner(skip, 6)
 	refs.goal = UI.label("", { Position = UDim2.new(0, 0, 0, 22), Size = UDim2.new(1, -64, 0, 24), TextSize = 18, Parent = card })
 	refs.reward = UI.label("", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 22), Size = UDim2.new(0, 64, 0, 24), TextSize = 15, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = GOLD, Parent = card })
 	local back, fill = UI.bar(card, T.green, { Position = UDim2.new(0, 0, 0, 50), Size = UDim2.new(1, -44, 0, 10) })
 	refs.fill = fill
 	refs.prog = UI.label("", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 45), Size = UDim2.new(0, 40, 0, 20), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.dim, Parent = card })
 	refs.tip = UI.label("", { Position = UDim2.new(0, 0, 0, 62), Size = UDim2.new(1, 0, 0, 28), TextYAlignment = Enum.TextYAlignment.Top, TextSize = 12, Font = T.body, TextColor3 = T.dim, Parent = card })
+	-- the finish reward, stated plainly from the start
+	refs.finish = UI.label(string.format(Content.Rookie.finishLine, finishShort()), { Position = UDim2.new(0, 0, 0, 92), Size = UDim2.new(1, 0, 0, 28), TextYAlignment = Enum.TextYAlignment.Top, TextSize = 12, Font = T.body, TextColor3 = GOLD, Parent = card })
 	local _ = back
+
+	-- quick, friendly confirm that covers the card
+	local confirm = UI.frame({ Name = "SkipConfirm", BackgroundColor3 = T.bg, Size = UDim2.new(1, 16, 1, 16), Position = UDim2.new(0, -8, 0, -8), ZIndex = 5, Visible = false, Parent = card })
+	UI.corner(confirm, 14)
+	UI.pad(confirm, 8)
+	refs.confirm = confirm
+	UI.label(string.format(Content.Rookie.skipAsk, RookieGuide.finishText()), { Size = UDim2.new(1, 0, 1, -40), TextYAlignment = Enum.TextYAlignment.Top, TextSize = 13, Font = T.body, ZIndex = 6, Parent = confirm })
+	local keep = UI.button(Content.Rookie.skipKeep, T.green, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(0.5, -4, 0, 34), TextSize = 15, ZIndex = 6, Parent = confirm }, function()
+		setConfirm(false)
+	end)
+	UI.corner(keep, 8)
+	local yes = UI.button(Content.Rookie.skipYes, T.cardHi, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, 0, 1, 0), Size = UDim2.new(0.5, -4, 0, 34), TextSize = 15, ZIndex = 6, Parent = confirm }, function()
+		setConfirm(false)
+		task.spawn(Net.act, "RookieSkip")
+	end)
+	UI.corner(yes, 8)
 end
 
 local function plotModel(s: any): Model?
@@ -11044,6 +11209,7 @@ local function hide()
 	if refs.card then
 		refs.card.Visible = false
 	end
+	setConfirm(false)
 end
 
 local TAGS = { grill = "Flip here!", tables = "Hungry critters!", smoker = "Smoke here!", sauce = "Sauce Shack", bell = "Ring me!" }
@@ -11068,8 +11234,8 @@ function RookieGuide.update(s: any)
 	refs.tip.Text = def and def.tip or ""
 	if st.step ~= lastStep then
 		lastStep = st.step
-		refs.card.Size = UDim2.new(0, 318, 0, 110)
-		TweenService:Create(refs.card, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.new(0, 300, 0, 104) }):Play()
+		refs.card.Size = UDim2.new(0, W + 18, 0, H + 6)
+		TweenService:Create(refs.card, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.new(0, W, 0, H) }):Play()
 	end
 
 	local part = st.target and targetPart(s, st.target)

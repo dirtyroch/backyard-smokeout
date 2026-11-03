@@ -21,6 +21,9 @@ local Holiday = require("../src/shared/Logic/Holiday")
 local Rookie = require("../src/shared/Logic/Rookie")
 local SfxIds = require("../src/shared/SfxIds")
 local Gifting = require("../src/shared/Logic/Gifting")
+local function fs_read(path: string): string
+	return require("@lune/fs").readFile(path)
+end
 local SeasonPass = require("../src/shared/Logic/SeasonPass")
 local Storefront = require("../src/shared/Logic/Storefront")
 local Funnels = require("../src/shared/Logic/Funnels")
@@ -648,7 +651,7 @@ test("Rookie List: five quick, free goals that each point somewhere real", funct
 		truthy(not string.find(low, "robux", 1, true) and not string.find(low, "buy now", 1, true), "no paid or pressure copy")
 		truthy(not d.reward.robux, "free rewards only")
 	end
-	local last = steps[#steps].reward
+	local last = Config.RookieFinish
 	eq(Config.Cosmetics[last.cosmetic].source, "rookie", "bandana is earned, never sold")
 	for _, p in pairs(Monetization.Products) do
 		for _, g in ipairs(p.grants or {}) do
@@ -683,6 +686,69 @@ test("Rookie List: claims in order, can claim several at once, never twice", fun
 	truthy(Rookie.status(s, steps, stats).finished, "finished")
 	eq(#Rookie.advance(s, steps, stats), 0, "no double claims")
 	eq(Rookie.status(s, steps, stats).progress, 0)
+end)
+
+test("Rookie List: a clear finish reward (coins + earned-only bandana + title), shown up front", function()
+	local fin = Config.RookieFinish
+	truthy(fin.coins > 0 and fin.cosmetic and fin.title, "coins, a look and a title")
+	eq(Config.Cosmetics[fin.cosmetic].source, "rookie")
+	for _, d in ipairs(Config.RookieSteps) do
+		truthy(d.reward.cosmetic == nil and d.reward.title == nil, "the look and title belong to the finish reward, not one step")
+	end
+	for _, p in pairs(Monetization.Products) do
+		truthy(p.grants == nil or table.find(p.grants, fin.cosmetic) == nil, "never sold")
+	end
+	local text = Rookie.rewardText(fin, Config.Cosmetics[fin.cosmetic].name)
+	eq(text, 'Rookie of the Ranch Bandana, the "Rookie of the Ranch" title and +' .. fin.coins .. " 🪙")
+	eq(Rookie.rewardText({ coins = 5 }), "+5 🪙")
+	eq(Rookie.rewardShort(fin, Config.Cosmetics[fin.cosmetic].name), "Rookie of the Ranch Bandana + title + " .. fin.coins .. " 🪙")
+	truthy(string.find(Content.Rookie.finishLine, "Finish all 5", 1, true) and string.find(Content.Rookie.finishLine, "%s", 1, true), "card states the finish reward")
+	truthy(string.find(string.format(Content.Rookie.done, 400), "400", 1, true))
+	local fs = require("@lune/fs")
+	local gsrc = fs.readFile("src/server/Services/GameService.luau")
+	truthy(string.find(gsrc, "Config.RookieFinish", 1, true), "server pays the finish reward")
+	local csrc = fs.readFile("src/client/RookieGuide.luau")
+	truthy(string.find(csrc, "Content.Rookie.finishLine", 1, true), "card shows it")
+end)
+
+test("Rookie List: skip asks kindly first, then can be brought back and still finished", function()
+	local steps = Config.RookieSteps
+	local s = Rookie.new()
+	local stats = { flips = 1, served = 0, smokerStarts = 0, sauces = 0, bells = 0 }
+	eq(#Rookie.advance(s, steps, stats), 1)
+	truthy(Rookie.skip(s, steps), "skip works mid-list")
+	truthy(not Rookie.skip(s, steps), "not twice")
+	local st = Rookie.status(s, steps, stats)
+	truthy(st.finished and st.skipped and not st.done, "hidden, marked skipped, not done")
+	stats.served, stats.smokerStarts, stats.sauces = 5, 1, 1 -- kept playing while skipped
+	eq(#Rookie.advance(s, steps, stats), 0, "nothing pays out while skipped")
+	truthy(Rookie.resume(s, steps), "bring it back")
+	truthy(not Rookie.resume(s, steps), "already showing")
+	eq(#Rookie.advance(s, steps, stats), 3, "goals done meanwhile count right away")
+	eq(Rookie.status(s, steps, stats).id, "bell")
+	stats.bells = 1
+	eq(#Rookie.advance(s, steps, stats), 1)
+	local done = Rookie.status(s, steps, stats)
+	truthy(done.done and not done.skipped, "finished for real")
+	truthy(not Rookie.skip(s, steps), "a finished list can't be skipped")
+	-- a veteran who brings it back isn't quietly re-skipped on the next join
+	local v = Rookie.new()
+	v.skipped = true
+	truthy(Rookie.resume(v, steps))
+	truthy(not Rookie.shouldSkip(v, true, { served = 400 }, Config.ROOKIE_VETERAN_SERVES), "stays on after resume")
+	-- skip state is saved
+	local dsrc = fs_read("src/shared/DefaultData.luau")
+	truthy(string.find(dsrc, "rookie = { claimed = 0, skipped = false, resumed = false }", 1, true), "skip state persists")
+	-- friendly confirm copy, no pressure words
+	local ask = string.lower(Content.Rookie.skipAsk)
+	truthy(string.find(ask, "finish reward", 1, true) and string.find(ask, "settings", 1, true), "says what you miss and how to come back")
+	for _, w in ipairs({ "are you sure", "last chance", "forever", "never", "hurry", "now!" }) do
+		truthy(not string.find(ask, w, 1, true), "no pressure: " .. w)
+	end
+	local gsrc = fs_read("src/server/Services/GameService.luau")
+	truthy(string.find(gsrc, "Actions.RookieSkip", 1, true) and string.find(gsrc, "Actions.RookieResume", 1, true), "server actions")
+	truthy(string.find(fs_read("src/client/Panels.luau"), '"RookieResume"', 1, true), "Settings has Bring it back")
+	truthy(string.find(fs_read("src/client/RookieGuide.luau"), '"RookieSkip"', 1, true), "card has Skip")
 end)
 
 test("Rookie List: veterans skip quietly, new players don't", function()
