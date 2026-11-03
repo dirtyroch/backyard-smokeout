@@ -217,7 +217,7 @@ local function shopCard(parent: Instance, order: number, kind: string, key: stri
 		local have = Storefront.ownedCount(s.owned, item.grants)
 		if item.kind == "bundle" and not owned and have > 0 then
 			-- honest heads-up: the bundle price doesn't change if you already own some of it
-			lbl(f, string.format("You already own %d of %d", have, #(item.grants :: any)), { Position = UDim2.new(0, 0, 0, 178), Size = UDim2.new(1, 0, 0, 16), TextSize = 11, Font = T.body, TextColor3 = T.dim, TextXAlignment = Enum.TextXAlignment.Center })
+			lbl(f, string.format("Own %d/%d", have, #(item.grants :: any)), { Size = UDim2.new(0.5, 0, 0, 18), TextSize = 11, Font = T.body, TextColor3 = T.dim })
 		end
 	elseif item.once then
 		owned = s.onceBought ~= nil and s.onceBought[key] == true
@@ -352,7 +352,7 @@ local function renderShop(s: any)
 	end
 	local foot = "Every purchase shows exactly what you get. No random items, ever. Tap 🎁 to gift a look to someone in your server."
 	if sel == "This Week" then
-		foot = event and ("Turkey Day looks are on sale through " .. s.turkey.ends .. " and come back next year. The Thankful & Full Apron stays free at the potluck.") or "This week's looks rotate every Monday and come back in a later week. Looks only, no stats."
+		foot = event and ("Turkey Day looks are here through " .. s.turkey.ends .. " and return next year. The potluck apron stays free.") or "This week's looks rotate every Monday and come back in a later week. Looks only, no stats."
 	elseif sel == "Passes" then
 		foot = "Passes are yours forever. The Pit Crew Club and Premium are monthly and give looks and friendly perks, never coins."
 	end

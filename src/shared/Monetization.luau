@@ -89,7 +89,7 @@ Monetization.Products = {
 	-- Bundles (prices shown honestly vs buying separately)
 	BundleStarter = { id = 0, name = "Pitmaster Starter Bundle", price = 199, icon = "🎁", kind = "bundle", category = "Bundles", grants = { "apron_grillmaster", "hat_pitmaster" }, minutes = 30, mult = 2, valueNote = "R$ 223 if bought separately", desc = "Grill Master Apron, Pitmaster Cowboy Hat and a 30-minute x2 speed boost." },
 	BundleGoldRush = { id = 0, name = "Gold Rush Bundle", price = 349, icon = "💛", kind = "bundle", category = "Bundles", grants = { "tool_goldenspatula", "skin_golden" }, valueNote = "R$ 398 if bought separately", desc = "Golden Spatula and Solid Gold Smoker skin." },
-	BundleWholeHog = { id = 0, name = "Whole Hog Collection", price = 499, icon = "🐖", kind = "bundle", category = "Bundles", grants = { "skin_golden", "tool_goldenspatula", "hat_pitmaster", "apron_grillmaster", "smoke_sherbet", "trail_sparkler" }, valueNote = "R$ 730 if bought separately. Costs less as a set.", desc = "Six looks: Solid Gold Smoker, Golden Spatula, Pitmaster Hat, Grill Master Apron, Rainbow Sherbet Smoke and Sparkler Trail." },
+	BundleWholeHog = { id = 0, name = "Whole Hog Collection", price = 499, icon = "🐖", kind = "bundle", category = "Bundles", grants = { "skin_golden", "tool_goldenspatula", "hat_pitmaster", "apron_grillmaster", "smoke_sherbet", "trail_sparkler" }, valueNote = "R$ 730 separately. Costs less as a set.", desc = "Six looks, including the Solid Gold Smoker, Golden Spatula and Sparkler Trail." },
 	-- First-time Pit Pack: one per account, shown first in Bundles until you've bought anything.
 	StarterPitPack = { id = 0, name = "First-Time Pit Pack", price = 49, icon = "🧢", kind = "starter", category = "Bundles", once = true, grants = { "starter_hat" }, minutes = 30, mult = 2, cut = "tomahawk", count = 3, valueNote = "R$ 108 of boost and steaks, plus a hat only found here", desc = "One per account: Rookie Pitmaster Hat, a 30-minute x2 speed boost and 3 Tomahawk Steaks." },
 
@@ -137,7 +137,7 @@ Monetization.Subscriptions = {
 -- the time Premium members spend playing (no setup needed).
 Monetization.Premium = { name = "Roblox Premium", icon = "⭐", desc = "Premium members get the Premium Pitmaster Bandana free. Looks only." }
 
--- PRIVATE SERVERS: set this price on the Creator Dashboard (see PUBLISHING.md section 4b).
+-- PRIVATE SERVERS: set this price on the Creator Dashboard (see PUBLISHING.md section 6c).
 Monetization.PrivateServer = { price = 100, desc = "Your own ranch server for you and your friends, R$ 100 a month. The host gets a Ranch Host tag and can share a Smoke Shower every 10 minutes." }
 
 -- Optional badges (Creator Dashboard > Associated Items > Badges). 0 = skip.
