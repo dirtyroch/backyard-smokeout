@@ -88,7 +88,7 @@ end
 
 local function buildTool(folder: Folder, hand: BasePart, id: string)
 	local def = Config.Cosmetics[id]
-	local mat = Enum.Material.Foil
+	local mat = def.neon and Enum.Material.Neon or Enum.Material.Foil
 	local handle = weldPart(folder, hand, "ToolHandle", Vector3.new(0.2, 0.2, 1.4), CFrame.new(0, -hand.Size.Y / 2 - 0.1, -0.6), def.color, mat)
 	if id == "tool_goldtongs" then
 		weldPart(folder, hand, "TongA", Vector3.new(0.12, 0.12, 1.2), CFrame.new(-0.12, -hand.Size.Y / 2 - 0.1, -1.6) * CFrame.Angles(0, math.rad(6), 0), def.color, mat)

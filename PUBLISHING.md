@@ -207,6 +207,6 @@ To take a clean Studio screenshot:
 - Check **Analytics** on the dashboard after a day. Look at **Day 1 retention** and **Average session time**.
 - **Funnels** (Analytics > Funnels): **Onboarding** shows where new players stop (joined, first brisket, first plate, tutorial, each Rookie goal). **PitShop** shows opened shop, opened a tab, tapped buy and bought. Use them to see whether a price is too high before you change it.
 - **Economy** (Analytics > Economy): coin sources (tips, rewards) and sinks (meat, sauce, upgrades, slots). Use it to check that the coin economy stays balanced.
-- **Seasons:** Season 1 (Harvest Smoke) runs Nov 2 to Dec 13, 2026, and Season 2 (Winter Smoke) runs Dec 14, 2026 to Jan 24, 2027. Add Season 3 to `Config.SeasonPass.seasons` (15 paid looks or titles plus 5 free ones) **before Jan 25, 2027**. If you don't, the pass hides itself until you add one.
+- **Seasons:** Season 1 (Harvest Smoke) runs Nov 2 to Dec 13, 2026, Season 2 (Winter Smoke) Dec 14, 2026 to Jan 24, 2027, Season 3 (Rodeo Smoke) Jan 25 to Mar 7, 2027, and Season 4 (Bluebonnet Smoke) Mar 8 to Apr 18, 2027. Add Season 5 to `Config.SeasonPass.seasons` (15 paid looks or titles plus 5 free ones) **before Apr 19, 2027**. If you don't, the pass hides itself until you add one.
 - Every update is the same: edit in Studio, then **File > Publish to Roblox**.
 - Want to change prices or add items later? Edit **Monetization** and create the matching item on the dashboard.
