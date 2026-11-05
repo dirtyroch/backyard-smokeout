@@ -9,6 +9,8 @@
 	  * nthWeekday: e.g. the 4th Thursday of November
 	  * thanksgiving: US Thanksgiving (4th Thursday of November) for a year
 	  * turkeyWeek: is `day` inside the Turkey Day Smokeout window around Thanksgiving?
+	  * dateWindow: is `day` inside a fixed-date window (it may wrap into the next year, like the
+	    Holiday Smokeout's Dec 19 - Jan 1)?
 ]]
 local Holiday = {}
 
@@ -66,6 +68,28 @@ function Holiday.turkeyWeek(day: number, before: number, after: number): Week
 	return { active = day >= startDay and day <= endDay, isDay = day == t, day = t, startDay = startDay, endDay = endDay }
 end
 
+-- A fixed-date window, `start`/`finish`/`peak` as { month, day }. If finish is earlier in the year
+-- than start, the window wraps into the next year (Dec 19 - Jan 1), and a January day belongs to the
+-- window that started the December before. `isDay` is the `peak` day (Christmas for the Holiday Smokeout).
+function Holiday.dateWindow(day: number, start: { number }, finish: { number }, peak: { number }?): Week
+	local y, m = Holiday.civilFromDays(day)
+	local wraps = finish[1] < start[1] or (finish[1] == start[1] and finish[2] < start[2])
+	local sy = y
+	if wraps and (m < start[1] or (m == start[1] and day < Holiday.daysFromCivil(y, start[1], start[2]))) then
+		-- before this year's start: we're either in last year's window (January) or before this year's
+		sy = y - 1
+		if Holiday.daysFromCivil(sy + 1, finish[1], finish[2]) < day then
+			sy = y -- past last year's end: the next window is this year's
+		end
+	end
+	local startDay = Holiday.daysFromCivil(sy, start[1], start[2])
+	local endDay = Holiday.daysFromCivil(wraps and sy + 1 or sy, finish[1], finish[2])
+	local pk = peak or start
+	local py = (wraps and pk[1] < start[1]) and sy + 1 or sy
+	local peakDay = Holiday.daysFromCivil(py, pk[1], pk[2])
+	return { active = day >= startDay and day <= endDay, isDay = day == peakDay, day = peakDay, startDay = startDay, endDay = endDay }
+end
+
 -- Seasonal cuts cook only in their season, except the event's own cut stays open for the whole
 -- event window (so Thanksgiving weeks that run into December still have turkey legs).
 function Holiday.meatInSeason(meat: any, seasonId: string, eventActive: boolean, eventMeatId: string): boolean
@@ -73,6 +97,14 @@ function Holiday.meatInSeason(meat: any, seasonId: string, eventActive: boolean,
 		return true
 	end
 	return eventActive and meat.id == eventMeatId
+end
+
+-- Same idea with several events at once: `eventMeats[meatId] = true` while that cut's event is on.
+function Holiday.meatOpen(meat: any, seasonId: string, eventMeats: { [string]: boolean }): boolean
+	if not meat.season or meat.season == seasonId then
+		return true
+	end
+	return eventMeats[meat.id] == true
 end
 
 -- Which cooler plate to share at the potluck: the plainest one of `meatId` (lowest rarity index,

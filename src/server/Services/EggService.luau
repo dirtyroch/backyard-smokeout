@@ -246,59 +246,60 @@ local function checkDinnerBell(player: Player)
 	end
 end
 
--- Turkey Day Smokeout: share a smoked Harvest Turkey Leg at the potluck table (once a day). When enough
--- different pitmasters share inside the window, the table is full: free server-wide tips.
-local function checkPotluck(player: Player)
-	local TD = Config.TurkeyDay
+-- Potluck events (Turkey Day Smokeout, Holiday Smokeout): share the event's smoked cut at the potluck
+-- table (once a day). When enough different pitmasters share inside the window, the table is full:
+-- free server-wide tips.
+local function checkPotluck(player: Player, EV: any, EC: any)
 	local now = workspace:GetServerTimeNow()
 	potluckShares[player.UserId] = now
-	local n, go = Hype.pileOn(potluckShares, now, TD.window, TD.need, lastPotluck, TD.cooldown)
+	local n, go = Hype.pileOn(potluckShares, now, EV.window, EV.need, lastPotluck, EV.cooldown)
 	if go then
 		lastPotluck = now
-		ctx.Game.potluckUntil = now + TD.minutes * 60
-		ctx.Game.announce(string.format(Content.TurkeyDay.full, n, math.floor(TD.tipBonus * 100 + 0.5), TD.minutes), "#E8761E")
+		ctx.Game.potluckUntil = now + EV.minutes * 60
+		ctx.Game.potluckBonus = EV.tipBonus
+		ctx.Game.potluckHud = EC.hud
+		ctx.Game.announce(string.format(EC.full, n, math.floor(EV.tipBonus * 100 + 0.5), EV.minutes), EV.id == "holiday" and "#3FA35B" or "#E8761E")
 		table.clear(potluckShares)
 		for p in pairs(ctx.Game.runtime) do
 			ctx.Game.markDirty(p)
 		end
-	elseif now - lastPotluck >= TD.cooldown then
-		ctx.Game.toast(player, string.format(Content.TurkeyDay.progress, n, TD.need, TD.need - n), "info")
+	elseif now - lastPotluck >= EV.cooldown then
+		ctx.Game.toast(player, string.format(EC.progress, n, EV.need, EV.need - n), "info")
 	end
 end
 
 handlers["event:potluck"] = function(player, data)
-	local TD = Config.TurkeyDay
-	local TC = Content.TurkeyDay
-	if not ctx.Game.turkeyWeek().active then
-		dialog(player, "Granny Pecan", TC.over)
+	local EV, EC = ctx.Game.potluckEvent()
+	if not EV or not EC then
+		dialog(player, "Granny Pecan", Content.TurkeyDay.over)
 		return
 	end
 	local d = today()
-	if data.daily.turkeyDay == d then
-		dialog(player, "Granny Pecan", TC.already)
+	if data.daily[EV.dailyKey] == d then
+		dialog(player, EC.host, EC.already)
 		return
 	end
-	local i = Holiday.pickPlate(data.cooler, TD.meat, function(id: string): number
+	local i = Holiday.pickPlate(data.cooler, EV.meat, function(id: string): number
 		return Rarity.indexOf(Config.Rarities, id)
 	end)
 	if not i then
-		dialog(player, "Granny Pecan", TC.needDish)
+		dialog(player, EC.host, EC.needDish)
 		return
 	end
 	local plate = table.remove(data.cooler, i)
-	data.daily.turkeyDay = d
+	data.daily[EV.dailyKey] = d
 	local meat = Config.Meats[plate.m]
-	local coins = math.floor(meat.price * TD.shareMult * Economy.rankMult(data.rank, Config.RANK_STEP))
+	local coins = math.floor(meat.price * EV.shareMult * Economy.rankMult(data.rank, Config.RANK_STEP))
 	ctx.Game.addCoins(player, data, coins, true)
 	local label = Rarity.get(Config.Rarities, plate.r).name .. " " .. meat.name
-	local thanks = TC.thanks[rng:NextInteger(1, #TC.thanks)]
-	if ctx.Game.grantCosmetic(player, data, TD.reward) then
-		data.titles[TD.title] = true
-		dialog(player, "Turkey Day Potluck", string.format(TC.firstShare, label, coins) .. "\n\n" .. thanks, coins)
+	local thanks = EC.thanks[rng:NextInteger(1, #EC.thanks)]
+	if ctx.Game.grantCosmetic(player, data, EV.reward) then
+		data.titles[EV.title] = true
+		dialog(player, EC.dialog, string.format(EC.firstShare, label, coins) .. "\n\n" .. thanks, coins)
 	else
-		dialog(player, "Turkey Day Potluck", string.format(TC.share, label, coins) .. "\n\n" .. thanks, coins)
+		dialog(player, EC.dialog, string.format(EC.share, label, coins) .. "\n\n" .. thanks, coins)
 	end
-	checkPotluck(player)
+	checkPotluck(player, EV, EC)
 	ctx.World.refreshStations(player)
 end
 

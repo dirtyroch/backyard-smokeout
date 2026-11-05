@@ -6,7 +6,8 @@
 	  * the Cook-Off (practice any day, 3x payouts + weekly leaderboard on Saturdays, Texas time),
 	  * the monthly season theme on the Cook-Off banner,
 	  * Suds Saturday & Sunday announcements,
-	  * the Turkey Day Smokeout (Thanksgiving week): potluck table decor + sign, login toast.
+	  * the Turkey Day Smokeout (Thanksgiving week) and Holiday Smokeout (Dec 19 - Jan 1): potluck
+	    table decor + sign, login toast.
 ]]
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
@@ -305,35 +306,41 @@ local function refreshBoard()
 	bt.Text = "🏆 " .. string.upper(season.name) .. (ctx.Game.isSaturday() and " - TODAY! 3x PRIZES" or " - SATURDAY") .. " 🏆"
 end
 
--- ===== Turkey Day Smokeout =====
-local turkeyOn: boolean? = nil
+-- ===== Potluck events: Turkey Day Smokeout and Holiday Smokeout =====
+-- The hub potluck table dresses up for whichever event is on (decor is built at runtime and
+-- destroyed after), and the sign changes with it.
+local potluckOn: string? = nil -- "turkeyday" | "holiday" | "" (none); nil = not set up yet
 
 local function refreshTurkey()
-	local w = ctx.Game.turkeyWeek()
-	if w.active == turkeyOn then
+	local EV = ctx.Game.potluckEvent()
+	local id = EV and EV.id or ""
+	if id == potluckOn then
 		return
 	end
 	local pot = ctx.World.map().Hub:FindFirstChild("Potluck")
 	if not pot then
 		return
 	end
-	turkeyOn = w.active
+	potluckOn = id
 	local sign = pot:FindFirstChild("Sign")
 	local gui = sign and sign:FindFirstChild("SignGui")
 	local label = gui and gui:FindFirstChild("Text") :: TextLabel?
-	if w.active then
-		WorldBuilder.turkeyDay(pot, Content)
-		if label then
-			label.Text = Content.Signs.turkeyPotluck
-		end
-	else
-		local decor = pot:FindFirstChild("TurkeyDay")
+	for _, name in ipairs({ "TurkeyDay", "HolidaySmokeout" }) do
+		local decor = pot:FindFirstChild(name)
 		if decor then
 			decor:Destroy()
 		end
-		if label then
-			label.Text = Content.Signs.potluck
-		end
+	end
+	local text = Content.Signs.potluck
+	if id == "turkeyday" then
+		WorldBuilder.turkeyDay(pot, Content)
+		text = Content.Signs.turkeyPotluck
+	elseif id == "holiday" then
+		WorldBuilder.holidaySmokeout(pot, Content)
+		text = Content.Signs.holidayPotluck
+	end
+	if label then
+		label.Text = text
 	end
 end
 EventService.refreshTurkey = refreshTurkey
@@ -382,8 +389,9 @@ function EventService.start()
 			if ctx.Game.isSudsWeekend() then
 				ctx.Game.toast(player, "🫧 Suds Saturday & Sunday! Muddy pups need a bath. Wash one for a free bandana.", "good")
 			end
-			if ctx.Game.turkeyWeek().active then
-				ctx.Game.toast(player, Content.TurkeyDay.login, "good")
+			local _, EC = ctx.Game.potluckEvent()
+			if EC then
+				ctx.Game.toast(player, EC.login, "good")
 			end
 			if ctx.Game.isSaturday() then
 				ctx.Game.toast(player, "🏆 It's Cook-Off Saturday! Bring your best plate to Granny Pecan for 3x prizes.", "good")

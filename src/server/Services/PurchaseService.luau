@@ -8,7 +8,7 @@
 	    live game; in Studio they get a free "Studio test" grant so you can try everything.
 	  * Nothing sold here is random. Robux never buys coins.
 	  * Every "can I buy this?" rule is in Shared.Logic.Storefront (unit-tested): weekly rotation,
-	    Turkey Day week only, one-per-account packs, nothing you already own, season limits.
+	    Turkey Day and Holiday Smokeout looks only during their dates, one-per-account packs, nothing you already own, season limits.
 	  * Roblox PolicyService info is fetched per player; MembershipService uses
 	    IsEligibleToPurchaseSubscription to decide who sees the Pit Crew Club.
 ]]
@@ -120,7 +120,7 @@ local function storeCtx(_player: Player, data: any): Storefront.Ctx
 	return {
 		owned = data.owned,
 		featured = featuredNow(),
-		eventActive = ctx.Game.turkeyWeek().active,
+		events = ctx.Game.activeEvents(),
 		onceBought = data.purchases.once,
 		cooking = cooking,
 		seasonActive = active,
@@ -292,8 +292,9 @@ function PurchaseService.promptGift(player: Player, key: string, recipientUserId
 	if p.rotation and not featuredNow()[key] then
 		return false, "That one's not in this week's rotation. It'll be back!"
 	end
-	if p.event == "turkeyday" and not ctx.Game.turkeyWeek().active then
-		return false, "The Turkey Day looks are on sale during Thanksgiving week. They come back next year."
+	local closed = Storefront.eventClosed(p, ctx.Game.activeEvents())
+	if closed then
+		return false, closed
 	end
 	local recipient = Players:GetPlayerByUserId(recipientUserId)
 	local rdata = recipient and ctx.Game.dataOf(recipient) or nil

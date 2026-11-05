@@ -25,7 +25,7 @@
 	  * Fair Play caps (Config.FairPlay): the tip pass is +50% (not x2), and buying a speed boost
 	    gives everyone else in the server a free 5-minute Smoke Shower.
 	  * The Smokehouse Pass, tier skips, the Pit Crew Club and Premium give looks and titles only.
-	  * Event looks (Turkey Day set) go on sale only during the event week and come back the next
+	  * Event looks (the Turkey Day and Holiday sets) go on sale only during the event week and come back the next
 	    year. The free event reward always stays free. Dates are shown plainly, never as a timer.
 	  * Roblox PolicyService decides who sees the subscription (IsEligibleToPurchaseSubscription).
 ]]
@@ -46,7 +46,7 @@ export type Product = {
 	count: number?,
 	valueNote: string?,
 	rotation: boolean?,
-	event: string?, -- "turkeyday": only on sale during that event's window
+	event: string?, -- "turkeyday" | "holiday": only on sale during that event's window
 	once: boolean?, -- one per account (the first-time Pit Pack)
 }
 
@@ -100,6 +100,14 @@ Monetization.Products = {
 	TD_TrailLeaves = { id = 0, name = "Falling Leaves Trail", price = 79, icon = "🍁", kind = "cosmetic", category = "Turkey Day", event = "turkeyday", grants = { "td_trail_leaves" }, desc = "Autumn leaves drift behind you." },
 	TD_SkinPecan = { id = 0, name = "Pecan Pie Smoker", price = 99, icon = "🥧", kind = "cosmetic", category = "Turkey Day", event = "turkeyday", grants = { "td_skin_pecan" }, desc = "Toasty pecan-brown smokers." },
 	TD_BundleFeast = { id = 0, name = "Turkey Day Look Set", price = 229, icon = "🦃", kind = "bundle", category = "Turkey Day", event = "turkeyday", grants = { "td_hat_cornucopia", "td_smoke_cranberry", "td_trail_leaves", "td_skin_pecan" }, valueNote = "R$ 306 if bought separately", desc = "All four Turkey Day looks: hat, smoke, trail and smoker." },
+
+	-- Holiday look set (on sale only during the Holiday Smokeout, Dec 19 - Jan 1, back next year;
+	-- the Merry & Smoky Apron stays free for everyone who shares a dish)
+	HD_HatTwinkle = { id = 0, name = "Twinkle Lights Cowboy Hat", price = 79, icon = "🎄", kind = "cosmetic", category = "Holiday", event = "holiday", grants = { "hd_hat_twinkle" }, desc = "An evergreen cowboy hat with a band of glowing colored lights." },
+	HD_SmokeEvergreen = { id = 0, name = "Evergreen Smoke", price = 49, icon = "🌲", kind = "cosmetic", category = "Holiday", event = "holiday", grants = { "hd_smoke_evergreen" }, desc = "Pine-green smoke from every smoker." },
+	HD_TrailTinsel = { id = 0, name = "Tinsel Trail", price = 79, icon = "✨", kind = "cosmetic", category = "Holiday", event = "holiday", grants = { "hd_trail_tinsel" }, desc = "A gold-and-silver tinsel shimmer behind you." },
+	HD_SkinOrnament = { id = 0, name = "Ornament Smoker", price = 99, icon = "🔴", kind = "cosmetic", category = "Holiday", event = "holiday", grants = { "hd_skin_ornament" }, desc = "Shiny ornament-red smokers that catch the light." },
+	HD_BundleHoliday = { id = 0, name = "Holiday Look Set", price = 229, icon = "🎁", kind = "bundle", category = "Holiday", event = "holiday", grants = { "hd_hat_twinkle", "hd_smoke_evergreen", "hd_trail_tinsel", "hd_skin_ornament" }, valueNote = "R$ 306 if bought separately", desc = "All four Holiday looks: hat, smoke, trail and smoker." },
 
 	-- Smokehouse Pass (one per season; looks and titles only) and tier skips
 	SeasonPass = { id = 0, name = "Smokehouse Pass", price = 399, icon = "🎟️", kind = "season", category = "Season", desc = "Unlocks this season's paid track: a look or title at every tier. Every paid reward you've already reached is yours right away." },

@@ -60,6 +60,15 @@ local function buildHat(folder: Folder, head: BasePart, id: string)
 	brim.Shape = Enum.PartType.Cylinder
 	weldPart(folder, head, "HatCrown", Vector3.new(1.3, 0.8, 1.4), CFrame.new(0, top + 0.55, 0), def.color)
 	weldPart(folder, head, "HatBand", Vector3.new(1.32, 0.18, 1.42), CFrame.new(0, top + 0.25, 0), id == "hat_pitmaster" and "#C9A227" or "#7B3F00")
+	if def.twinkle then
+		-- a ring of little glowing bulbs around the band (Twinkle Lights Cowboy Hat)
+		local BULBS = { "#FF3B3B", "#FFD54A", "#3BD16F", "#4FA3FF" }
+		for k = 0, 11 do
+			local a = k / 12 * math.pi * 2
+			local bulb = weldPart(folder, head, "Bulb", Vector3.new(0.2, 0.2, 0.2), CFrame.new(math.cos(a) * 0.72, top + 0.27, math.sin(a) * 0.76), BULBS[k % #BULBS + 1], Enum.Material.Neon)
+			bulb.Shape = Enum.PartType.Ball
+		end
+	end
 end
 
 local function buildApron(folder: Folder, torso: BasePart, id: string)
@@ -146,7 +155,7 @@ local function buildTrail(folder: Folder, hrp: BasePart, id: string)
 	tr.Attachment1 = a1
 	tr.Lifetime = 0.7
 	tr.LightEmission = id == "trail_sauce" and 0 or 0.6
-	tr.Color = ColorSequence.new(hex(def.color), id == "trail_firework" and hex("#FFD700") or hex(def.color))
+	tr.Color = ColorSequence.new(hex(def.color), def.color2 and hex(def.color2) or (id == "trail_firework" and hex("#FFD700") or hex(def.color)))
 	tr.Transparency = NumberSequence.new(0.1, 1)
 	tr.WidthScale = NumberSequence.new(1, 0.2)
 	tr.Parent = folder

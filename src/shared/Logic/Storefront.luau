@@ -8,7 +8,7 @@ local Storefront = {}
 export type Ctx = {
 	owned: { [string]: boolean },
 	featured: { [string]: boolean },
-	eventActive: boolean,
+	events: { [string]: boolean }, -- which date-gated event shops are open ("turkeyday", "holiday")
 	onceBought: { [string]: boolean },
 	cooking: boolean,
 	seasonActive: boolean,
@@ -30,12 +30,27 @@ function Storefront.ownsAll(owned: { [string]: boolean }, grants: { string }?): 
 	return grants ~= nil and #grants > 0 and Storefront.ownedCount(owned, grants) == #grants
 end
 
+-- Calm "not right now" lines for event looks bought outside their dates.
+Storefront.EVENT_CLOSED = {
+	turkeyday = "The Turkey Day looks are on sale during Thanksgiving week. They come back next year.",
+	holiday = "The Holiday looks are on sale from Dec 19 to Jan 1. They come back next year.",
+} :: { [string]: string }
+
+-- nil if this product isn't event-gated or its event is on; otherwise the calm reason.
+function Storefront.eventClosed(p: any, events: { [string]: boolean }): string?
+	if p.event and not events[p.event] then
+		return Storefront.EVENT_CLOSED[p.event] or "That one's only on sale during its event. It comes back next year."
+	end
+	return nil
+end
+
 function Storefront.canBuy(key: string, p: any, c: Ctx): (boolean, string?)
 	if p.rotation and not c.featured[key] then
 		return false, "That one's not in this week's rotation. It'll be back!"
 	end
-	if p.event == "turkeyday" and not c.eventActive then
-		return false, "The Turkey Day looks are on sale during Thanksgiving week. They come back next year."
+	local closed = Storefront.eventClosed(p, c.events)
+	if closed then
+		return false, closed
 	end
 	if p.once and c.onceBought[key] then
 		return false, "You already picked up this one-time pack. Thanks!"

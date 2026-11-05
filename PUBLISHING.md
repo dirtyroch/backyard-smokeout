@@ -23,6 +23,7 @@ This guide takes you from "I have a file" to "my game is live on Roblox". Plan o
 - Saving doesn't work in Studio until you finish step 5. A yellow note will say "progress is NOT saved". That's normal.
 - Shop items show a **"Studio test (free)"** button so you can try every apron and smoker skin without spending anything.
 - **Turkey Day Smokeout** (Thanksgiving week, Nov 23–29 in 2026) turns on by itself on the right dates. To test it any day in Studio: in the **Explorer** click **Workspace**, then in **Properties** scroll to **Attributes**, click **+**, name it `ForceTurkeyDay`, pick **boolean**, tick it, and press Play. The potluck table in the hub gets the turkey, pies, pumpkins and banner. It only works in Studio; the live game always uses the real dates.
+- **Holiday Smokeout** (Christmas, Dec 19 – Jan 1) works the same way. To test it any day, add a boolean attribute named `ForceHolidaySmokeout` to **Workspace** and tick it. The potluck table gets the glazed ham, tamales, a little Christmas tree, presents and a "Merry Christmas" banner, and the Holiday Glazed Ham shows up in the smoker menu.
 - Want to test with a friend? Open the **Test** tab, set **Clients** to 2 and press **Start**.
 
 ## 3. Publish it
@@ -109,6 +110,11 @@ Go to **Monetization > Developer Products > Create a Developer Product**. For ea
 | `TD_TrailLeaves` | Falling Leaves Trail (Turkey Day week) | R$ 79 |
 | `TD_SkinPecan` | Pecan Pie Smoker (Turkey Day week) | R$ 99 |
 | `TD_BundleFeast` | Turkey Day Look Set (all four) | R$ 229 |
+| `HD_HatTwinkle` | Twinkle Lights Cowboy Hat (Holiday Smokeout) | R$ 79 |
+| `HD_SmokeEvergreen` | Evergreen Smoke (Holiday Smokeout) | R$ 49 |
+| `HD_TrailTinsel` | Tinsel Trail (Holiday Smokeout) | R$ 79 |
+| `HD_SkinOrnament` | Ornament Smoker (Holiday Smokeout) | R$ 99 |
+| `HD_BundleHoliday` | Holiday Look Set (all four) | R$ 229 |
 | `SeasonPass` | Smokehouse Pass (this season's paid track) | R$ 399 |
 | `TierSkip1` | Skip 1 Tier | R$ 49 |
 | `TierSkip5` | Skip 5 Tiers | R$ 199 |
@@ -119,7 +125,8 @@ Go to **Monetization > Developer Products > Create a Developer Product**. For ea
 - Optional badges: go to **Engagement > Badges**, create them and paste their IDs into `Monetization.Badges`. Badge IDs left at `0` are skipped.
 
 - **Smokehouse Pass and tier skips:** make each one a Developer Product, not a Game Pass. The game tracks which season you bought it for, so one product works for every season. Create the product once.
-- **Turkey Day items** are only for sale from Monday to Sunday of Thanksgiving week (Nov 23–29 in 2026). The free Harvest Apron stays free. You can create these products at any time.
+- **Turkey Day items** are only for sale from Monday to Sunday of Thanksgiving week (Nov 23–29 in 2026). The free Thankful & Full Apron stays free. You can create these products at any time.
+- **Holiday items** (`HD_...`) are only for sale during the Holiday Smokeout, Dec 19 – Jan 1. The free Merry & Smoky Apron stays free. You can create these products at any time too.
 - **First-Time Pit Pack** is a Developer Product. The game makes sure each account can buy it only once.
 
 ### 6b. Pit Crew Club (Roblox subscription, $4.99 a month)

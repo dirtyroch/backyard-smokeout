@@ -1357,6 +1357,106 @@ function WorldBuilder.turkeyDay(pot, content)
 	return m
 end
 
+-- Holiday Smokeout decor for the hub potluck table (built at runtime only Dec 19 - Jan 1, then
+-- destroyed). Same layout rules as Turkey Day: everything hangs off the Potluck's Table part.
+-- Adds a glazed holiday ham (the "Share a dish" prompt), a tray of tamales, sugar cookies, a little
+-- Christmas tree with a star, wrapped presents, an evergreen garland with colored bulbs, and a
+-- banner. Original art, no brands or characters.
+function WorldBuilder.holidaySmokeout(pot, content)
+	local tablePart = pot:FindFirstChild("Table")
+	if not tablePart then
+		return nil
+	end
+	local old = pot:FindFirstChild("HolidaySmokeout")
+	if old then
+		old:Destroy()
+	end
+	local m = model(pot, "HolidaySmokeout")
+	local base = tablePart.CFrame * E.CFrame.new(0, -3, 0) -- the potluck's own origin (ground)
+	local function B(x, y, z, rx, ry, rz)
+		return base * E.CFrame.new(x, y, z) * E.CFrame.Angles(math.rad(rx or 0), math.rad(ry or 0), math.rad(rz or 0))
+	end
+	local TOP = 3.25
+	local HX = 1.3 -- ham x on the table
+	local BULBS = { "#FF3B3B", "#FFD54A", "#3BD16F", "#4FA3FF", "#FF7AD9" }
+	-- red runner with a green stripe down the middle
+	deco(m, "Runner", V(13.6, 0.06, 1.6), B(0, TOP + 0.03, 0.6), "#B3122E", E.Enum.Material.Fabric)
+	deco(m, "RunnerStripe", V(13.6, 0.07, 0.35), B(0, TOP + 0.04, 0.6), "#1E6B3A", E.Enum.Material.Fabric)
+	-- the glazed holiday ham on a platter, scored glaze and cloves
+	dcyl(m, "Platter", 0.16, 3.4, B(HX, TOP + 0.1, 0.7) * upright(), "#F4F1EA", E.Enum.Material.SmoothPlastic)
+	local body = ell(m, "HamBody", V(2.5, 1.8, 2.0), B(HX, TOP + 0.95, 0.7), "#C4664E")
+	ell(m, "HamGlaze", V(2.1, 0.9, 1.7), B(HX, TOP + 1.5, 0.7), "#A8462A")
+	for k = -1, 1 do
+		deco(m, "Score", V(0.06, 0.05, 1.5), B(HX + k * 0.5, TOP + 1.93, 0.7, 0, 35, 0), "#8E3B1E", E.Enum.Material.SmoothPlastic)
+		deco(m, "Score", V(0.06, 0.05, 1.5), B(HX + k * 0.5, TOP + 1.93, 0.7, 0, -35, 0), "#8E3B1E", E.Enum.Material.SmoothPlastic)
+	end
+	dcyl(m, "Bone", 0.7, 0.32, B(HX + 1.45, TOP + 1.0, 0.7), "#F3E9D2", E.Enum.Material.SmoothPlastic)
+	for k = -1, 1, 2 do -- rosemary sprigs and cranberries on the platter
+		dball(m, "Sprig", 0.3, B(HX + k * 1.2, TOP + 0.3, 1.9), "#3E7B3A", E.Enum.Material.SmoothPlastic)
+		dball(m, "Berry", 0.22, B(HX + k * 1.35, TOP + 0.3, 1.75), "#B3122E", E.Enum.Material.SmoothPlastic)
+	end
+	prompt(body, "event:potluck", "Share a dish", "Christmas Potluck", 0.4, 10)
+	-- a tray of tamales (a Texas Christmas tradition)
+	deco(m, "TamaleTray", V(2.2, 0.16, 1.4), B(-1.7, TOP + 0.1, 0.5), "#C9CED6", E.Enum.Material.Metal)
+	for r = 0, 1 do
+		for k = 0, 3 do
+			local t = ell(m, "Tamale", V(0.42, 0.32, 1.1), B(-2.4 + k * 0.48, TOP + 0.33, 0.2 + r * 0.6), "#E9D3A0")
+			t.Material = E.Enum.Material.Fabric
+		end
+	end
+	-- sugar cookies (stars and trees) on a plate
+	dcyl(m, "CookiePlate", 0.1, 1.6, B(4.2, TOP + 0.07, 0.4) * upright(), "#FFFFFF", E.Enum.Material.SmoothPlastic)
+	local COOK = { "#F4F1EA", "#3BD16F", "#FF3B3B", "#FFD54A" }
+	for k = 0, 3 do
+		local a = k / 4 * math.pi * 2
+		deco(m, "Cookie", V(0.45, 0.1, 0.45), B(4.2 + math.cos(a) * 0.4, TOP + 0.16, 0.4 + math.sin(a) * 0.4, 0, 45 + k * 20, 0), COOK[k + 1], E.Enum.Material.SmoothPlastic)
+	end
+	-- a little Christmas tree at the left end: stacked boughs, bulbs and a glowing star
+	local TX, TZ = -8.4, 0.6
+	deco(m, "TreeTrunk", V(0.6, 1.2, 0.6), B(TX, 0.6, TZ), "#5A3A22", E.Enum.Material.Wood)
+	local tiers = { { 1.2, 3.6, 1.8 }, { 2.6, 2.8, 1.6 }, { 3.8, 2.0, 1.4 }, { 4.8, 1.2, 1.1 } }
+	for i, t in ipairs(tiers) do
+		local y, w, h = t[1], t[2], t[3]
+		ell(m, "Bough" .. i, V(w, h, w), B(TX, y, TZ), i % 2 == 0 and "#2E7D46" or "#25693A")
+		for k = 0, 4 do
+			local a = (k / 5 + i * 0.13) * math.pi * 2
+			dball(m, "TreeBulb", 0.3, B(TX + math.cos(a) * w * 0.47, y - h * 0.15, TZ + math.sin(a) * w * 0.47), BULBS[(k + i) % #BULBS + 1], E.Enum.Material.Neon)
+		end
+	end
+	for k = 0, 1 do -- the star: two squares turned 45 degrees apart
+		deco(m, "Star", V(0.75, 0.75, 0.12), B(TX, 5.75, TZ, 0, 0, 45 * k), "#FFD54A", E.Enum.Material.Neon)
+	end
+	-- wrapped presents under the tree and at the right end
+	local GIFTS = { { -7.0, 1.0, 1.6, 1.0, "#B3122E", "#FFD54A" }, { -7.3, 0.7, -0.4, 0.8, "#1E6B3A", "#FFFFFF" }, { 7.9, 1.1, 1.0, 1.2, "#2E5BA8", "#FFD54A" }, { 8.5, 0.7, -0.6, 0.8, "#FFFFFF", "#B3122E" } }
+	for i, g in ipairs(GIFTS) do
+		local x, sz, z, h, box, ribbon = g[1], g[2], g[3], g[4], g[5], g[6]
+		deco(m, "Gift" .. i, V(sz, h, sz), B(x, h / 2, z, 0, i * 17, 0), box, E.Enum.Material.SmoothPlastic, true)
+		deco(m, "RibbonA" .. i, V(sz + 0.04, h + 0.04, 0.16), B(x, h / 2, z, 0, i * 17, 0), ribbon, E.Enum.Material.Fabric)
+		deco(m, "RibbonB" .. i, V(0.16, h + 0.04, sz + 0.04), B(x, h / 2, z, 0, i * 17, 0), ribbon, E.Enum.Material.Fabric)
+		dball(m, "Bow" .. i, 0.4, B(x, h + 0.12, z), ribbon, E.Enum.Material.Fabric)
+	end
+	-- garland posts wrapped red and white, an evergreen garland with bulbs, and the banner
+	for side = -1, 1, 2 do
+		deco(m, "Post", V(0.4, 8.6, 0.4), B(side * 7.6, 4.3, -1.6), "#F4F1EA", E.Enum.Material.SmoothPlastic, true)
+		for k = 0, 7 do
+			deco(m, "PostStripe", V(0.44, 0.35, 0.44), B(side * 7.6, 0.6 + k * 1.05, -1.6, 0, 0, side * 20), "#B3122E", E.Enum.Material.SmoothPlastic)
+		end
+		ell(m, "Wreath", V(1.4, 1.4, 0.4), B(side * 7.6, 5.3, -1.25), "#2E7D46")
+		ell(m, "WreathHole", V(0.6, 0.6, 0.42), B(side * 7.6, 5.3, -1.22), "#F4F1EA")
+		dball(m, "WreathBow", 0.4, B(side * 7.6, 4.7, -1.05), "#B3122E", E.Enum.Material.Fabric)
+	end
+	local banner = part(m, "Banner", V(10.5, 1.5, 0.2), B(0, 8.05, -1.6), "#1E6B3A", E.Enum.Material.Fabric, { CanCollide = false, CanQuery = false, CanTouch = false })
+	local bt = surfaceText(banner, E.Enum.NormalId.Back, content and content.Signs and content.Signs.holidayBanner or "HOLIDAY SMOKEOUT", "#FFE9A8", nil)
+	bt.Name = "BannerText"
+	for k = 0, 12 do
+		local x = -7.2 + k * 1.2
+		local sag = -0.6 * (1 - ((x / 7.2) ^ 2))
+		ell(m, "Garland", V(1.35, 0.45, 0.45), B(x, 6.85 + sag, -1.6), k % 2 == 0 and "#2E7D46" or "#25693A")
+		dball(m, "GarlandBulb", 0.3, B(x + 0.3, 6.55 + sag, -1.75), BULBS[k % #BULBS + 1], E.Enum.Material.Neon)
+	end
+	return m
+end
+
 function WorldBuilder.bertha(parent, base, content)
 	local m = model(parent, "BigBertha")
 	local IRON, IRON_D, RUST, STEEL = "#3A3536", "#262223", "#7A3B22", "#B9BEC4"

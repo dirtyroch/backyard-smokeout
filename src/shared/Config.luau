@@ -72,12 +72,13 @@ Config.Meats = {
 	ribs = { id = "ribs", name = "Roch & Roll Ribs", station = "smoker", cookTime = 1800, cost = 60, price = 420, unlockPit = 2, maxRarity = 5, color = "#7A2E1C", icon = "🍖", size = { 2.8, 0.5, 1.2 } },
 	porkbutt = { id = "porkbutt", name = "Pork Butt", station = "smoker", cookTime = 7200, cost = 150, price = 1500, unlockPit = 3, maxRarity = 5, color = "#6B3A20", icon = "🐖", size = { 1.8, 1.4, 1.8 } },
 	turkeyleg = { id = "turkeyleg", name = "Harvest Turkey Leg", station = "smoker", cookTime = 900, cost = 30, price = 260, unlockPit = 1, maxRarity = 5, color = "#A0522D", icon = "🦃", season = "harvest", size = { 1, 1, 2.2 } },
+	holidayham = { id = "holidayham", name = "Holiday Glazed Ham", station = "smoker", cookTime = 1200, cost = 40, price = 340, unlockPit = 1, maxRarity = 5, color = "#B8553A", icon = "🍖", season = "holiday", size = { 1.8, 1.3, 1.6 } },
 	wagyu = { id = "wagyu", name = "Wagyu Brisket", station = "smoker", cookTime = 14400, cost = 0, price = 7000, unlockPit = 1, maxRarity = 5, color = "#2B140B", icon = "🥩", premium = true, size = { 3.2, 1.1, 1.9 } },
 	tomahawk = { id = "tomahawk", name = "Tomahawk Steak", station = "grill", cookTime = 300, cost = 0, price = 700, unlockPit = 1, maxRarity = 5, color = "#5A1E12", icon = "🪓", premium = true, size = { 3, 0.6, 1.4 } },
 	firstbrisket = { id = "firstbrisket", name = "First Brisket", station = "smoker", cookTime = 75, cost = 0, price = 100, unlockPit = 1, maxRarity = 5, color = "#3E2215", icon = "🥩", hidden = true, size = { 3, 1, 1.8 } },
 }
 
-Config.MeatOrder = { "burger", "tomahawk", "hotlink", "yardbird", "turkeyleg", "ribs", "porkbutt", "brisket", "wagyu" }
+Config.MeatOrder = { "burger", "tomahawk", "hotlink", "yardbird", "turkeyleg", "holidayham", "ribs", "porkbutt", "brisket", "wagyu" }
 
 -- Rarity of a finished cut. Rolled on the server when the cook starts. Odds are shown in the Index.
 Config.Rarities = {
@@ -213,6 +214,7 @@ Config.Cosmetics = {
 	apron_pathfinder = { name = "Pit Path Apron", slot = "apron", source = "path", color = "#2F4F2F", text = "28 DAYS LOW & SLOW" },
 	apron_harvest = { name = "Harvest Plaid Apron", slot = "apron", source = "rotation", color = "#A0522D", text = "GIVE THANKS" },
 	apron_thankful = { name = "Thankful & Full Apron", slot = "apron", source = "event", color = "#D9822B", text = "THANKFUL & FULL" },
+	apron_merry = { name = "Merry & Smoky Apron", slot = "apron", source = "event", color = "#1E6B3A", text = "MERRY & SMOKY" },
 	tool_goldenspatula = { name = "Golden Spatula", slot = "tool", source = "robux", color = "#FFD700" },
 	tool_goldtongs = { name = "Golden Tongs", slot = "tool", source = "path", color = "#E6BE8A" },
 	skin_candyred = { name = "Candy Apple Smoker", slot = "skin", source = "robux", color = "#C1121F" },
@@ -304,6 +306,11 @@ Config.Cosmetics = {
 	td_smoke_cranberry = { name = "Cranberry Smoke", slot = "smoke", source = "eventshop", color = "#9B1B30" },
 	td_trail_leaves = { name = "Falling Leaves Trail", slot = "trail", source = "eventshop", color = "#D2691E" },
 	td_skin_pecan = { name = "Pecan Pie Smoker", slot = "skin", source = "eventshop", color = "#7B4B2A" },
+	-- Holiday look set (Robux, only on sale during the Holiday Smokeout; the free apron stays free)
+	hd_hat_twinkle = { name = "Twinkle Lights Cowboy Hat", slot = "hat", source = "eventshop", color = "#1F4D2B", twinkle = true },
+	hd_smoke_evergreen = { name = "Evergreen Smoke", slot = "smoke", source = "eventshop", color = "#2E8B57" },
+	hd_trail_tinsel = { name = "Tinsel Trail", slot = "trail", source = "eventshop", color = "#FFD54A", color2 = "#E8EEF5" },
+	hd_skin_ornament = { name = "Ornament Smoker", slot = "skin", source = "eventshop", color = "#B3122E", gold = true },
 	-- Pit Crew Club (Roblox subscription): one members' look each month, kept forever
 	club_apron = { name = "Pit Crew Apron", slot = "apron", source = "club", color = "#1D3557", text = "PIT CREW" },
 	club_hat = { name = "Pit Crew Hat", slot = "hat", source = "club", color = "#264653" },
@@ -463,12 +470,37 @@ Config.Rush = { period = 150, need = 4, bonusFrac = 0.5 }
 -- `window` seconds the table is full and the whole server gets +25% tips (free, like the Dinner Bell).
 -- Nothing here is paid. In Studio, set the workspace attribute ForceTurkeyDay = true to test it any day.
 Config.TurkeyDay = {
+	id = "turkeyday",
+	dailyKey = "turkeyDay", -- data.daily field for the once-a-day share
 	daysBefore = 3,
 	daysAfter = 3,
 	meat = "turkeyleg",
 	reward = "apron_thankful",
 	title = "Thankful",
 	shareMult = 2, -- coins = turkey leg price x2 x rank bonus, once per day
+	need = 3,
+	window = 600,
+	cooldown = 900,
+	minutes = 5,
+	tipBonus = 0.25,
+}
+
+-- Holiday Smokeout: Christmas through New Year's Day (Dec 19 - Jan 1, Texas time). Same potluck
+-- table as Turkey Day, dressed for Christmas: smoke a Holiday Glazed Ham (a winter cut, Dec-Jan) and
+-- share it once a day for coins; the first share ever earns the free Merry & Smoky Apron. When `need`
+-- pitmasters share within `window` seconds, everyone gets +25% tips. Nothing here is paid; the
+-- Holiday look set is sold separately and only during these dates (Monetization, event = "holiday").
+-- In Studio, set the workspace attribute ForceHolidaySmokeout = true to test it any day.
+Config.HolidaySmokeout = {
+	id = "holiday",
+	dailyKey = "holidayDay",
+	start = { 12, 19 }, -- month, day
+	finish = { 1, 1 }, -- runs into the next year
+	peak = { 12, 25 },
+	meat = "holidayham",
+	reward = "apron_merry",
+	title = "Merry & Smoky",
+	shareMult = 2,
 	need = 3,
 	window = 600,
 	cooldown = 900,

@@ -963,7 +963,7 @@ test("no paid random items: every product kind is a fixed, shown reward", functi
 		truthy(p.odds == nil and p.random == nil and p.pool == nil, key .. " looks random")
 	end
 end)
-test("value notes add up: Whole Hog R$499 vs R$730, Turkey set, starter pack, 5 skips", function()
+test("value notes add up: Whole Hog R$499 vs R$730, Turkey and Holiday sets, starter pack, 5 skips", function()
 	local P = Monetization.Products
 	local function sum(grants)
 		local t = 0
@@ -981,6 +981,8 @@ test("value notes add up: Whole Hog R$499 vs R$730, Turkey set, starter pack, 5 
 	truthy(string.find(P.BundleWholeHog.valueNote, "730", 1, true) and string.find(P.BundleWholeHog.valueNote, "less as a set", 1, true))
 	eq(sum(P.TD_BundleFeast.grants), 306)
 	truthy(string.find(P.TD_BundleFeast.valueNote, "306", 1, true) and P.TD_BundleFeast.price < 306)
+	eq(sum(P.HD_BundleHoliday.grants), 306)
+	truthy(string.find(P.HD_BundleHoliday.valueNote, "306", 1, true) and P.HD_BundleHoliday.price < 306)
 	eq(P.Boost30.price + P.TomahawkPack.price, 108)
 	truthy(string.find(P.StarterPitPack.valueNote, "108", 1, true) and P.StarterPitPack.price < 108)
 	eq(P.TierSkip1.price * 5, 245)
@@ -1041,10 +1043,10 @@ test("Turkey Day looks: on sale only in Thanksgiving week, the free apron stays 
 	for key, p in pairs(P) do
 		if p.event == "turkeyday" then
 			n += 1
-			base.eventActive = false
+			base.events = { turkeyday = false, holiday = true }
 			local ok, why = Storefront.canBuy(key, p, base)
 			truthy(not ok and string.find(why, "next year", 1, true), key .. " blocked outside the week")
-			base.eventActive = true
+			base.events = { turkeyday = true, holiday = false }
 			truthy((Storefront.canBuy(key, p, base)), key .. " buyable in the week")
 			for _, g in ipairs(p.grants) do
 				truthy(g ~= Config.TurkeyDay.reward, "free event apron is never sold")
@@ -1056,9 +1058,128 @@ test("Turkey Day looks: on sale only in Thanksgiving week, the free apron stays 
 	local w = Holiday.turkeyWeek(Holiday.daysFromCivil(2026, 11, 25), Config.TurkeyDay.daysBefore, Config.TurkeyDay.daysAfter)
 	truthy(w.active and Holiday.label(w.startDay) == "Nov 23" and Holiday.label(w.endDay) == "Nov 29")
 end)
+test("Holiday Smokeout window is Dec 19 - Jan 1 and wraps into the new year", function()
+	local H = Config.HolidaySmokeout
+	local function at(y, mo, d)
+		return Holiday.dateWindow(Holiday.daysFromCivil(y, mo, d), H.start, H.finish, H.peak)
+	end
+	eq(at(2026, 12, 18).active, false, "Dec 18 is before")
+	eq(at(2026, 12, 19).active, true, "Dec 19 opens")
+	eq(at(2026, 12, 25).active and at(2026, 12, 25).isDay, true, "Christmas Day")
+	eq(at(2026, 12, 24).isDay, false)
+	eq(at(2026, 12, 31).active, true, "New Year's Eve")
+	eq(at(2027, 1, 1).active, true, "New Year's Day is the last day")
+	eq(at(2027, 1, 2).active, false, "Jan 2 is after")
+	eq(at(2026, 11, 26).active, false, "Thanksgiving is Turkey Day's, not this")
+	eq(at(2027, 7, 4).active, false, "summer is off")
+	local w = at(2027, 1, 1)
+	eq(Holiday.label(w.startDay) .. "-" .. Holiday.label(w.endDay), "Dec 19-Jan 1")
+	eq(w.day, Holiday.daysFromCivil(2026, 12, 25), "Jan 1 belongs to the window that started in December")
+	eq(at(2027, 3, 1).startDay, Holiday.daysFromCivil(2027, 12, 19), "after the window, the next one is this December")
+	eq(at(2026, 12, 10).endDay, Holiday.daysFromCivil(2027, 1, 1), "early December points at this year's window")
+	-- never overlaps Turkey Day, any year
+	for y = 2026, 2060 do
+		local tw = Holiday.turkeyWeek(Holiday.thanksgiving(y), Config.TurkeyDay.daysBefore, Config.TurkeyDay.daysAfter)
+		truthy(tw.endDay < at(y, 12, 19).startDay, "Turkey Day ends before the Holiday Smokeout " .. y)
+	end
+	-- a non-wrapping window works too
+	local sw = Holiday.dateWindow(Holiday.daysFromCivil(2027, 7, 4), { 7, 1 }, { 7, 7 }, nil)
+	truthy(sw.active and Holiday.label(sw.startDay) == "Jul 1" and Holiday.label(sw.endDay) == "Jul 7")
+end)
+test("Holiday Smokeout: the ham is a winter cut, the reward is free, the copy is calm", function()
+	local H = Config.HolidaySmokeout
+	local ham = Config.Meats[H.meat]
+	truthy(ham and ham.season == "holiday" and ham.station == "smoker", "event meat is the winter Holiday Glazed Ham")
+	truthy(table.find(Config.MeatOrder, H.meat) ~= nil, "shows in the cook picker")
+	eq(CookOff.seasonFor(Config.Seasons, 12).id, "holiday")
+	eq(CookOff.seasonFor(Config.Seasons, 1).id, "holiday")
+	eq(Holiday.meatOpen(ham, "holiday", {}), true, "cookable all December and January")
+	eq(Holiday.meatOpen(ham, "harvest", {}), false, "not in November without the event")
+	eq(Holiday.meatOpen(ham, "harvest", { [H.meat] = true }), true, "the event keeps it open (Studio test)")
+	eq(Holiday.meatOpen(Config.Meats.turkeyleg, "holiday", { [Config.TurkeyDay.meat] = true }), true)
+	eq(Holiday.meatOpen(Config.Meats.brisket, "summer", {}), true)
+	truthy(ham.price / ham.cookTime <= Config.Meats.turkeyleg.price / Config.Meats.turkeyleg.cookTime + 0.001, "no better per minute than the turkey leg")
+	local def = Config.Cosmetics[H.reward]
+	truthy(def and def.source == "event", "earned, not sold")
+	for _, p in pairs(Monetization.Products) do
+		for _, g in ipairs(p.grants or {}) do
+			truthy(g ~= H.reward, "the Merry & Smoky Apron is never a Robux product")
+		end
+	end
+	truthy(H.need >= 2 and H.tipBonus <= Config.DinnerBell.tipBonus, "small co-op bonus")
+	truthy(H.dailyKey ~= Config.TurkeyDay.dailyKey and H.id ~= Config.TurkeyDay.id)
+	local dd = fs_read("src/shared/DefaultData.luau")
+	truthy(string.find(dd, H.dailyKey .. " = -1", 1, true) and string.find(dd, Config.TurkeyDay.dailyKey .. " = -1", 1, true), "save fields for both once-a-day shares")
+	for _, C in ipairs({ Content.TurkeyDay, Content.HolidaySmokeout }) do
+		truthy(C.dialog and C.host and C.hud and #C.thanks >= 3, "potluck copy has a title, host and HUD line")
+		truthy(string.format(C.firstShare, "Juicy Holiday Glazed Ham", 680) ~= "")
+		truthy(string.format(C.progress, 1, 3, 2) ~= "" and string.format(C.full, 3, 25, 5) ~= "")
+	end
+	local C = Content.HolidaySmokeout
+	truthy(Content.Signs.holidayPotluck and Content.Signs.holidayBanner)
+	local lines = { C.login, C.needDish, C.already, C.firstShare, C.share, C.over, C.progress, C.full, Content.Signs.holidayBanner }
+	for _, l in ipairs(C.thanks) do
+		table.insert(lines, l)
+	end
+	for _, line in ipairs(lines) do
+		local low = string.lower(line)
+		for _, w in ipairs({ "buy", "robux", "hurry", "last chance", "don't miss", "santa", "grinch", "rudolph", "elf on" }) do
+			truthy(not string.find(low, w, 1, true), "calm, original copy (" .. w .. "): " .. line)
+		end
+	end
+	-- the decor and server wiring exist
+	truthy(string.find(fs_read("src/shared/WorldBuilder.luau"), "function WorldBuilder.holidaySmokeout", 1, true), "decor builder")
+	local ev = fs_read("src/server/Services/EventService.luau")
+	truthy(string.find(ev, "WorldBuilder.holidaySmokeout", 1, true) and string.find(ev, "Signs.holidayPotluck", 1, true), "EventService dresses the table")
+	local gs = fs_read("src/server/Services/GameService.luau")
+	truthy(string.find(gs, "ForceHolidaySmokeout", 1, true) and string.find(gs, "Config.HolidaySmokeout", 1, true), "Studio test switch")
+end)
+test("Holiday looks: on sale only Dec 19 - Jan 1, giftable, looks only, and Turkey Day's stay separate", function()
+	local P = Monetization.Products
+	local base = { owned = {}, featured = {}, onceBought = {}, cooking = false, seasonActive = true, seasonPaid = false, canSkip = function()
+		return true
+	end }
+	local n = 0
+	for key, p in pairs(P) do
+		if p.event == "holiday" then
+			n += 1
+			base.events = { turkeyday = true, holiday = false }
+			local ok, why = Storefront.canBuy(key, p, base)
+			truthy(not ok and string.find(why, "Dec 19", 1, true) and string.find(why, "next year", 1, true), key .. " blocked outside the dates")
+			base.events = { holiday = true }
+			truthy((Storefront.canBuy(key, p, base)), key .. " buyable during the event")
+			truthy(Gifting.giftable(p), key .. " can be gifted")
+			truthy(p.kind == "cosmetic" or p.kind == "bundle", "looks only")
+			for _, g in ipairs(p.grants) do
+				eq(Config.Cosmetics[g].source, "eventshop")
+				truthy(string.sub(g, 1, 3) == "hd_", "holiday look ids")
+			end
+		elseif p.event ~= nil then
+			eq(p.event, "turkeyday", key .. " has a known event")
+		end
+	end
+	eq(n, 5)
+	eq(Storefront.eventClosed(P.HD_HatTwinkle, { holiday = true }), nil)
+	eq(Storefront.eventClosed(P.BundleWholeHog, {}), nil, "regular items aren't event-gated")
+	truthy(Config.Cosmetics.hd_hat_twinkle.twinkle and Config.Cosmetics.hd_trail_tinsel.color2, "hat lights and two-tone tinsel are defined")
+	local cs = fs_read("src/server/Services/CosmeticService.luau")
+	truthy(string.find(cs, "def.twinkle", 1, true) and string.find(cs, "def.color2", 1, true), "CosmeticService draws them")
+	-- every Holiday look name is new (no clash with Season 2 Winter Smoke or the shop)
+	local names = {}
+	for id, c in pairs(Config.Cosmetics) do
+		if string.sub(id, 1, 3) ~= "hd_" then
+			names[c.name] = true
+		end
+	end
+	for key, p in pairs(P) do
+		if p.event == "holiday" and p.kind == "cosmetic" then
+			truthy(not names[p.name], key .. " reuses a name")
+		end
+	end
+end)
 test("First-Time Pit Pack: one per account, not giftable, nothing random", function()
 	local p = Monetization.Products.StarterPitPack
-	local c = { owned = {}, featured = {}, onceBought = {}, eventActive = false, cooking = false, seasonActive = false, seasonPaid = false, canSkip = function()
+	local c = { owned = {}, featured = {}, onceBought = {}, events = {}, cooking = false, seasonActive = false, seasonPaid = false, canSkip = function()
 		return false
 	end }
 	truthy((Storefront.canBuy("StarterPitPack", p, c)))
@@ -1073,7 +1194,7 @@ test("First-Time Pit Pack: one per account, not giftable, nothing random", funct
 end)
 test("Storefront: owned bundles, season limits and rotation say no calmly", function()
 	local P = Monetization.Products
-	local c = { owned = {}, featured = {}, onceBought = {}, eventActive = false, cooking = false, seasonActive = true, seasonPaid = false, canSkip = function(n)
+	local c = { owned = {}, featured = {}, onceBought = {}, events = {}, cooking = false, seasonActive = true, seasonPaid = false, canSkip = function(n)
 		return n <= 1
 	end }
 	truthy((Storefront.canBuy("SeasonPass", P.SeasonPass, c)))

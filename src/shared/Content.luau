@@ -98,6 +98,9 @@ Content.Slang = {
 
 -- Turkey Day Smokeout (Thanksgiving week). Family-friendly, original lines only.
 Content.TurkeyDay = {
+	dialog = "Turkey Day Potluck",
+	host = "Granny Pecan",
+	hud = "🦃 Potluck's full: +25% tips",
 	login = "🦃 It's Turkey Day Smokeout week! Smoke a Harvest Turkey Leg and share it at the potluck table for a free Thankful & Full Apron.",
 	needDish = "Everybody brings a dish! Smoke a Harvest Turkey Leg (any smoker, 15 min), then set it on the table here.",
 	already = "You already brought a dish today. Thank you, sugar! Come back tomorrow, and bring your crew: when 3 pitmasters share, the table's full for everybody.",
@@ -111,6 +114,28 @@ Content.TurkeyDay = {
 		"Unc Hank: \"I'm thankful for elastic waistbands. That's it. That's the joke.\"",
 		"The King of the Pit: \"Thankful for low fire, slow days, and folks to feed.\"",
 		"Temp: \"I am thankful for... 165 degrees. Always 165.\"",
+	},
+}
+
+-- Holiday Smokeout (Dec 19 - Jan 1). Christmas at the ranch: family-friendly, original lines only.
+Content.HolidaySmokeout = {
+	dialog = "Holiday Smokeout Potluck",
+	host = "Granny Pecan",
+	hud = "🎄 Christmas potluck's full: +25% tips",
+	login = "🎄 Merry Christmas from the ranch! The Holiday Smokeout runs through New Year's Day. Smoke a Holiday Glazed Ham and share it at the potluck table for a free Merry & Smoky Apron.",
+	needDish = "Christmas potluck! Everybody brings a dish. Smoke a Holiday Glazed Ham (any smoker, 20 min), then set it on the table here.",
+	already = "You already brought a dish today, sugar. Merry Christmas! Come back tomorrow, and bring your crew: when 3 pitmasters share, the table's full for everybody.",
+	firstShare = "You set your %s on the table. Granny Pecan tucks a wrapped box under your arm: it's an apron!\n\n+%d coins, the Merry & Smoky Apron, and a new title: Merry & Smoky.",
+	share = "You set your %s on the table. \"Now THAT's a Christmas spread!\"\n\n+%d coins. Come back tomorrow with another dish.",
+	progress = "🎄 Christmas potluck: %d/%d dishes. %d more pitmasters sharing in the next few minutes fills the table, and everybody gets bonus tips!",
+	full = "🎄 THE CHRISTMAS POTLUCK'S FULL! %d pitmasters shared a dish. Everyone gets +%d%% tips for %d min!",
+	over = "The Christmas potluck is packed up till next December. Happy New Year, y'all!",
+	thanks = {
+		"Granny Pecan: \"Merry Christmas, sugar. Grab a tamale before Unc finds 'em.\"",
+		"Unc Hank: \"I asked for a new grill brush. Got socks again. Unc things.\"",
+		"The King of the Pit: \"Best gift there is: a full table and a slow fire.\"",
+		"Temp: \"Ham's done at 140. I checked it twice. Like a list.\"",
+		"Unc Hank: \"Ugly sweater? Sir, this is my good sweater.\"",
 	},
 }
 
@@ -142,6 +167,8 @@ Content.Signs = {
 	potluck = "SUNDAY POTLUCK",
 	turkeyPotluck = "TURKEY DAY POTLUCK",
 	turkeyBanner = "TURKEY DAY SMOKEOUT\nBring a dish!",
+	holidayPotluck = "CHRISTMAS POTLUCK",
+	holidayBanner = "HOLIDAY SMOKEOUT\nMerry Christmas, y'all!",
 	creek = "(nothing to see here)",
 	welcome = "BACKYARD SMOKEOUT",
 	bertha = "BIG BERTHA\nThe King of the Pit's 1,000-gallon smoker · Ring the bell when supper's on",

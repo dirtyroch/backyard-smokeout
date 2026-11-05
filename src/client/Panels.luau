@@ -282,7 +282,13 @@ local function renderShop(s: any)
 	end
 	local sf = scroller(content, true, Vector2.new(166, 236))
 	local n = 0
-	local event = s.turkey and s.turkey.active
+	-- the event look set that's on sale right now (Turkey Day or Holiday), if any
+	local event, eventEnds, eventName, eventFree = nil, "", "", ""
+	if s.turkey and s.turkey.active then
+		event, eventEnds, eventName, eventFree = "turkeyday", s.turkey.ends, "Turkey Day", "The potluck apron stays free."
+	elseif s.holiday and s.holiday.active then
+		event, eventEnds, eventName, eventFree = "holiday", s.holiday.ends, "Holiday", "The Merry & Smoky Apron stays free."
+	end
 	if sel == "Passes" then
 		local keys = {}
 		for k in pairs(Monetization.Passes) do
@@ -318,7 +324,7 @@ local function renderShop(s: any)
 		if sel == "This Week" then
 			if event then
 				for k, p in pairs(Monetization.Products) do
-					if p.event == "turkeyday" then
+					if p.event == event then
 						table.insert(keys, k)
 					end
 				end
@@ -353,7 +359,7 @@ local function renderShop(s: any)
 	end
 	local foot = "Every purchase shows exactly what you get. No random items, ever. Tap 🎁 to gift a look to someone in your server."
 	if sel == "This Week" then
-		foot = event and ("Turkey Day looks are here through " .. s.turkey.ends .. " and return next year. The potluck apron stays free.") or "This week's looks rotate every Monday and come back in a later week. Looks only, no stats."
+		foot = event and (eventName .. " looks are here through " .. eventEnds .. " and return next year. " .. eventFree) or "This week's looks rotate every Monday and come back in a later week. Looks only, no stats."
 	elseif sel == "Passes" then
 		foot = "Passes are yours forever. The Pit Crew Club and Premium are monthly and give looks and friendly perks, never coins."
 	end
@@ -547,11 +553,19 @@ local function renderSauce(s: any)
 end
 
 -- ===== Cook picker =====
+-- Event cuts stay cookable for their whole event, even outside their season.
+local function eventMeats(s: any): { [string]: boolean }
+	return {
+		[Config.TurkeyDay.meat] = s.turkey ~= nil and s.turkey.active,
+		[Config.HolidaySmokeout.meat] = s.holiday ~= nil and s.holiday.active,
+	}
+end
+
 local function meatLocked(s: any, meat: any): string?
 	if meat.hidden then
 		return "hidden"
 	end
-	if not Holiday.meatInSeason(meat, s.season.id, s.turkey ~= nil and s.turkey.active, Config.TurkeyDay.meat) then
+	if not Holiday.meatOpen(meat, s.season.id, eventMeats(s)) then
 		return "Seasonal: back next " .. meat.season
 	end
 	if s.pitLevel < meat.unlockPit then
@@ -577,7 +591,7 @@ local function renderCook(s: any)
 	local order = 0
 	for _, id in ipairs(Config.MeatOrder) do
 		local meat = Config.Meats[id]
-		if meat.station == kind and Holiday.meatInSeason(meat, s.season.id, s.turkey ~= nil and s.turkey.active, Config.TurkeyDay.meat) then
+		if meat.station == kind and Holiday.meatOpen(meat, s.season.id, eventMeats(s)) then
 			order += 1
 			local why = meatLocked(s, meat)
 			local f = card(sf, order, 74)

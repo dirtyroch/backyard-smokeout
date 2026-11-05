@@ -261,7 +261,7 @@ function Hud.update()
 			ends, n, done = (math.floor(now / P) + 1) * P, 0, false
 		end
 		local left = math.max(0, math.floor(ends - now))
-		local zoom = (s.dinnerUntil or 0) > now and "  🔔 Dinner Bell +25% tips" or ((s.potluckUntil or 0) > now and "  🦃 Potluck's full: +25% tips" or "")
+		local zoom = (s.dinnerUntil or 0) > now and "  🔔 Dinner Bell +25% tips" or ((s.potluckUntil or 0) > now and ("  " .. (s.potluckHud ~= nil and s.potluckHud ~= "" and s.potluckHud or "🦃 Potluck's full: +25% tips")) or "")
 		refs.rush.Text = (done and "🍽️ Rush cleared! Next in " or string.format("🍽️ Lunch Rush %d/%d · ", n, s.rush.need)) .. TimeUtil.formatDuration(left) .. zoom
 	end
 	refs.combo.Text = s.combo >= Config.Flip.lockedInAt and ("LOCKED IN 🔒 x" .. s.combo) or (s.combo > 0 and ("Flip combo x" .. s.combo) or "")

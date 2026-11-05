@@ -156,12 +156,13 @@ Config.Meats = {
 	ribs = { id = "ribs", name = "Roch & Roll Ribs", station = "smoker", cookTime = 1800, cost = 60, price = 420, unlockPit = 2, maxRarity = 5, color = "#7A2E1C", icon = "🍖", size = { 2.8, 0.5, 1.2 } },
 	porkbutt = { id = "porkbutt", name = "Pork Butt", station = "smoker", cookTime = 7200, cost = 150, price = 1500, unlockPit = 3, maxRarity = 5, color = "#6B3A20", icon = "🐖", size = { 1.8, 1.4, 1.8 } },
 	turkeyleg = { id = "turkeyleg", name = "Harvest Turkey Leg", station = "smoker", cookTime = 900, cost = 30, price = 260, unlockPit = 1, maxRarity = 5, color = "#A0522D", icon = "🦃", season = "harvest", size = { 1, 1, 2.2 } },
+	holidayham = { id = "holidayham", name = "Holiday Glazed Ham", station = "smoker", cookTime = 1200, cost = 40, price = 340, unlockPit = 1, maxRarity = 5, color = "#B8553A", icon = "🍖", season = "holiday", size = { 1.8, 1.3, 1.6 } },
 	wagyu = { id = "wagyu", name = "Wagyu Brisket", station = "smoker", cookTime = 14400, cost = 0, price = 7000, unlockPit = 1, maxRarity = 5, color = "#2B140B", icon = "🥩", premium = true, size = { 3.2, 1.1, 1.9 } },
 	tomahawk = { id = "tomahawk", name = "Tomahawk Steak", station = "grill", cookTime = 300, cost = 0, price = 700, unlockPit = 1, maxRarity = 5, color = "#5A1E12", icon = "🪓", premium = true, size = { 3, 0.6, 1.4 } },
 	firstbrisket = { id = "firstbrisket", name = "First Brisket", station = "smoker", cookTime = 75, cost = 0, price = 100, unlockPit = 1, maxRarity = 5, color = "#3E2215", icon = "🥩", hidden = true, size = { 3, 1, 1.8 } },
 }
 
-Config.MeatOrder = { "burger", "tomahawk", "hotlink", "yardbird", "turkeyleg", "ribs", "porkbutt", "brisket", "wagyu" }
+Config.MeatOrder = { "burger", "tomahawk", "hotlink", "yardbird", "turkeyleg", "holidayham", "ribs", "porkbutt", "brisket", "wagyu" }
 
 -- Rarity of a finished cut. Rolled on the server when the cook starts. Odds are shown in the Index.
 Config.Rarities = {
@@ -297,6 +298,7 @@ Config.Cosmetics = {
 	apron_pathfinder = { name = "Pit Path Apron", slot = "apron", source = "path", color = "#2F4F2F", text = "28 DAYS LOW & SLOW" },
 	apron_harvest = { name = "Harvest Plaid Apron", slot = "apron", source = "rotation", color = "#A0522D", text = "GIVE THANKS" },
 	apron_thankful = { name = "Thankful & Full Apron", slot = "apron", source = "event", color = "#D9822B", text = "THANKFUL & FULL" },
+	apron_merry = { name = "Merry & Smoky Apron", slot = "apron", source = "event", color = "#1E6B3A", text = "MERRY & SMOKY" },
 	tool_goldenspatula = { name = "Golden Spatula", slot = "tool", source = "robux", color = "#FFD700" },
 	tool_goldtongs = { name = "Golden Tongs", slot = "tool", source = "path", color = "#E6BE8A" },
 	skin_candyred = { name = "Candy Apple Smoker", slot = "skin", source = "robux", color = "#C1121F" },
@@ -388,6 +390,11 @@ Config.Cosmetics = {
 	td_smoke_cranberry = { name = "Cranberry Smoke", slot = "smoke", source = "eventshop", color = "#9B1B30" },
 	td_trail_leaves = { name = "Falling Leaves Trail", slot = "trail", source = "eventshop", color = "#D2691E" },
 	td_skin_pecan = { name = "Pecan Pie Smoker", slot = "skin", source = "eventshop", color = "#7B4B2A" },
+	-- Holiday look set (Robux, only on sale during the Holiday Smokeout; the free apron stays free)
+	hd_hat_twinkle = { name = "Twinkle Lights Cowboy Hat", slot = "hat", source = "eventshop", color = "#1F4D2B", twinkle = true },
+	hd_smoke_evergreen = { name = "Evergreen Smoke", slot = "smoke", source = "eventshop", color = "#2E8B57" },
+	hd_trail_tinsel = { name = "Tinsel Trail", slot = "trail", source = "eventshop", color = "#FFD54A", color2 = "#E8EEF5" },
+	hd_skin_ornament = { name = "Ornament Smoker", slot = "skin", source = "eventshop", color = "#B3122E", gold = true },
 	-- Pit Crew Club (Roblox subscription): one members' look each month, kept forever
 	club_apron = { name = "Pit Crew Apron", slot = "apron", source = "club", color = "#1D3557", text = "PIT CREW" },
 	club_hat = { name = "Pit Crew Hat", slot = "hat", source = "club", color = "#264653" },
@@ -547,12 +554,37 @@ Config.Rush = { period = 150, need = 4, bonusFrac = 0.5 }
 -- `window` seconds the table is full and the whole server gets +25% tips (free, like the Dinner Bell).
 -- Nothing here is paid. In Studio, set the workspace attribute ForceTurkeyDay = true to test it any day.
 Config.TurkeyDay = {
+	id = "turkeyday",
+	dailyKey = "turkeyDay", -- data.daily field for the once-a-day share
 	daysBefore = 3,
 	daysAfter = 3,
 	meat = "turkeyleg",
 	reward = "apron_thankful",
 	title = "Thankful",
 	shareMult = 2, -- coins = turkey leg price x2 x rank bonus, once per day
+	need = 3,
+	window = 600,
+	cooldown = 900,
+	minutes = 5,
+	tipBonus = 0.25,
+}
+
+-- Holiday Smokeout: Christmas through New Year's Day (Dec 19 - Jan 1, Texas time). Same potluck
+-- table as Turkey Day, dressed for Christmas: smoke a Holiday Glazed Ham (a winter cut, Dec-Jan) and
+-- share it once a day for coins; the first share ever earns the free Merry & Smoky Apron. When `need`
+-- pitmasters share within `window` seconds, everyone gets +25% tips. Nothing here is paid; the
+-- Holiday look set is sold separately and only during these dates (Monetization, event = "holiday").
+-- In Studio, set the workspace attribute ForceHolidaySmokeout = true to test it any day.
+Config.HolidaySmokeout = {
+	id = "holiday",
+	dailyKey = "holidayDay",
+	start = { 12, 19 }, -- month, day
+	finish = { 1, 1 }, -- runs into the next year
+	peak = { 12, 25 },
+	meat = "holidayham",
+	reward = "apron_merry",
+	title = "Merry & Smoky",
+	shareMult = 2,
 	need = 3,
 	window = 600,
 	cooldown = 900,
@@ -676,6 +708,9 @@ Content.Slang = {
 
 -- Turkey Day Smokeout (Thanksgiving week). Family-friendly, original lines only.
 Content.TurkeyDay = {
+	dialog = "Turkey Day Potluck",
+	host = "Granny Pecan",
+	hud = "🦃 Potluck's full: +25% tips",
 	login = "🦃 It's Turkey Day Smokeout week! Smoke a Harvest Turkey Leg and share it at the potluck table for a free Thankful & Full Apron.",
 	needDish = "Everybody brings a dish! Smoke a Harvest Turkey Leg (any smoker, 15 min), then set it on the table here.",
 	already = "You already brought a dish today. Thank you, sugar! Come back tomorrow, and bring your crew: when 3 pitmasters share, the table's full for everybody.",
@@ -689,6 +724,28 @@ Content.TurkeyDay = {
 		"Unc Hank: \"I'm thankful for elastic waistbands. That's it. That's the joke.\"",
 		"The King of the Pit: \"Thankful for low fire, slow days, and folks to feed.\"",
 		"Temp: \"I am thankful for... 165 degrees. Always 165.\"",
+	},
+}
+
+-- Holiday Smokeout (Dec 19 - Jan 1). Christmas at the ranch: family-friendly, original lines only.
+Content.HolidaySmokeout = {
+	dialog = "Holiday Smokeout Potluck",
+	host = "Granny Pecan",
+	hud = "🎄 Christmas potluck's full: +25% tips",
+	login = "🎄 Merry Christmas from the ranch! The Holiday Smokeout runs through New Year's Day. Smoke a Holiday Glazed Ham and share it at the potluck table for a free Merry & Smoky Apron.",
+	needDish = "Christmas potluck! Everybody brings a dish. Smoke a Holiday Glazed Ham (any smoker, 20 min), then set it on the table here.",
+	already = "You already brought a dish today, sugar. Merry Christmas! Come back tomorrow, and bring your crew: when 3 pitmasters share, the table's full for everybody.",
+	firstShare = "You set your %s on the table. Granny Pecan tucks a wrapped box under your arm: it's an apron!\n\n+%d coins, the Merry & Smoky Apron, and a new title: Merry & Smoky.",
+	share = "You set your %s on the table. \"Now THAT's a Christmas spread!\"\n\n+%d coins. Come back tomorrow with another dish.",
+	progress = "🎄 Christmas potluck: %d/%d dishes. %d more pitmasters sharing in the next few minutes fills the table, and everybody gets bonus tips!",
+	full = "🎄 THE CHRISTMAS POTLUCK'S FULL! %d pitmasters shared a dish. Everyone gets +%d%% tips for %d min!",
+	over = "The Christmas potluck is packed up till next December. Happy New Year, y'all!",
+	thanks = {
+		"Granny Pecan: \"Merry Christmas, sugar. Grab a tamale before Unc finds 'em.\"",
+		"Unc Hank: \"I asked for a new grill brush. Got socks again. Unc things.\"",
+		"The King of the Pit: \"Best gift there is: a full table and a slow fire.\"",
+		"Temp: \"Ham's done at 140. I checked it twice. Like a list.\"",
+		"Unc Hank: \"Ugly sweater? Sir, this is my good sweater.\"",
 	},
 }
 
@@ -720,6 +777,8 @@ Content.Signs = {
 	potluck = "SUNDAY POTLUCK",
 	turkeyPotluck = "TURKEY DAY POTLUCK",
 	turkeyBanner = "TURKEY DAY SMOKEOUT\nBring a dish!",
+	holidayPotluck = "CHRISTMAS POTLUCK",
+	holidayBanner = "HOLIDAY SMOKEOUT\nMerry Christmas, y'all!",
 	creek = "(nothing to see here)",
 	welcome = "BACKYARD SMOKEOUT",
 	bertha = "BIG BERTHA\nThe King of the Pit's 1,000-gallon smoker · Ring the bell when supper's on",
@@ -784,7 +843,7 @@ return {
 	},
 	streak = { lastDay = -1, count = 0, best = 0, freeMissWeek = -1 },
 	path = { claimed = 0, playDays = 0, lastPlayDay = -1 },
-	daily = { jokeDay = -1, creekDay = -1, kingDone = false, bellDay = -1, turkeyDay = -1 },
+	daily = { jokeDay = -1, creekDay = -1, kingDone = false, bellDay = -1, turkeyDay = -1, holidayDay = -1 },
 	restock = { window = -1, bought = {} },
 	cookoff = { week = -1, best = 0 },
 	settings = { peace = true, sfx = true }, -- snagging is opt-in (Fair Play)
@@ -1276,6 +1335,8 @@ return Gifting
 	  * nthWeekday: e.g. the 4th Thursday of November
 	  * thanksgiving: US Thanksgiving (4th Thursday of November) for a year
 	  * turkeyWeek: is `day` inside the Turkey Day Smokeout window around Thanksgiving?
+	  * dateWindow: is `day` inside a fixed-date window (it may wrap into the next year, like the
+	    Holiday Smokeout's Dec 19 - Jan 1)?
 ]]
 local Holiday = {}
 
@@ -1333,6 +1394,28 @@ function Holiday.turkeyWeek(day: number, before: number, after: number): Week
 	return { active = day >= startDay and day <= endDay, isDay = day == t, day = t, startDay = startDay, endDay = endDay }
 end
 
+-- A fixed-date window, `start`/`finish`/`peak` as { month, day }. If finish is earlier in the year
+-- than start, the window wraps into the next year (Dec 19 - Jan 1), and a January day belongs to the
+-- window that started the December before. `isDay` is the `peak` day (Christmas for the Holiday Smokeout).
+function Holiday.dateWindow(day: number, start: { number }, finish: { number }, peak: { number }?): Week
+	local y, m = Holiday.civilFromDays(day)
+	local wraps = finish[1] < start[1] or (finish[1] == start[1] and finish[2] < start[2])
+	local sy = y
+	if wraps and (m < start[1] or (m == start[1] and day < Holiday.daysFromCivil(y, start[1], start[2]))) then
+		-- before this year's start: we're either in last year's window (January) or before this year's
+		sy = y - 1
+		if Holiday.daysFromCivil(sy + 1, finish[1], finish[2]) < day then
+			sy = y -- past last year's end: the next window is this year's
+		end
+	end
+	local startDay = Holiday.daysFromCivil(sy, start[1], start[2])
+	local endDay = Holiday.daysFromCivil(wraps and sy + 1 or sy, finish[1], finish[2])
+	local pk = peak or start
+	local py = (wraps and pk[1] < start[1]) and sy + 1 or sy
+	local peakDay = Holiday.daysFromCivil(py, pk[1], pk[2])
+	return { active = day >= startDay and day <= endDay, isDay = day == peakDay, day = peakDay, startDay = startDay, endDay = endDay }
+end
+
 -- Seasonal cuts cook only in their season, except the event's own cut stays open for the whole
 -- event window (so Thanksgiving weeks that run into December still have turkey legs).
 function Holiday.meatInSeason(meat: any, seasonId: string, eventActive: boolean, eventMeatId: string): boolean
@@ -1340,6 +1423,14 @@ function Holiday.meatInSeason(meat: any, seasonId: string, eventActive: boolean,
 		return true
 	end
 	return eventActive and meat.id == eventMeatId
+end
+
+-- Same idea with several events at once: `eventMeats[meatId] = true` while that cut's event is on.
+function Holiday.meatOpen(meat: any, seasonId: string, eventMeats: { [string]: boolean }): boolean
+	if not meat.season or meat.season == seasonId then
+		return true
+	end
+	return eventMeats[meat.id] == true
 end
 
 -- Which cooler plate to share at the potluck: the plainest one of `meatId` (lowest rarity index,
@@ -2107,7 +2198,7 @@ local Storefront = {}
 export type Ctx = {
 	owned: { [string]: boolean },
 	featured: { [string]: boolean },
-	eventActive: boolean,
+	events: { [string]: boolean }, -- which date-gated event shops are open ("turkeyday", "holiday")
 	onceBought: { [string]: boolean },
 	cooking: boolean,
 	seasonActive: boolean,
@@ -2129,12 +2220,27 @@ function Storefront.ownsAll(owned: { [string]: boolean }, grants: { string }?): 
 	return grants ~= nil and #grants > 0 and Storefront.ownedCount(owned, grants) == #grants
 end
 
+-- Calm "not right now" lines for event looks bought outside their dates.
+Storefront.EVENT_CLOSED = {
+	turkeyday = "The Turkey Day looks are on sale during Thanksgiving week. They come back next year.",
+	holiday = "The Holiday looks are on sale from Dec 19 to Jan 1. They come back next year.",
+} :: { [string]: string }
+
+-- nil if this product isn't event-gated or its event is on; otherwise the calm reason.
+function Storefront.eventClosed(p: any, events: { [string]: boolean }): string?
+	if p.event and not events[p.event] then
+		return Storefront.EVENT_CLOSED[p.event] or "That one's only on sale during its event. It comes back next year."
+	end
+	return nil
+end
+
 function Storefront.canBuy(key: string, p: any, c: Ctx): (boolean, string?)
 	if p.rotation and not c.featured[key] then
 		return false, "That one's not in this week's rotation. It'll be back!"
 	end
-	if p.event == "turkeyday" and not c.eventActive then
-		return false, "The Turkey Day looks are on sale during Thanksgiving week. They come back next year."
+	local closed = Storefront.eventClosed(p, c.events)
+	if closed then
+		return false, closed
 	end
 	if p.once and c.onceBought[key] then
 		return false, "You already picked up this one-time pack. Thanks!"
@@ -2324,7 +2430,7 @@ return TimeUtil
 	  * Fair Play caps (Config.FairPlay): the tip pass is +50% (not x2), and buying a speed boost
 	    gives everyone else in the server a free 5-minute Smoke Shower.
 	  * The Smokehouse Pass, tier skips, the Pit Crew Club and Premium give looks and titles only.
-	  * Event looks (Turkey Day set) go on sale only during the event week and come back the next
+	  * Event looks (the Turkey Day and Holiday sets) go on sale only during the event week and come back the next
 	    year. The free event reward always stays free. Dates are shown plainly, never as a timer.
 	  * Roblox PolicyService decides who sees the subscription (IsEligibleToPurchaseSubscription).
 ]]
@@ -2345,7 +2451,7 @@ export type Product = {
 	count: number?,
 	valueNote: string?,
 	rotation: boolean?,
-	event: string?, -- "turkeyday": only on sale during that event's window
+	event: string?, -- "turkeyday" | "holiday": only on sale during that event's window
 	once: boolean?, -- one per account (the first-time Pit Pack)
 }
 
@@ -2399,6 +2505,14 @@ Monetization.Products = {
 	TD_TrailLeaves = { id = 0, name = "Falling Leaves Trail", price = 79, icon = "🍁", kind = "cosmetic", category = "Turkey Day", event = "turkeyday", grants = { "td_trail_leaves" }, desc = "Autumn leaves drift behind you." },
 	TD_SkinPecan = { id = 0, name = "Pecan Pie Smoker", price = 99, icon = "🥧", kind = "cosmetic", category = "Turkey Day", event = "turkeyday", grants = { "td_skin_pecan" }, desc = "Toasty pecan-brown smokers." },
 	TD_BundleFeast = { id = 0, name = "Turkey Day Look Set", price = 229, icon = "🦃", kind = "bundle", category = "Turkey Day", event = "turkeyday", grants = { "td_hat_cornucopia", "td_smoke_cranberry", "td_trail_leaves", "td_skin_pecan" }, valueNote = "R$ 306 if bought separately", desc = "All four Turkey Day looks: hat, smoke, trail and smoker." },
+
+	-- Holiday look set (on sale only during the Holiday Smokeout, Dec 19 - Jan 1, back next year;
+	-- the Merry & Smoky Apron stays free for everyone who shares a dish)
+	HD_HatTwinkle = { id = 0, name = "Twinkle Lights Cowboy Hat", price = 79, icon = "🎄", kind = "cosmetic", category = "Holiday", event = "holiday", grants = { "hd_hat_twinkle" }, desc = "An evergreen cowboy hat with a band of glowing colored lights." },
+	HD_SmokeEvergreen = { id = 0, name = "Evergreen Smoke", price = 49, icon = "🌲", kind = "cosmetic", category = "Holiday", event = "holiday", grants = { "hd_smoke_evergreen" }, desc = "Pine-green smoke from every smoker." },
+	HD_TrailTinsel = { id = 0, name = "Tinsel Trail", price = 79, icon = "✨", kind = "cosmetic", category = "Holiday", event = "holiday", grants = { "hd_trail_tinsel" }, desc = "A gold-and-silver tinsel shimmer behind you." },
+	HD_SkinOrnament = { id = 0, name = "Ornament Smoker", price = 99, icon = "🔴", kind = "cosmetic", category = "Holiday", event = "holiday", grants = { "hd_skin_ornament" }, desc = "Shiny ornament-red smokers that catch the light." },
+	HD_BundleHoliday = { id = 0, name = "Holiday Look Set", price = 229, icon = "🎁", kind = "bundle", category = "Holiday", event = "holiday", grants = { "hd_hat_twinkle", "hd_smoke_evergreen", "hd_trail_tinsel", "hd_skin_ornament" }, valueNote = "R$ 306 if bought separately", desc = "All four Holiday looks: hat, smoke, trail and smoker." },
 
 	-- Smokehouse Pass (one per season; looks and titles only) and tier skips
 	SeasonPass = { id = 0, name = "Smokehouse Pass", price = 399, icon = "🎟️", kind = "season", category = "Season", desc = "Unlocks this season's paid track: a look or title at every tier. Every paid reward you've already reached is yours right away." },
@@ -3842,6 +3956,106 @@ function WorldBuilder.turkeyDay(pot, content)
 	return m
 end
 
+-- Holiday Smokeout decor for the hub potluck table (built at runtime only Dec 19 - Jan 1, then
+-- destroyed). Same layout rules as Turkey Day: everything hangs off the Potluck's Table part.
+-- Adds a glazed holiday ham (the "Share a dish" prompt), a tray of tamales, sugar cookies, a little
+-- Christmas tree with a star, wrapped presents, an evergreen garland with colored bulbs, and a
+-- banner. Original art, no brands or characters.
+function WorldBuilder.holidaySmokeout(pot, content)
+	local tablePart = pot:FindFirstChild("Table")
+	if not tablePart then
+		return nil
+	end
+	local old = pot:FindFirstChild("HolidaySmokeout")
+	if old then
+		old:Destroy()
+	end
+	local m = model(pot, "HolidaySmokeout")
+	local base = tablePart.CFrame * E.CFrame.new(0, -3, 0) -- the potluck's own origin (ground)
+	local function B(x, y, z, rx, ry, rz)
+		return base * E.CFrame.new(x, y, z) * E.CFrame.Angles(math.rad(rx or 0), math.rad(ry or 0), math.rad(rz or 0))
+	end
+	local TOP = 3.25
+	local HX = 1.3 -- ham x on the table
+	local BULBS = { "#FF3B3B", "#FFD54A", "#3BD16F", "#4FA3FF", "#FF7AD9" }
+	-- red runner with a green stripe down the middle
+	deco(m, "Runner", V(13.6, 0.06, 1.6), B(0, TOP + 0.03, 0.6), "#B3122E", E.Enum.Material.Fabric)
+	deco(m, "RunnerStripe", V(13.6, 0.07, 0.35), B(0, TOP + 0.04, 0.6), "#1E6B3A", E.Enum.Material.Fabric)
+	-- the glazed holiday ham on a platter, scored glaze and cloves
+	dcyl(m, "Platter", 0.16, 3.4, B(HX, TOP + 0.1, 0.7) * upright(), "#F4F1EA", E.Enum.Material.SmoothPlastic)
+	local body = ell(m, "HamBody", V(2.5, 1.8, 2.0), B(HX, TOP + 0.95, 0.7), "#C4664E")
+	ell(m, "HamGlaze", V(2.1, 0.9, 1.7), B(HX, TOP + 1.5, 0.7), "#A8462A")
+	for k = -1, 1 do
+		deco(m, "Score", V(0.06, 0.05, 1.5), B(HX + k * 0.5, TOP + 1.93, 0.7, 0, 35, 0), "#8E3B1E", E.Enum.Material.SmoothPlastic)
+		deco(m, "Score", V(0.06, 0.05, 1.5), B(HX + k * 0.5, TOP + 1.93, 0.7, 0, -35, 0), "#8E3B1E", E.Enum.Material.SmoothPlastic)
+	end
+	dcyl(m, "Bone", 0.7, 0.32, B(HX + 1.45, TOP + 1.0, 0.7), "#F3E9D2", E.Enum.Material.SmoothPlastic)
+	for k = -1, 1, 2 do -- rosemary sprigs and cranberries on the platter
+		dball(m, "Sprig", 0.3, B(HX + k * 1.2, TOP + 0.3, 1.9), "#3E7B3A", E.Enum.Material.SmoothPlastic)
+		dball(m, "Berry", 0.22, B(HX + k * 1.35, TOP + 0.3, 1.75), "#B3122E", E.Enum.Material.SmoothPlastic)
+	end
+	prompt(body, "event:potluck", "Share a dish", "Christmas Potluck", 0.4, 10)
+	-- a tray of tamales (a Texas Christmas tradition)
+	deco(m, "TamaleTray", V(2.2, 0.16, 1.4), B(-1.7, TOP + 0.1, 0.5), "#C9CED6", E.Enum.Material.Metal)
+	for r = 0, 1 do
+		for k = 0, 3 do
+			local t = ell(m, "Tamale", V(0.42, 0.32, 1.1), B(-2.4 + k * 0.48, TOP + 0.33, 0.2 + r * 0.6), "#E9D3A0")
+			t.Material = E.Enum.Material.Fabric
+		end
+	end
+	-- sugar cookies (stars and trees) on a plate
+	dcyl(m, "CookiePlate", 0.1, 1.6, B(4.2, TOP + 0.07, 0.4) * upright(), "#FFFFFF", E.Enum.Material.SmoothPlastic)
+	local COOK = { "#F4F1EA", "#3BD16F", "#FF3B3B", "#FFD54A" }
+	for k = 0, 3 do
+		local a = k / 4 * math.pi * 2
+		deco(m, "Cookie", V(0.45, 0.1, 0.45), B(4.2 + math.cos(a) * 0.4, TOP + 0.16, 0.4 + math.sin(a) * 0.4, 0, 45 + k * 20, 0), COOK[k + 1], E.Enum.Material.SmoothPlastic)
+	end
+	-- a little Christmas tree at the left end: stacked boughs, bulbs and a glowing star
+	local TX, TZ = -8.4, 0.6
+	deco(m, "TreeTrunk", V(0.6, 1.2, 0.6), B(TX, 0.6, TZ), "#5A3A22", E.Enum.Material.Wood)
+	local tiers = { { 1.2, 3.6, 1.8 }, { 2.6, 2.8, 1.6 }, { 3.8, 2.0, 1.4 }, { 4.8, 1.2, 1.1 } }
+	for i, t in ipairs(tiers) do
+		local y, w, h = t[1], t[2], t[3]
+		ell(m, "Bough" .. i, V(w, h, w), B(TX, y, TZ), i % 2 == 0 and "#2E7D46" or "#25693A")
+		for k = 0, 4 do
+			local a = (k / 5 + i * 0.13) * math.pi * 2
+			dball(m, "TreeBulb", 0.3, B(TX + math.cos(a) * w * 0.47, y - h * 0.15, TZ + math.sin(a) * w * 0.47), BULBS[(k + i) % #BULBS + 1], E.Enum.Material.Neon)
+		end
+	end
+	for k = 0, 1 do -- the star: two squares turned 45 degrees apart
+		deco(m, "Star", V(0.75, 0.75, 0.12), B(TX, 5.75, TZ, 0, 0, 45 * k), "#FFD54A", E.Enum.Material.Neon)
+	end
+	-- wrapped presents under the tree and at the right end
+	local GIFTS = { { -7.0, 1.0, 1.6, 1.0, "#B3122E", "#FFD54A" }, { -7.3, 0.7, -0.4, 0.8, "#1E6B3A", "#FFFFFF" }, { 7.9, 1.1, 1.0, 1.2, "#2E5BA8", "#FFD54A" }, { 8.5, 0.7, -0.6, 0.8, "#FFFFFF", "#B3122E" } }
+	for i, g in ipairs(GIFTS) do
+		local x, sz, z, h, box, ribbon = g[1], g[2], g[3], g[4], g[5], g[6]
+		deco(m, "Gift" .. i, V(sz, h, sz), B(x, h / 2, z, 0, i * 17, 0), box, E.Enum.Material.SmoothPlastic, true)
+		deco(m, "RibbonA" .. i, V(sz + 0.04, h + 0.04, 0.16), B(x, h / 2, z, 0, i * 17, 0), ribbon, E.Enum.Material.Fabric)
+		deco(m, "RibbonB" .. i, V(0.16, h + 0.04, sz + 0.04), B(x, h / 2, z, 0, i * 17, 0), ribbon, E.Enum.Material.Fabric)
+		dball(m, "Bow" .. i, 0.4, B(x, h + 0.12, z), ribbon, E.Enum.Material.Fabric)
+	end
+	-- garland posts wrapped red and white, an evergreen garland with bulbs, and the banner
+	for side = -1, 1, 2 do
+		deco(m, "Post", V(0.4, 8.6, 0.4), B(side * 7.6, 4.3, -1.6), "#F4F1EA", E.Enum.Material.SmoothPlastic, true)
+		for k = 0, 7 do
+			deco(m, "PostStripe", V(0.44, 0.35, 0.44), B(side * 7.6, 0.6 + k * 1.05, -1.6, 0, 0, side * 20), "#B3122E", E.Enum.Material.SmoothPlastic)
+		end
+		ell(m, "Wreath", V(1.4, 1.4, 0.4), B(side * 7.6, 5.3, -1.25), "#2E7D46")
+		ell(m, "WreathHole", V(0.6, 0.6, 0.42), B(side * 7.6, 5.3, -1.22), "#F4F1EA")
+		dball(m, "WreathBow", 0.4, B(side * 7.6, 4.7, -1.05), "#B3122E", E.Enum.Material.Fabric)
+	end
+	local banner = part(m, "Banner", V(10.5, 1.5, 0.2), B(0, 8.05, -1.6), "#1E6B3A", E.Enum.Material.Fabric, { CanCollide = false, CanQuery = false, CanTouch = false })
+	local bt = surfaceText(banner, E.Enum.NormalId.Back, content and content.Signs and content.Signs.holidayBanner or "HOLIDAY SMOKEOUT", "#FFE9A8", nil)
+	bt.Name = "BannerText"
+	for k = 0, 12 do
+		local x = -7.2 + k * 1.2
+		local sag = -0.6 * (1 - ((x / 7.2) ^ 2))
+		ell(m, "Garland", V(1.35, 0.45, 0.45), B(x, 6.85 + sag, -1.6), k % 2 == 0 and "#2E7D46" or "#25693A")
+		dball(m, "GarlandBulb", 0.3, B(x + 0.3, 6.55 + sag, -1.75), BULBS[k % #BULBS + 1], E.Enum.Material.Neon)
+	end
+	return m
+end
+
 function WorldBuilder.bertha(parent, base, content)
 	local m = model(parent, "BigBertha")
 	local IRON, IRON_D, RUST, STEEL = "#3A3536", "#262223", "#7A3B22", "#B9BEC4"
@@ -4422,6 +4636,15 @@ local function buildHat(folder: Folder, head: BasePart, id: string)
 	brim.Shape = Enum.PartType.Cylinder
 	weldPart(folder, head, "HatCrown", Vector3.new(1.3, 0.8, 1.4), CFrame.new(0, top + 0.55, 0), def.color)
 	weldPart(folder, head, "HatBand", Vector3.new(1.32, 0.18, 1.42), CFrame.new(0, top + 0.25, 0), id == "hat_pitmaster" and "#C9A227" or "#7B3F00")
+	if def.twinkle then
+		-- a ring of little glowing bulbs around the band (Twinkle Lights Cowboy Hat)
+		local BULBS = { "#FF3B3B", "#FFD54A", "#3BD16F", "#4FA3FF" }
+		for k = 0, 11 do
+			local a = k / 12 * math.pi * 2
+			local bulb = weldPart(folder, head, "Bulb", Vector3.new(0.2, 0.2, 0.2), CFrame.new(math.cos(a) * 0.72, top + 0.27, math.sin(a) * 0.76), BULBS[k % #BULBS + 1], Enum.Material.Neon)
+			bulb.Shape = Enum.PartType.Ball
+		end
+	end
 end
 
 local function buildApron(folder: Folder, torso: BasePart, id: string)
@@ -4508,7 +4731,7 @@ local function buildTrail(folder: Folder, hrp: BasePart, id: string)
 	tr.Attachment1 = a1
 	tr.Lifetime = 0.7
 	tr.LightEmission = id == "trail_sauce" and 0 or 0.6
-	tr.Color = ColorSequence.new(hex(def.color), id == "trail_firework" and hex("#FFD700") or hex(def.color))
+	tr.Color = ColorSequence.new(hex(def.color), def.color2 and hex(def.color2) or (id == "trail_firework" and hex("#FFD700") or hex(def.color)))
 	tr.Transparency = NumberSequence.new(0.1, 1)
 	tr.WidthScale = NumberSequence.new(1, 0.2)
 	tr.Parent = folder
@@ -5179,59 +5402,60 @@ local function checkDinnerBell(player: Player)
 	end
 end
 
--- Turkey Day Smokeout: share a smoked Harvest Turkey Leg at the potluck table (once a day). When enough
--- different pitmasters share inside the window, the table is full: free server-wide tips.
-local function checkPotluck(player: Player)
-	local TD = Config.TurkeyDay
+-- Potluck events (Turkey Day Smokeout, Holiday Smokeout): share the event's smoked cut at the potluck
+-- table (once a day). When enough different pitmasters share inside the window, the table is full:
+-- free server-wide tips.
+local function checkPotluck(player: Player, EV: any, EC: any)
 	local now = workspace:GetServerTimeNow()
 	potluckShares[player.UserId] = now
-	local n, go = Hype.pileOn(potluckShares, now, TD.window, TD.need, lastPotluck, TD.cooldown)
+	local n, go = Hype.pileOn(potluckShares, now, EV.window, EV.need, lastPotluck, EV.cooldown)
 	if go then
 		lastPotluck = now
-		ctx.Game.potluckUntil = now + TD.minutes * 60
-		ctx.Game.announce(string.format(Content.TurkeyDay.full, n, math.floor(TD.tipBonus * 100 + 0.5), TD.minutes), "#E8761E")
+		ctx.Game.potluckUntil = now + EV.minutes * 60
+		ctx.Game.potluckBonus = EV.tipBonus
+		ctx.Game.potluckHud = EC.hud
+		ctx.Game.announce(string.format(EC.full, n, math.floor(EV.tipBonus * 100 + 0.5), EV.minutes), EV.id == "holiday" and "#3FA35B" or "#E8761E")
 		table.clear(potluckShares)
 		for p in pairs(ctx.Game.runtime) do
 			ctx.Game.markDirty(p)
 		end
-	elseif now - lastPotluck >= TD.cooldown then
-		ctx.Game.toast(player, string.format(Content.TurkeyDay.progress, n, TD.need, TD.need - n), "info")
+	elseif now - lastPotluck >= EV.cooldown then
+		ctx.Game.toast(player, string.format(EC.progress, n, EV.need, EV.need - n), "info")
 	end
 end
 
 handlers["event:potluck"] = function(player, data)
-	local TD = Config.TurkeyDay
-	local TC = Content.TurkeyDay
-	if not ctx.Game.turkeyWeek().active then
-		dialog(player, "Granny Pecan", TC.over)
+	local EV, EC = ctx.Game.potluckEvent()
+	if not EV or not EC then
+		dialog(player, "Granny Pecan", Content.TurkeyDay.over)
 		return
 	end
 	local d = today()
-	if data.daily.turkeyDay == d then
-		dialog(player, "Granny Pecan", TC.already)
+	if data.daily[EV.dailyKey] == d then
+		dialog(player, EC.host, EC.already)
 		return
 	end
-	local i = Holiday.pickPlate(data.cooler, TD.meat, function(id: string): number
+	local i = Holiday.pickPlate(data.cooler, EV.meat, function(id: string): number
 		return Rarity.indexOf(Config.Rarities, id)
 	end)
 	if not i then
-		dialog(player, "Granny Pecan", TC.needDish)
+		dialog(player, EC.host, EC.needDish)
 		return
 	end
 	local plate = table.remove(data.cooler, i)
-	data.daily.turkeyDay = d
+	data.daily[EV.dailyKey] = d
 	local meat = Config.Meats[plate.m]
-	local coins = math.floor(meat.price * TD.shareMult * Economy.rankMult(data.rank, Config.RANK_STEP))
+	local coins = math.floor(meat.price * EV.shareMult * Economy.rankMult(data.rank, Config.RANK_STEP))
 	ctx.Game.addCoins(player, data, coins, true)
 	local label = Rarity.get(Config.Rarities, plate.r).name .. " " .. meat.name
-	local thanks = TC.thanks[rng:NextInteger(1, #TC.thanks)]
-	if ctx.Game.grantCosmetic(player, data, TD.reward) then
-		data.titles[TD.title] = true
-		dialog(player, "Turkey Day Potluck", string.format(TC.firstShare, label, coins) .. "\n\n" .. thanks, coins)
+	local thanks = EC.thanks[rng:NextInteger(1, #EC.thanks)]
+	if ctx.Game.grantCosmetic(player, data, EV.reward) then
+		data.titles[EV.title] = true
+		dialog(player, EC.dialog, string.format(EC.firstShare, label, coins) .. "\n\n" .. thanks, coins)
 	else
-		dialog(player, "Turkey Day Potluck", string.format(TC.share, label, coins) .. "\n\n" .. thanks, coins)
+		dialog(player, EC.dialog, string.format(EC.share, label, coins) .. "\n\n" .. thanks, coins)
 	end
-	checkPotluck(player)
+	checkPotluck(player, EV, EC)
 	ctx.World.refreshStations(player)
 end
 
@@ -5324,7 +5548,8 @@ return EggService
 	  * the Cook-Off (practice any day, 3x payouts + weekly leaderboard on Saturdays, Texas time),
 	  * the monthly season theme on the Cook-Off banner,
 	  * Suds Saturday & Sunday announcements,
-	  * the Turkey Day Smokeout (Thanksgiving week): potluck table decor + sign, login toast.
+	  * the Turkey Day Smokeout (Thanksgiving week) and Holiday Smokeout (Dec 19 - Jan 1): potluck
+	    table decor + sign, login toast.
 ]]
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
@@ -5623,35 +5848,41 @@ local function refreshBoard()
 	bt.Text = "🏆 " .. string.upper(season.name) .. (ctx.Game.isSaturday() and " - TODAY! 3x PRIZES" or " - SATURDAY") .. " 🏆"
 end
 
--- ===== Turkey Day Smokeout =====
-local turkeyOn: boolean? = nil
+-- ===== Potluck events: Turkey Day Smokeout and Holiday Smokeout =====
+-- The hub potluck table dresses up for whichever event is on (decor is built at runtime and
+-- destroyed after), and the sign changes with it.
+local potluckOn: string? = nil -- "turkeyday" | "holiday" | "" (none); nil = not set up yet
 
 local function refreshTurkey()
-	local w = ctx.Game.turkeyWeek()
-	if w.active == turkeyOn then
+	local EV = ctx.Game.potluckEvent()
+	local id = EV and EV.id or ""
+	if id == potluckOn then
 		return
 	end
 	local pot = ctx.World.map().Hub:FindFirstChild("Potluck")
 	if not pot then
 		return
 	end
-	turkeyOn = w.active
+	potluckOn = id
 	local sign = pot:FindFirstChild("Sign")
 	local gui = sign and sign:FindFirstChild("SignGui")
 	local label = gui and gui:FindFirstChild("Text") :: TextLabel?
-	if w.active then
-		WorldBuilder.turkeyDay(pot, Content)
-		if label then
-			label.Text = Content.Signs.turkeyPotluck
-		end
-	else
-		local decor = pot:FindFirstChild("TurkeyDay")
+	for _, name in ipairs({ "TurkeyDay", "HolidaySmokeout" }) do
+		local decor = pot:FindFirstChild(name)
 		if decor then
 			decor:Destroy()
 		end
-		if label then
-			label.Text = Content.Signs.potluck
-		end
+	end
+	local text = Content.Signs.potluck
+	if id == "turkeyday" then
+		WorldBuilder.turkeyDay(pot, Content)
+		text = Content.Signs.turkeyPotluck
+	elseif id == "holiday" then
+		WorldBuilder.holidaySmokeout(pot, Content)
+		text = Content.Signs.holidayPotluck
+	end
+	if label then
+		label.Text = text
 	end
 end
 EventService.refreshTurkey = refreshTurkey
@@ -5700,8 +5931,9 @@ function EventService.start()
 			if ctx.Game.isSudsWeekend() then
 				ctx.Game.toast(player, "🫧 Suds Saturday & Sunday! Muddy pups need a bath. Wash one for a free bandana.", "good")
 			end
-			if ctx.Game.turkeyWeek().active then
-				ctx.Game.toast(player, Content.TurkeyDay.login, "good")
+			local _, EC = ctx.Game.potluckEvent()
+			if EC then
+				ctx.Game.toast(player, EC.login, "good")
 			end
 			if ctx.Game.isSaturday() then
 				ctx.Game.toast(player, "🏆 It's Cook-Off Saturday! Bring your best plate to Granny Pecan for 3x prizes.", "good")
@@ -5815,6 +6047,36 @@ function GameService.turkeyWeek(): Holiday.Week
 	return w
 end
 
+-- Holiday Smokeout window (Dec 19 - Jan 1, Texas time). In Studio, the workspace attribute
+-- ForceHolidaySmokeout = true turns it on any day so it can be tested.
+function GameService.holidayWeek(): Holiday.Week
+	local H = Config.HolidaySmokeout
+	local w = Holiday.dateWindow(today(), H.start, H.finish, H.peak)
+	if not w.active and RunService:IsStudio() and workspace:GetAttribute("ForceHolidaySmokeout") == true then
+		w.active = true
+	end
+	return w
+end
+
+-- Which date-gated event shops are open right now (Storefront.events).
+function GameService.activeEvents(): { [string]: boolean }
+	return { [Config.TurkeyDay.id] = GameService.turkeyWeek().active, [Config.HolidaySmokeout.id] = GameService.holidayWeek().active }
+end
+
+-- The potluck event that's on right now (config, copy, window), or nil. The dates never overlap;
+-- if both are forced on in Studio, Turkey Day wins.
+function GameService.potluckEvent(): (any?, any?, Holiday.Week?)
+	local tw = GameService.turkeyWeek()
+	if tw.active then
+		return Config.TurkeyDay, Content.TurkeyDay, tw
+	end
+	local hw = GameService.holidayWeek()
+	if hw.active then
+		return Config.HolidaySmokeout, Content.HolidaySmokeout, hw
+	end
+	return nil, nil, nil
+end
+
 local function profileOf(player: Player): any?
 	local p = ctx.Data.get(player)
 	return p and p.data or nil
@@ -5860,6 +6122,8 @@ GameService.awardBadge = awardBadge
 -- The Turkey Day potluck table fills the same way (set by EggService). The two don't stack.
 GameService.dinnerUntil = 0
 GameService.potluckUntil = 0
+GameService.potluckBonus = 0
+GameService.potluckHud = ""
 function GameService.dinnerBonus(): number
 	local now = workspace:GetServerTimeNow()
 	local bonus = 0
@@ -5867,7 +6131,7 @@ function GameService.dinnerBonus(): number
 		bonus = Config.DinnerBell.tipBonus
 	end
 	if now < GameService.potluckUntil then
-		bonus = math.max(bonus, Config.TurkeyDay.tipBonus)
+		bonus = math.max(bonus, GameService.potluckBonus)
 	end
 	return bonus
 end
@@ -6057,7 +6321,7 @@ local function meatAvailable(player: Player, data: any, meat: any): (boolean, st
 	if meat.hidden then
 		return false, "Not on the menu."
 	end
-	if not Holiday.meatInSeason(meat, GameService.currentSeason().id, GameService.turkeyWeek().active, Config.TurkeyDay.meat) then
+	if not Holiday.meatOpen(meat, GameService.currentSeason().id, { [Config.TurkeyDay.meat] = GameService.turkeyWeek().active, [Config.HolidaySmokeout.meat] = GameService.holidayWeek().active }) then
 		return false, "That's a seasonal cut. It's back next season!"
 	end
 	if data.pitLevel < meat.unlockPit then
@@ -6800,9 +7064,14 @@ local function snapshot(player: Player, data: any): any
 		end)(),
 		dinnerUntil = GameService.dinnerUntil,
 		potluckUntil = GameService.potluckUntil,
+		potluckHud = GameService.potluckHud,
 		turkey = (function()
 			local w = GameService.turkeyWeek()
 			return { active = w.active, isDay = w.isDay, ends = Holiday.label(w.endDay), shared = data.daily.turkeyDay == today() }
+		end)(),
+		holiday = (function()
+			local w = GameService.holidayWeek()
+			return { active = w.active, isDay = w.isDay, ends = Holiday.label(w.endDay), shared = data.daily.holidayDay == today() }
 		end)(),
 		season = GameService.currentSeason(),
 		saturday = GameService.isSaturday(),
@@ -7495,7 +7764,7 @@ return MembershipService
 	    live game; in Studio they get a free "Studio test" grant so you can try everything.
 	  * Nothing sold here is random. Robux never buys coins.
 	  * Every "can I buy this?" rule is in Shared.Logic.Storefront (unit-tested): weekly rotation,
-	    Turkey Day week only, one-per-account packs, nothing you already own, season limits.
+	    Turkey Day and Holiday Smokeout looks only during their dates, one-per-account packs, nothing you already own, season limits.
 	  * Roblox PolicyService info is fetched per player; MembershipService uses
 	    IsEligibleToPurchaseSubscription to decide who sees the Pit Crew Club.
 ]]
@@ -7607,7 +7876,7 @@ local function storeCtx(_player: Player, data: any): Storefront.Ctx
 	return {
 		owned = data.owned,
 		featured = featuredNow(),
-		eventActive = ctx.Game.turkeyWeek().active,
+		events = ctx.Game.activeEvents(),
 		onceBought = data.purchases.once,
 		cooking = cooking,
 		seasonActive = active,
@@ -7779,8 +8048,9 @@ function PurchaseService.promptGift(player: Player, key: string, recipientUserId
 	if p.rotation and not featuredNow()[key] then
 		return false, "That one's not in this week's rotation. It'll be back!"
 	end
-	if p.event == "turkeyday" and not ctx.Game.turkeyWeek().active then
-		return false, "The Turkey Day looks are on sale during Thanksgiving week. They come back next year."
+	local closed = Storefront.eventClosed(p, ctx.Game.activeEvents())
+	if closed then
+		return false, closed
 	end
 	local recipient = Players:GetPlayerByUserId(recipientUserId)
 	local rdata = recipient and ctx.Game.dataOf(recipient) or nil
@@ -9646,7 +9916,7 @@ function Hud.update()
 			ends, n, done = (math.floor(now / P) + 1) * P, 0, false
 		end
 		local left = math.max(0, math.floor(ends - now))
-		local zoom = (s.dinnerUntil or 0) > now and "  🔔 Dinner Bell +25% tips" or ((s.potluckUntil or 0) > now and "  🦃 Potluck's full: +25% tips" or "")
+		local zoom = (s.dinnerUntil or 0) > now and "  🔔 Dinner Bell +25% tips" or ((s.potluckUntil or 0) > now and ("  " .. (s.potluckHud ~= nil and s.potluckHud ~= "" and s.potluckHud or "🦃 Potluck's full: +25% tips")) or "")
 		refs.rush.Text = (done and "🍽️ Rush cleared! Next in " or string.format("🍽️ Lunch Rush %d/%d · ", n, s.rush.need)) .. TimeUtil.formatDuration(left) .. zoom
 	end
 	refs.combo.Text = s.combo >= Config.Flip.lockedInAt and ("LOCKED IN 🔒 x" .. s.combo) or (s.combo > 0 and ("Flip combo x" .. s.combo) or "")
@@ -10267,7 +10537,13 @@ local function renderShop(s: any)
 	end
 	local sf = scroller(content, true, Vector2.new(166, 236))
 	local n = 0
-	local event = s.turkey and s.turkey.active
+	-- the event look set that's on sale right now (Turkey Day or Holiday), if any
+	local event, eventEnds, eventName, eventFree = nil, "", "", ""
+	if s.turkey and s.turkey.active then
+		event, eventEnds, eventName, eventFree = "turkeyday", s.turkey.ends, "Turkey Day", "The potluck apron stays free."
+	elseif s.holiday and s.holiday.active then
+		event, eventEnds, eventName, eventFree = "holiday", s.holiday.ends, "Holiday", "The Merry & Smoky Apron stays free."
+	end
 	if sel == "Passes" then
 		local keys = {}
 		for k in pairs(Monetization.Passes) do
@@ -10303,7 +10579,7 @@ local function renderShop(s: any)
 		if sel == "This Week" then
 			if event then
 				for k, p in pairs(Monetization.Products) do
-					if p.event == "turkeyday" then
+					if p.event == event then
 						table.insert(keys, k)
 					end
 				end
@@ -10338,7 +10614,7 @@ local function renderShop(s: any)
 	end
 	local foot = "Every purchase shows exactly what you get. No random items, ever. Tap 🎁 to gift a look to someone in your server."
 	if sel == "This Week" then
-		foot = event and ("Turkey Day looks are here through " .. s.turkey.ends .. " and return next year. The potluck apron stays free.") or "This week's looks rotate every Monday and come back in a later week. Looks only, no stats."
+		foot = event and (eventName .. " looks are here through " .. eventEnds .. " and return next year. " .. eventFree) or "This week's looks rotate every Monday and come back in a later week. Looks only, no stats."
 	elseif sel == "Passes" then
 		foot = "Passes are yours forever. The Pit Crew Club and Premium are monthly and give looks and friendly perks, never coins."
 	end
@@ -10532,11 +10808,19 @@ local function renderSauce(s: any)
 end
 
 -- ===== Cook picker =====
+-- Event cuts stay cookable for their whole event, even outside their season.
+local function eventMeats(s: any): { [string]: boolean }
+	return {
+		[Config.TurkeyDay.meat] = s.turkey ~= nil and s.turkey.active,
+		[Config.HolidaySmokeout.meat] = s.holiday ~= nil and s.holiday.active,
+	}
+end
+
 local function meatLocked(s: any, meat: any): string?
 	if meat.hidden then
 		return "hidden"
 	end
-	if not Holiday.meatInSeason(meat, s.season.id, s.turkey ~= nil and s.turkey.active, Config.TurkeyDay.meat) then
+	if not Holiday.meatOpen(meat, s.season.id, eventMeats(s)) then
 		return "Seasonal: back next " .. meat.season
 	end
 	if s.pitLevel < meat.unlockPit then
@@ -10562,7 +10846,7 @@ local function renderCook(s: any)
 	local order = 0
 	for _, id in ipairs(Config.MeatOrder) do
 		local meat = Config.Meats[id]
-		if meat.station == kind and Holiday.meatInSeason(meat, s.season.id, s.turkey ~= nil and s.turkey.active, Config.TurkeyDay.meat) then
+		if meat.station == kind and Holiday.meatOpen(meat, s.season.id, eventMeats(s)) then
 			order += 1
 			local why = meatLocked(s, meat)
 			local f = card(sf, order, 74)
