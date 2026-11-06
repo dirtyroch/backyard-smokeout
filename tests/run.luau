@@ -850,7 +850,11 @@ test("Smokehouse Pass: 6-week seasons from Mon Nov 2 2026, plain start/end dates
 	eq(d.def.id, "s4")
 	eq(Holiday.label(d.startDay), "Mar 8")
 	eq(Holiday.label(d.endDay), "Apr 18")
-	truthy(SeasonPass.seasonAt(SP.epochDay + 168, SP).def == nil, "no made-up season 5")
+	local e = SeasonPass.seasonAt(SP.epochDay + 168, SP)
+	eq(e.def.id, "s5")
+	eq(Holiday.label(e.startDay), "Apr 19")
+	eq(Holiday.label(e.endDay), "May 30")
+	truthy(SeasonPass.seasonAt(SP.epochDay + 210, SP).def == nil, "no made-up season 6")
 end)
 test("Smokehouse Pass: both tracks are looks and titles only, every look exists, no repeats", function()
 	local seen = {}
