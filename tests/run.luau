@@ -22,6 +22,7 @@ local Rookie = require("../src/shared/Logic/Rookie")
 local SfxIds = require("../src/shared/SfxIds")
 local Music = require("../src/shared/Music")
 local MusicPrefs = require("../src/shared/Logic/MusicPrefs")
+local CuteFace = require("../src/shared/Logic/CuteFace")
 local Gifting = require("../src/shared/Logic/Gifting")
 local function fs_read(path: string): string
 	return require("@lune/fs").readFile(path)
@@ -1322,6 +1323,93 @@ test("Analytics: onboarding steps log once each, in order; coin flows are batche
 	eq(b["Source|Gameplay|Earned"].amount, 75)
 	eq(b["Sink|Shop|Sauce"].amount, 40)
 	eq(#Funnels.SHOP, 4)
+end)
+
+print("Cute faces (burger and tomahawk)")
+local function hasName(specs, name)
+	for _, s in ipairs(specs) do
+		if s.name == name then
+			return true
+		end
+	end
+	return false
+end
+local function hasNeon(specs)
+	for _, s in ipairs(specs) do
+		if s.material == "neon" then
+			return true
+		end
+	end
+	return false
+end
+
+test("only the burger and the tomahawk steak get a face", function()
+	eq(CuteFace.kind("burger"), "patty")
+	eq(CuteFace.kind("tomahawk"), "steak")
+	eq(CuteFace.kind("brisket"), nil)
+	eq(CuteFace.kind("wagyu"), nil)
+	eq(CuteFace.kind("hotlink"), nil)
+	eq(#CuteFace.specs("brisket", { 2, 0.8, 1.2 }, false), 0)
+	eq(#CuteFace.specs("ribs", { 2, 0.6, 1 }, false), 0)
+end)
+
+test("happy faces have sparkly eyes, cheeks and a mouth, and stay phone-light", function()
+	local burger = Config.Meats.burger.size
+	local steak = Config.Meats.tomahawk.size
+	local b = CuteFace.specs("burger", burger, false)
+	local s = CuteFace.specs("tomahawk", steak, false)
+	truthy(#b >= 8 and #b <= CuteFace.MAX_PARTS, "burger part count")
+	truthy(#s >= 6 and #s <= CuteFace.MAX_PARTS, "steak part count")
+	truthy(hasName(b, "EyeL") and hasName(b, "EyeR") and hasName(b, "ShineL") and hasName(b, "SmileCenter"))
+	truthy(hasName(b, "CheekL") and hasName(b, "CheekR"))
+	truthy(hasName(s, "EyeL") and hasName(s, "Wink") and hasName(s, "Delight") and hasName(s, "Bone"))
+	truthy(hasNeon(b) and hasNeon(s))
+	truthy(not hasName(b, "Wink") and not hasName(s, "SmileCenter"), "the two expressions are not the same")
+end)
+
+test("faces sit on top, leave most of the surface for doneness color, and aim toward the yard", function()
+	for _, id in ipairs({ "burger", "tomahawk" }) do
+		local size = Config.Meats[id].size
+		local specs = CuteFace.specs(id, size, false)
+		local top = size[2] / 2
+		local cover = CuteFace.topCoverage(specs, size)
+		truthy(cover < 0.45 and cover > 0.05, id .. " coverage " .. cover)
+		for _, s in ipairs(specs) do
+			local x, y, z = s.offset[1], s.offset[2], s.offset[3]
+			if s.name ~= "Bone" then
+				truthy(y >= top - 0.001, s.name .. " on the top")
+				truthy(y + s.size[2] / 2 <= top + 0.45, s.name .. " stays low")
+				truthy(math.abs(x) + s.size[1] / 2 <= size[1] / 2 + 0.02, s.name .. " inside the width")
+				truthy(math.abs(z) + s.size[3] / 2 <= size[3] / 2 + 0.02, s.name .. " inside the depth")
+			end
+		end
+		-- mouth is closer to -Z (the path side) than the eyes
+		local eyeZ, mouthZ = 0, 0
+		for _, s in ipairs(specs) do
+			if s.name == "EyeL" then
+				eyeZ = s.offset[3]
+			elseif s.name == "SmileCenter" or s.name == "Delight" then
+				mouthZ = s.offset[3]
+			end
+		end
+		truthy(mouthZ < eyeZ, id .. " mouth faces the yard path")
+	end
+end)
+
+test("a burnt burger or steak drops the sparkle and frowns, and the body color stays the burn cue", function()
+	local b = CuteFace.specs("burger", Config.Meats.burger.size, true)
+	local s = CuteFace.specs("tomahawk", Config.Meats.tomahawk.size, true)
+	truthy(hasName(b, "FrownCenter") and not hasName(b, "SmileCenter"))
+	truthy(hasName(s, "FrownCenter") and not hasName(s, "Delight"))
+	truthy(not hasNeon(b) and not hasNeon(s), "no sparkle on a burnt cut")
+	local src = fs_read("src/shared/WorldBuilder.luau")
+	truthy(string.find(src, "attachCuteFace", 1, true) ~= nil)
+	truthy(string.find(src, 'hex("#141414")', 1, true) ~= nil, "burnt body is still black")
+	local world = fs_read("src/server/Services/WorldService.luau")
+	truthy(string.find(world, "cook.burnt == true", 1, true) ~= nil, "grill passes the burnt flag")
+	truthy(string.find(world, "Color3.fromRGB(20, 20, 20)", 1, true) ~= nil, "burn feedback still paints the body")
+	truthy(string.find(world, "m.Size = m.Size * 0.45", 1, true) == nil, "plates scale before the face is built")
+	truthy(string.find(world, "0.45", 1, true) ~= nil)
 end)
 
 print(string.format("\n%d passed, %d failed", passed, failed))

@@ -9,6 +9,7 @@ Do not publish to Roblox, and do not change the Creator Dashboard, until the che
 - Warmer, larger UI for the shop, Rookie List, settings, and the game HUD. Phone layouts reflow instead of shrinking the type.
 - A music mute and volume, saved separately from sound effects. The default volume is quiet (`0.22`).
 - A few original yard jokes and a small "Today's Board" sign by Unc's grill.
+- Original cute faces on the Backyard Burger and the Tomahawk Steak. They sit on top of the food. The meat itself still changes color as it cooks, and a burnt one still turns black (the face frowns and loses its sparkle).
 - Saves gain `settings.music` and `settings.musicVolume` automatically. Old fields stay. Gameplay, the skippable Rookie List and its finish reward, seasons, gifting, and purchases are the same.
 
 ## What this update does not change

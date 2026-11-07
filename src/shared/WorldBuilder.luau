@@ -541,18 +541,49 @@ function WorldBuilder.mosquito(env, parent, cf, queen)
 	return m, body
 end
 
+local function attachCuteFace(meatPart, meatId, burnt)
+	local ok, CuteFace = pcall(function()
+		return require(script.Parent.Logic.CuteFace)
+	end)
+	if not ok or not CuteFace.kind(meatId) then
+		return
+	end
+	local sz = { meatPart.Size.X, meatPart.Size.Y, meatPart.Size.Z }
+	for _, s in ipairs(CuteFace.specs(meatId, sz, burnt == true)) do
+		local piece = E.Instance.new("Part")
+		piece.Name = s.name
+		piece.Anchored = true
+		piece.CanCollide = false
+		piece.CanQuery = false
+		piece.CanTouch = false
+		piece.CastShadow = false
+		piece.Size = V(s.size[1], s.size[2], s.size[3])
+		piece.CFrame = meatPart.CFrame * E.CFrame.new(s.offset[1], s.offset[2], s.offset[3])
+		piece.Color = hex(s.color)
+		piece.Material = s.material == "neon" and E.Enum.Material.Neon or E.Enum.Material.SmoothPlastic
+		piece.Shape = s.shape == "ball" and E.Enum.PartType.Ball or E.Enum.PartType.Block
+		piece.Parent = meatPart
+	end
+end
+
 -- Visual for meat sitting on a smoker / grill / pass window.
-function WorldBuilder.meat(env, parent, meatDef, rarityDef, cf, doneness)
+-- `burnt` builds the sad face and the black body together.
+-- `fitScale` (the pass-window plates use 0.45) is applied before the face,
+-- so the eyes shrink with the meat instead of being left full size.
+function WorldBuilder.meat(env, parent, meatDef, rarityDef, cf, doneness, burnt, fitScale)
 	E = env
 	local sz = meatDef.size or { 2, 0.6, 1.2 }
 	local scale = 1
 	if rarityDef and rarityDef.id == "texas" then
 		scale = 1.9
 	end
+	if type(fitScale) == "number" and fitScale > 0 then
+		scale *= fitScale
+	end
 	local color = hex(meatDef.color)
 	local raw = hex("#E8857A")
 	local t = math.clamp(doneness or 1, 0, 1)
-	local c = raw:Lerp(color, t)
+	local c = if burnt then hex("#141414") else raw:Lerp(color, t)
 	local p = E.Instance.new("Part")
 	p.Name = "Meat"
 	p.Anchored = true
@@ -587,7 +618,13 @@ function WorldBuilder.meat(env, parent, meatDef, rarityDef, cf, doneness)
 			p.Transparency = 0.05
 		end
 	end
+	if burnt then
+		p.Color = hex("#141414")
+		p.Material = E.Enum.Material.SmoothPlastic
+		p.Transparency = 0
+	end
 	p.Parent = parent
+	attachCuteFace(p, meatDef.id, burnt == true)
 	return p
 end
 
