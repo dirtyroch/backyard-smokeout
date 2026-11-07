@@ -233,8 +233,9 @@ function WorldService.refreshStations(player: Player)
 			if unlocked and type(cook) == "table" then
 				anyGrill = true
 				local meat = Config.Meats[cook.meat]
-				local mp = WorldBuilder.meat(ENV, g, meat, nil, g.CFrame * CFrame.new(0, 0.1, 0), CookLogic.fraction(cook))
+				local mp = WorldBuilder.meat(ENV, g, meat, nil, g.CFrame * CFrame.new(0, 0.1, 0), CookLogic.fraction(cook), cook.burnt == true)
 				if cook.burnt then
+					-- the body itself goes black; the face is already the sad one
 					mp.Color = Color3.fromRGB(20, 20, 20)
 				end
 				label.Text = meat.icon .. (cook.burnt and " burnt" or (CookLogic.isDone(cook) and " ✅" or ""))
@@ -262,8 +263,8 @@ function WorldService.refreshStations(player: Player)
 		plate.Parent = plates
 		local meat = Config.Meats[data.cooler[pi].m]
 		if meat then
-			local m = WorldBuilder.meat(ENV, plates, meat, nil, counter.CFrame * CFrame.new(-3 + (pi - 1) * 2, 2.05, 0), 1)
-			m.Size = m.Size * 0.45
+			-- 0.45 is applied inside meat() so a cute face shrinks with the plate
+			WorldBuilder.meat(ENV, plates, meat, nil, counter.CFrame * CFrame.new(-3 + (pi - 1) * 2, 2.05, 0), 1, false, 0.45)
 		end
 	end
 
@@ -496,6 +497,11 @@ function WorldService.init(c: any)
 	local existing = workspace:FindFirstChild("Map")
 	if existing then
 		map = existing :: Model
+		-- Places baked before the porch board still get it, without rebuilding the map.
+		local hub = map:FindFirstChild("Hub")
+		if hub then
+			WorldBuilder.yardBoard(hub, Content)
+		end
 	else
 		map = WorldBuilder.build(ENV, workspace, Config, Content)
 	end

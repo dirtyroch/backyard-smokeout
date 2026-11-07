@@ -125,6 +125,37 @@ local function surfaceText(p, face, text, textColor, bg, font)
 end
 WorldBuilder.surfaceText = surfaceText
 
+-- A small cream board by Unc's grill. Original yard notes, big enough to read from the path.
+function WorldBuilder.yardBoard(parent, content)
+	if parent:FindFirstChild("YardBoard") then
+		return
+	end
+	local notes = content and content.YardNotes
+	local text = (notes and notes.board) or "TODAY'S BOARD"
+	local cf = E.CFrame.new(-12.5, 3.6, 18.5) * E.CFrame.Angles(0, math.rad(28), 0)
+	local group = model(parent, "YardBoard")
+	part(group, "Post", V(0.4, 3.4, 0.4), cf * E.CFrame.new(0, -2.4, 0), "#6B4226", E.Enum.Material.Wood)
+	part(group, "Board", V(8.4, 4.6, 0.35), cf, "#6B4226", E.Enum.Material.Wood)
+	local face = part(group, "Face", V(7.6, 3.9, 0.12), cf * E.CFrame.new(0, 0, -0.22), "#F6E2C4", E.Enum.Material.SmoothPlastic)
+	local sg = E.Instance.new("SurfaceGui")
+	sg.Name = "SignGui"
+	sg.Face = E.Enum.NormalId.Front
+	sg.SizingMode = E.Enum.SurfaceGuiSizingMode.PixelsPerStud
+	sg.PixelsPerStud = 42
+	sg.Parent = face
+	local tl = E.Instance.new("TextLabel")
+	tl.Name = "Text"
+	tl.Position = E.UDim2.new(0.06, 0, 0.08, 0)
+	tl.Size = E.UDim2.new(0.88, 0, 0.84, 0)
+	tl.BackgroundTransparency = 1
+	tl.TextColor3 = hex("#2A140C")
+	tl.Font = E.Enum.Font.GothamBold
+	tl.TextScaled = true
+	tl.TextWrapped = true
+	tl.Text = text
+	tl.Parent = sg
+end
+
 -- `studs` (optional {w, h}) sizes the label in world studs instead of pixels, so labels on
 -- closely spaced things (smoker row, grill spots, customer tables) shrink with distance
 -- instead of piling on top of each other.
@@ -510,18 +541,49 @@ function WorldBuilder.mosquito(env, parent, cf, queen)
 	return m, body
 end
 
+local function attachCuteFace(meatPart, meatId, burnt)
+	local ok, CuteFace = pcall(function()
+		return require(script.Parent.Logic.CuteFace)
+	end)
+	if not ok or not CuteFace.kind(meatId) then
+		return
+	end
+	local sz = { meatPart.Size.X, meatPart.Size.Y, meatPart.Size.Z }
+	for _, s in ipairs(CuteFace.specs(meatId, sz, burnt == true)) do
+		local piece = E.Instance.new("Part")
+		piece.Name = s.name
+		piece.Anchored = true
+		piece.CanCollide = false
+		piece.CanQuery = false
+		piece.CanTouch = false
+		piece.CastShadow = false
+		piece.Size = V(s.size[1], s.size[2], s.size[3])
+		piece.CFrame = meatPart.CFrame * E.CFrame.new(s.offset[1], s.offset[2], s.offset[3])
+		piece.Color = hex(s.color)
+		piece.Material = s.material == "neon" and E.Enum.Material.Neon or E.Enum.Material.SmoothPlastic
+		piece.Shape = s.shape == "ball" and E.Enum.PartType.Ball or E.Enum.PartType.Block
+		piece.Parent = meatPart
+	end
+end
+
 -- Visual for meat sitting on a smoker / grill / pass window.
-function WorldBuilder.meat(env, parent, meatDef, rarityDef, cf, doneness)
+-- `burnt` builds the sad face and the black body together.
+-- `fitScale` (the pass-window plates use 0.45) is applied before the face,
+-- so the eyes shrink with the meat instead of being left full size.
+function WorldBuilder.meat(env, parent, meatDef, rarityDef, cf, doneness, burnt, fitScale)
 	E = env
 	local sz = meatDef.size or { 2, 0.6, 1.2 }
 	local scale = 1
 	if rarityDef and rarityDef.id == "texas" then
 		scale = 1.9
 	end
+	if type(fitScale) == "number" and fitScale > 0 then
+		scale *= fitScale
+	end
 	local color = hex(meatDef.color)
 	local raw = hex("#E8857A")
 	local t = math.clamp(doneness or 1, 0, 1)
-	local c = raw:Lerp(color, t)
+	local c = if burnt then hex("#141414") else raw:Lerp(color, t)
 	local p = E.Instance.new("Part")
 	p.Name = "Meat"
 	p.Anchored = true
@@ -556,7 +618,13 @@ function WorldBuilder.meat(env, parent, meatDef, rarityDef, cf, doneness)
 			p.Transparency = 0.05
 		end
 	end
+	if burnt then
+		p.Color = hex("#141414")
+		p.Material = E.Enum.Material.SmoothPlastic
+		p.Transparency = 0
+	end
 	p.Parent = parent
+	attachCuteFace(p, meatDef.id, burnt == true)
 	return p
 end
 
@@ -805,6 +873,7 @@ local function buildHub(root, cfg, content)
 	-- Unc Hank: dad jokes
 	local unc = WorldBuilder.npc(hub, "UncHank", lookAt(V(-18, 0.4, 10), V(-8, 0.4, -12)), { skin = "#D1A27A", shirt = "#F39C12", pants = "#2C3E50", hat = "cap", hatColor = "#2C3E50", label = "Unc Hank", apron = "#B22222", apronText = "UNC", mustache = "#6B4A2E", belly = true, sandals = true })
 	prompt(unc.Torso, "npc:unc", "Hear today's joke", "Unc Hank", 0, 10)
+	WorldBuilder.yardBoard(hub, content)
 	-- Unc's kettle grill (the bowl keeps the UncGrill name; the scenery adds a smoke wisp to it)
 	local kettle = E.CFrame.new(-22.5, 0.4, 13)
 	for k = 0, 2 do

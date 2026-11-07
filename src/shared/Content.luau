@@ -35,6 +35,10 @@ Content.UncJokes = {
 	"What do you call a pig that does karate? A pork chop.",
 	"Why are spiders great at cookouts? They know their way around the web of sauce.",
 	"Back in my day we didn't have smoke signals. We had... well, actually we had smoke signals.",
+	-- Yard jokes for early November 2026. Original sentences. See Content.YardNotes for sources.
+	"Granny held up a perfect slice and called it a W chew. The burnt end was L nibbles. I nodded like I had invented both words.",
+	"Half this brisket could sit on a postcard. The other half is what happens when Unc starts a story and forgets the fire. Same cook. Two drawings of one horse.",
+	"The yard pup flopped over for a belly wash. He is not a famous internet dog. He is our dog, and the belly is still the whole bit.",
 }
 
 Content.UncYap = {
@@ -49,6 +53,7 @@ Content.KingLines = {
 	"♪ Got a cooler full of brisket and a sky full of smoke... ♪",
 	"♪ Dum-da-dum, the pit don't lie, the pit don't lie... ♪",
 	"♪ Mesquite moon over the backyard tonight... ♪",
+	"♪ Porch light, low fire, hum it again from the top... ♪",
 	"Howdy, partner. A pit's like a promise: you keep it lit.",
 }
 
@@ -158,6 +163,31 @@ Content.Rookie = {
 	skipped = "Rookie List tucked away. Bring it back any time in Settings > Game.",
 	resumed = "Unc's Rookie List is back (top right)! Goals you already did count right away.",
 	stepDone = "✅ %s  +%d coins",
+}
+
+-- Yard flavor for the week of November 7, 2026. A few lines, not a meme wall.
+-- Dated sources, checked while writing this:
+-- * Know Your Meme, "The Weekly Meme Roundup", published November 6, 2026:
+--   "W chews" (good food) and "L nibbles" (bad food) had spread from a late-October post
+--   and were still circulating that week. We use the words in original BBQ sentences.
+--   We do not use the person from those clips, the clips themselves, or anyone's audio.
+-- * SocialBee, "Trending Instagram memes this week", November 5, 2026: a split
+--   horse-drawing format (polished on one side, rough on the other). We do not use the
+--   drawing. One brisket line borrows the shape of the joke only.
+-- * RoTerminal, "Trends on Roblox", snapshot November 7, 2026, 8:59am New York time:
+--   new games named tycoon were up about 73% and simulator about 61% versus the prior
+--   30 days. The porch board says low and slow beats a rush. It does not name other games.
+-- Left out on purpose from that same November 6 roundup: election jokes, thirst trends,
+-- and a brand-mascot pile-on. Those do not belong at a backyard cookout.
+-- "6-7" is already in the game from earlier. It is not labeled as a November 2026 trend.
+-- Unc is already the host (Know Your Meme's unc entry was last updated February 14, 2025;
+-- "Unc Still Got It" was updated April 9, 2026). He stays a small voice, not a new theme.
+-- Pibble is a March 2025 pet-audio meme that fandom pages were still describing in August
+-- 2026. One belly-rub line nods at it because Mike likes that joke. We do not play the audio,
+-- and we do not call it the current trend.
+Content.YardNotes = {
+	board = "TODAY'S BOARD\nGood smoke is a W chew.\nBurnt ends are L nibbles.\nLow and slow beats a rush.",
+	pup = "The pup flops over for a belly wash. He is our dog, not a famous one.",
 }
 
 Content.Signs = {

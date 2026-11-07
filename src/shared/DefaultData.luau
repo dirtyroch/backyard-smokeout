@@ -53,7 +53,7 @@ return {
 	daily = { jokeDay = -1, creekDay = -1, kingDone = false, bellDay = -1, turkeyDay = -1, holidayDay = -1 },
 	restock = { window = -1, bought = {} },
 	cookoff = { week = -1, best = 0 },
-	settings = { peace = true, sfx = true }, -- snagging is opt-in (Fair Play)
+	settings = { peace = true, sfx = true, music = true, musicVolume = 0.22 }, -- snagging is opt-in; music is its own quiet loop
 	tutorial = { firstBrisket = false, done = false },
 	rookie = { claimed = 0, skipped = false, resumed = false }, -- Unc Hank's Rookie List (Logic/Rookie)
 	forceCritter = "",
