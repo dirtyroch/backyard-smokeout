@@ -125,6 +125,37 @@ local function surfaceText(p, face, text, textColor, bg, font)
 end
 WorldBuilder.surfaceText = surfaceText
 
+-- A small cream board by Unc's grill. Original yard notes, big enough to read from the path.
+function WorldBuilder.yardBoard(parent, content)
+	if parent:FindFirstChild("YardBoard") then
+		return
+	end
+	local notes = content and content.YardNotes
+	local text = (notes and notes.board) or "TODAY'S BOARD"
+	local cf = E.CFrame.new(-12.5, 3.6, 18.5) * E.CFrame.Angles(0, math.rad(28), 0)
+	local group = model(parent, "YardBoard")
+	part(group, "Post", V(0.4, 3.4, 0.4), cf * E.CFrame.new(0, -2.4, 0), "#6B4226", E.Enum.Material.Wood)
+	part(group, "Board", V(8.4, 4.6, 0.35), cf, "#6B4226", E.Enum.Material.Wood)
+	local face = part(group, "Face", V(7.6, 3.9, 0.12), cf * E.CFrame.new(0, 0, -0.22), "#F6E2C4", E.Enum.Material.SmoothPlastic)
+	local sg = E.Instance.new("SurfaceGui")
+	sg.Name = "SignGui"
+	sg.Face = E.Enum.NormalId.Front
+	sg.SizingMode = E.Enum.SurfaceGuiSizingMode.PixelsPerStud
+	sg.PixelsPerStud = 42
+	sg.Parent = face
+	local tl = E.Instance.new("TextLabel")
+	tl.Name = "Text"
+	tl.Position = E.UDim2.new(0.06, 0, 0.08, 0)
+	tl.Size = E.UDim2.new(0.88, 0, 0.84, 0)
+	tl.BackgroundTransparency = 1
+	tl.TextColor3 = hex("#2A140C")
+	tl.Font = E.Enum.Font.GothamBold
+	tl.TextScaled = true
+	tl.TextWrapped = true
+	tl.Text = text
+	tl.Parent = sg
+end
+
 -- `studs` (optional {w, h}) sizes the label in world studs instead of pixels, so labels on
 -- closely spaced things (smoker row, grill spots, customer tables) shrink with distance
 -- instead of piling on top of each other.
@@ -805,6 +836,7 @@ local function buildHub(root, cfg, content)
 	-- Unc Hank: dad jokes
 	local unc = WorldBuilder.npc(hub, "UncHank", lookAt(V(-18, 0.4, 10), V(-8, 0.4, -12)), { skin = "#D1A27A", shirt = "#F39C12", pants = "#2C3E50", hat = "cap", hatColor = "#2C3E50", label = "Unc Hank", apron = "#B22222", apronText = "UNC", mustache = "#6B4A2E", belly = true, sandals = true })
 	prompt(unc.Torso, "npc:unc", "Hear today's joke", "Unc Hank", 0, 10)
+	WorldBuilder.yardBoard(hub, content)
 	-- Unc's kettle grill (the bowl keeps the UncGrill name; the scenery adds a smoke wisp to it)
 	local kettle = E.CFrame.new(-22.5, 0.4, 13)
 	for k = 0, 2 do

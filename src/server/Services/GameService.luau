@@ -26,6 +26,7 @@ local RateLimiter = require(Shared.Logic.RateLimiter)
 local TimeUtil = require(Shared.Logic.TimeUtil)
 local Holiday = require(Shared.Logic.Holiday)
 local Rookie = require(Shared.Logic.Rookie)
+local MusicPrefs = require(Shared.Logic.MusicPrefs)
 
 local GameService = {}
 local ctx: any = nil
@@ -708,7 +709,7 @@ function GameService.bellyRub(player: Player, customer: any)
 	local tip = math.floor(25 * data.pitLevel * rankMult(data))
 	GameService.addCoins(player, data, tip, true)
 	data.aura += 50
-	GameService.toast(player, string.format("The pup rolled over for belly rubs! +%d tip 🐶", tip), "good")
+	GameService.toast(player, string.format("%s +%d tip.", Content.YardNotes.pup, tip), "good")
 	ctx.World.effect(player, "bellyrub", customer)
 end
 
@@ -997,6 +998,24 @@ Actions.SetSfx = function(_player, data, on)
 		return false, "Bad request."
 	end
 	data.settings.sfx = on
+	return true, nil
+end
+
+-- Music mute is saved on its own. It does not change the sound-effect switch.
+Actions.SetMusic = function(_player, data, on)
+	if type(on) ~= "boolean" then
+		return false, "Bad request."
+	end
+	data.settings.music = on
+	return true, nil
+end
+
+-- Volume is saved even while muted, so unmuting comes back to this level.
+Actions.SetMusicVolume = function(_player, data, volume)
+	if type(volume) ~= "number" then
+		return false, "Bad request."
+	end
+	data.settings.musicVolume = MusicPrefs.clamp(volume)
 	return true, nil
 end
 

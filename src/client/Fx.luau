@@ -42,7 +42,8 @@ function Fx.toast(text: string, kind: string?)
 	UI.corner(f, 10)
 	UI.stroke(f)
 	UI.pad(f, 8)
-	UI.label(text, { TextXAlignment = Enum.TextXAlignment.Center, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0), TextSize = 17, ZIndex = 52, Parent = f })
+	local inkOn = UI.contrast(T.text, color) < 4.5
+	UI.label(text, { TextXAlignment = Enum.TextXAlignment.Center, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0), TextSize = 18, TextColor3 = if inkOn then T.ink else T.text, ZIndex = 52, Parent = f })
 	local kids = 0
 	for _, c in ipairs(toastHolder:GetChildren()) do
 		if c:IsA("Frame") then

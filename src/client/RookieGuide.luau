@@ -23,7 +23,7 @@ local lastStep = -1
 local GOLD = Color3.fromHex("#FFC83C")
 
 local NEAR = 14 -- studs: close enough that the floor line hides and only the bobbing arrow stays
-local W, H = 300, 140 -- card size
+local W, H = 360, 188 -- card size; applyLayout may shorten it on a phone
 
 -- "Rookie of the Ranch Bandana, the "Rookie of the Ranch" title and +250 🪙"
 function RookieGuide.finishText(): string
@@ -45,43 +45,100 @@ local function setConfirm(on: boolean)
 end
 
 function RookieGuide.mount(root: GuiObject)
-	local card = UI.frame({ Name = "RookieList", BackgroundColor3 = T.bg, BackgroundTransparency = 0.08, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 62), Size = UDim2.new(0, W, 0, H), Visible = false, Parent = root })
+	local card = UI.frame({ Name = "RookieList", BackgroundColor3 = T.bg, BackgroundTransparency = 0.04, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 68), Size = UDim2.new(0, W, 0, H), Visible = false, Parent = root })
 	UI.corner(card, 14)
 	UI.stroke(card, GOLD, 2)
-	UI.pad(card, 8)
+	UI.pad(card, 10)
 	refs.card = card
-	refs.head = UI.label(Content.Rookie.title, { Size = UDim2.new(1, -100, 0, 20), TextSize = 16, TextColor3 = GOLD, Parent = card })
-	refs.count = UI.label("1/5", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -54, 0, 0), Size = UDim2.new(0, 40, 0, 20), TextSize = 15, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.dim, Parent = card })
+	refs.head = UI.label(Content.Rookie.title, { Size = UDim2.new(1, -168, 0, 28), TextSize = 20, TextColor3 = GOLD, Parent = card })
+	refs.count = UI.label("1/5", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -100, 0, 2), Size = UDim2.new(0, 52, 0, 28), TextSize = 18, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.dim, Parent = card })
 	-- Skip (asks first). Skipped lists come back from Settings > Game.
-	local skip = UI.button("Skip", T.card, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, -1), Size = UDim2.new(0, 48, 0, 22), TextSize = 13, Parent = card }, function()
+	local skip = UI.button("Skip", T.card, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0, 92, 0, 44), TextSize = 18, Parent = card }, function()
 		setConfirm(true)
 	end)
-	UI.corner(skip, 6)
-	refs.goal = UI.label("", { Position = UDim2.new(0, 0, 0, 22), Size = UDim2.new(1, -64, 0, 24), TextSize = 18, Parent = card })
-	refs.reward = UI.label("", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 22), Size = UDim2.new(0, 64, 0, 24), TextSize = 15, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = GOLD, Parent = card })
-	local back, fill = UI.bar(card, T.green, { Position = UDim2.new(0, 0, 0, 50), Size = UDim2.new(1, -44, 0, 10) })
+	refs.skip = skip
+	UI.corner(skip, 8)
+	refs.goal = UI.label("", { Position = UDim2.new(0, 0, 0, 50), Size = UDim2.new(1, -96, 0, 32), TextSize = 20, Parent = card })
+	refs.reward = UI.label("", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 50), Size = UDim2.new(0, 88, 0, 32), TextSize = 16, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = GOLD, Parent = card })
+	local back, fill = UI.bar(card, T.green, { Position = UDim2.new(0, 0, 0, 88), Size = UDim2.new(1, -52, 0, 12) })
 	refs.fill = fill
-	refs.prog = UI.label("", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 45), Size = UDim2.new(0, 40, 0, 20), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.dim, Parent = card })
-	refs.tip = UI.label("", { Position = UDim2.new(0, 0, 0, 62), Size = UDim2.new(1, 0, 0, 28), TextYAlignment = Enum.TextYAlignment.Top, TextSize = 12, Font = T.body, TextColor3 = T.dim, Parent = card })
+	refs.prog = UI.label("", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 84), Size = UDim2.new(0, 48, 0, 22), TextSize = 16, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.dim, Parent = card })
+	refs.tip = UI.label("", { Position = UDim2.new(0, 0, 0, 106), Size = UDim2.new(1, 0, 0, 32), TextYAlignment = Enum.TextYAlignment.Top, TextSize = 16, Font = T.body, TextColor3 = T.dim, Parent = card })
 	-- the finish reward, stated plainly from the start
-	refs.finish = UI.label(string.format(Content.Rookie.finishLine, finishShort()), { Position = UDim2.new(0, 0, 0, 92), Size = UDim2.new(1, 0, 0, 28), TextYAlignment = Enum.TextYAlignment.Top, TextSize = 12, Font = T.body, TextColor3 = GOLD, Parent = card })
+	refs.finish = UI.label(string.format(Content.Rookie.finishLine, finishShort()), { Position = UDim2.new(0, 0, 0, 140), Size = UDim2.new(1, 0, 0, 36), TextYAlignment = Enum.TextYAlignment.Top, TextSize = 16, Font = T.body, TextColor3 = GOLD, Parent = card })
 	local _ = back
 
 	-- quick, friendly confirm that covers the card
-	local confirm = UI.frame({ Name = "SkipConfirm", BackgroundColor3 = T.bg, Size = UDim2.new(1, 16, 1, 16), Position = UDim2.new(0, -8, 0, -8), ZIndex = 5, Visible = false, Parent = card })
+	local confirm = UI.frame({ Name = "SkipConfirm", BackgroundColor3 = T.bg, Size = UDim2.new(1, 20, 1, 20), Position = UDim2.new(0, -10, 0, -10), ZIndex = 5, Visible = false, Parent = card })
 	UI.corner(confirm, 14)
-	UI.pad(confirm, 8)
+	UI.pad(confirm, 10)
 	refs.confirm = confirm
-	UI.label(string.format(Content.Rookie.skipAsk, RookieGuide.finishText()), { Size = UDim2.new(1, 0, 1, -40), TextYAlignment = Enum.TextYAlignment.Top, TextSize = 13, Font = T.body, ZIndex = 6, Parent = confirm })
-	local keep = UI.button(Content.Rookie.skipKeep, T.green, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(0.5, -4, 0, 34), TextSize = 15, ZIndex = 6, Parent = confirm }, function()
+	UI.label(string.format(Content.Rookie.skipAsk, RookieGuide.finishText()), { Size = UDim2.new(1, 0, 1, -52), TextYAlignment = Enum.TextYAlignment.Top, TextSize = 16, Font = T.body, ZIndex = 6, Parent = confirm })
+	local keep = UI.button(Content.Rookie.skipKeep, T.green, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(0.5, -6, 0, 44), TextSize = 16, ZIndex = 6, Parent = confirm }, function()
 		setConfirm(false)
 	end)
 	UI.corner(keep, 8)
-	local yes = UI.button(Content.Rookie.skipYes, T.cardHi, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, 0, 1, 0), Size = UDim2.new(0.5, -4, 0, 34), TextSize = 15, ZIndex = 6, Parent = confirm }, function()
+	local yes = UI.button(Content.Rookie.skipYes, T.cardHi, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, 0, 1, 0), Size = UDim2.new(0.5, -6, 0, 44), TextSize = 16, ZIndex = 6, Parent = confirm }, function()
 		setConfirm(false)
 		task.spawn(Net.act, "RookieSkip")
 	end)
 	UI.corner(yes, 8)
+	RookieGuide.applyLayout()
+end
+
+function RookieGuide.applyLayout()
+	local card = refs.card
+	if not card then
+		return
+	end
+	local v = UI.viewport
+	if UI.compact then
+		local top = UI.topChrome
+		local height = math.max(92, v.Y - top - UI.stationReserve)
+		card.AnchorPoint = Vector2.new(0, 0)
+		card.Position = UDim2.new(0, 8, 0, top)
+		card.Size = UDim2.new(1, -16, 0, height)
+		refs.head.Size = UDim2.new(1, -150, 0, 22)
+		refs.count.Position = UDim2.new(1, -100, 0, 0)
+		refs.goal.Position = UDim2.new(0, 0, 0, 22)
+		refs.goal.Size = UDim2.new(1, -150, 0, 22)
+		refs.reward.Position = UDim2.new(1, -100, 0, 22)
+		refs.reward.Size = UDim2.new(0, 96, 0, 20)
+		refs.tip.Visible = false
+		refs.finish.Position = UDim2.new(0, 0, 0, 48)
+		refs.finish.Size = UDim2.new(1, 0, 0, 28)
+		local bar = refs.fill and refs.fill.Parent
+		if bar and bar:IsA("Frame") then
+			bar.Position = UDim2.new(0, 0, 0, 44)
+			bar.Size = UDim2.new(1, -52, 0, 8)
+		end
+		refs.prog.Position = UDim2.new(1, 0, 0, 40)
+		if refs.skip then
+			refs.skip.Size = UDim2.fromOffset(88, 44)
+		end
+	else
+		card.AnchorPoint = Vector2.new(1, 0)
+		card.Position = UDim2.new(1, -16, 0, 68)
+		card.Size = UDim2.new(0, W, 0, H)
+		refs.head.Size = UDim2.new(1, -168, 0, 28)
+		refs.count.Position = UDim2.new(1, -100, 0, 2)
+		refs.goal.Position = UDim2.new(0, 0, 0, 50)
+		refs.goal.Size = UDim2.new(1, -96, 0, 32)
+		refs.reward.Position = UDim2.new(1, 0, 0, 50)
+		refs.reward.Size = UDim2.new(0, 88, 0, 32)
+		refs.tip.Visible = true
+		refs.finish.Position = UDim2.new(0, 0, 0, 140)
+		refs.finish.Size = UDim2.new(1, 0, 0, 36)
+		local bar = refs.fill and refs.fill.Parent
+		if bar and bar:IsA("Frame") then
+			bar.Position = UDim2.new(0, 0, 0, 88)
+			bar.Size = UDim2.new(1, -52, 0, 12)
+		end
+		refs.prog.Position = UDim2.new(1, 0, 0, 84)
+		if refs.skip then
+			refs.skip.Size = UDim2.fromOffset(92, 44)
+		end
+	end
 end
 
 local function plotModel(s: any): Model?
@@ -226,8 +283,9 @@ function RookieGuide.update(s: any)
 	refs.tip.Text = def and def.tip or ""
 	if st.step ~= lastStep then
 		lastStep = st.step
-		refs.card.Size = UDim2.new(0, W + 18, 0, H + 6)
-		TweenService:Create(refs.card, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.new(0, W, 0, H) }):Play()
+		local goal = refs.card.Size
+		refs.card.Size = UDim2.new(goal.X.Scale, goal.X.Offset + 12, goal.Y.Scale, goal.Y.Offset + 6)
+		TweenService:Create(refs.card, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = goal }):Play()
 	end
 
 	local part = st.target and targetPart(s, st.target)
