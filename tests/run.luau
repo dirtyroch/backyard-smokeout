@@ -20,6 +20,8 @@ local Hype = require("../src/shared/Logic/Hype")
 local Holiday = require("../src/shared/Logic/Holiday")
 local Rookie = require("../src/shared/Logic/Rookie")
 local SfxIds = require("../src/shared/SfxIds")
+local Music = require("../src/shared/Music")
+local MusicPrefs = require("../src/shared/Logic/MusicPrefs")
 local Gifting = require("../src/shared/Logic/Gifting")
 local function fs_read(path: string): string
 	return require("@lune/fs").readFile(path)
@@ -775,6 +777,70 @@ test("sound effects: every cue is a public Roblox-library id, sane volumes", fun
 	truthy(SfxIds.sizzleLoop.loop and SfxIds.sizzleLoop.volume <= 0.25, "the sizzle loop stays quiet")
 	local fs = require("@lune/fs")
 	truthy(string.find(fs.readFile("src/shared/DefaultData.luau"), "sfx = true", 1, true) ~= nil, "sound is on by default and the toggle is saved")
+end)
+
+print("Music (separate from sound effects)")
+test("music volume and mute are saved apart from sound effects", function()
+	local fs = require("@lune/fs")
+	local src = fs.readFile("src/shared/DefaultData.luau")
+	truthy(string.find(src, "music = true", 1, true) ~= nil, "music starts on")
+	truthy(string.find(src, "musicVolume = 0.22", 1, true) ~= nil, "quiet default volume")
+	truthy(string.find(src, "sfx = true", 1, true) ~= nil, "sound effects stay their own switch")
+	local on, vol = MusicPrefs.read({ music = true, musicVolume = 0.4, sfx = false })
+	eq(on, true)
+	eq(vol, 0.4)
+	on, vol = MusicPrefs.read({ music = false, musicVolume = 0.4 })
+	eq(on, false, "mute does not erase the saved volume")
+	eq(vol, 0.4)
+	eq(MusicPrefs.clamp("loud"), MusicPrefs.DEFAULT_VOLUME)
+	eq(MusicPrefs.clamp(0 / 0), MusicPrefs.DEFAULT_VOLUME)
+	eq(MusicPrefs.clamp(5), 1)
+	eq(MusicPrefs.clamp(-1), 0)
+	eq(MusicPrefs.DEFAULT_VOLUME <= 0.35 and MusicPrefs.DEFAULT_VOLUME >= 0.05, true)
+end)
+test("music does not pretend a placeholder id is audible", function()
+	eq(MusicPrefs.audible(0), false)
+	eq(MusicPrefs.audible(nil), false)
+	eq(MusicPrefs.audible(1.5), false)
+	eq(Music.id, 0, "Porch Light is not uploaded; id 0 stays silent")
+	local fs = require("@lune/fs")
+	local client = fs.readFile("src/client/Music.luau")
+	truthy(string.find(client, "Music.available()", 1, true) ~= nil, "client checks before play")
+	truthy(string.find(client, "s:Play()", 1, true) ~= nil)
+	local server = fs.readFile("src/server/Services/GameService.luau")
+	truthy(string.find(server, "Actions.SetMusic", 1, true) ~= nil)
+	truthy(string.find(server, "Actions.SetMusicVolume", 1, true) ~= nil)
+	truthy(fs.isFile("audio/porch-light.ogg"), "original loop is in the repo")
+	truthy(fs.isFile("audio/ATTRIBUTION.md"), "license note is next to the file")
+end)
+
+print("Yard notes (November 2026)")
+test("a few original yard lines, no borrowed meme media", function()
+	local foundChew, foundHorse, foundPup = false, false, false
+	for _, joke in ipairs(Content.UncJokes) do
+		if string.find(joke, "W chew", 1, true) then
+			foundChew = true
+		end
+		if string.find(joke, "horse", 1, true) then
+			foundHorse = true
+		end
+		if string.find(joke, "not a famous internet dog", 1, true) then
+			foundPup = true
+		end
+	end
+	truthy(foundChew and foundHorse and foundPup, "three original jokes")
+	truthy(#Content.UncJokes >= 28)
+	local notes = Content.YardNotes
+	truthy(string.find(notes.board, "W chew", 1, true) ~= nil)
+	truthy(string.find(notes.pup, "our dog", 1, true) ~= nil)
+	local src = fs_read("src/shared/Content.luau")
+	truthy(string.find(src, "November 6, 2026", 1, true) ~= nil, "W chew source is dated")
+	truthy(string.find(src, "November 5, 2026", 1, true) ~= nil, "horse-drawing source is dated")
+	truthy(string.find(src, "November 7, 2026", 1, true) ~= nil, "Roblox trend source is dated")
+	truthy(string.find(src, "not labeled as a November 2026 trend", 1, true) ~= nil, "older 6-7 line is not called current")
+	local lower = string.lower(src)
+	truthy(not string.find(lower, "mini producer", 1, true), "no borrowed creator")
+	truthy(not string.find(src, "rbxassetid", 1, true), "no meme audio id")
 end)
 
 print("Gifting")

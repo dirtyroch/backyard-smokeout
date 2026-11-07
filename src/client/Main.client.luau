@@ -12,6 +12,7 @@ local Panels = require(script.Parent.Panels)
 local WorldClient = require(script.Parent.WorldClient)
 local Ambient = require(script.Parent.Ambient)
 local Sfx = require(script.Parent.Sfx)
+local Music = require(script.Parent.Music)
 local RookieGuide = require(script.Parent.RookieGuide)
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -21,22 +22,20 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local screen = UI.new("ScreenGui", { Name = "BackyardSmokeout", ResetOnSpawn = false, IgnoreGuiInset = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = playerGui })
--- Scale everything down on small (phone) screens. The UIScale lives on a full-screen
--- container that is sized 1/scale, so after scaling it still covers the whole screen and
--- edge-anchored HUD pieces (menu, Serve All, station bar) stay on the screen edges.
+-- Text stays full size on phones. Layouts reflow (Hud.applyLayout, Panels.applyLayout)
+-- instead of shrinking every letter with a UIScale.
 local root = UI.new("Frame", { Name = "Root", BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), Parent = screen })
-local scale = UI.new("UIScale", { Parent = root })
 local function rescale()
 	local cam = workspace.CurrentCamera
 	local v = cam and cam.ViewportSize or Vector2.new(1280, 720)
-	local s = math.clamp(math.min(v.X / 1280, v.Y / 760), 0.55, 1)
-	scale.Scale = s
-	root.Size = UDim2.fromScale(1 / s, 1 / s)
+	UI.setViewport(v)
+	Hud.applyLayout()
+	Panels.applyLayout()
+	RookieGuide.applyLayout()
 end
-rescale()
-workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
 
 Sfx.mount()
+Music.mount()
 UI.onClick = function()
 	Sfx.play("click", nil, 0.05)
 end
@@ -44,6 +43,10 @@ Fx.mount(root)
 Panels.mount(root)
 Hud.mount(root, Panels)
 RookieGuide.mount(root)
+rescale()
+if workspace.CurrentCamera then
+	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
+end
 Net.notify = Fx.toast
 WorldClient.start(Panels)
 task.spawn(Ambient.start)
@@ -114,6 +117,7 @@ task.spawn(function()
 				if want ~= Sfx.isEnabled() then
 					Sfx.setEnabled(want)
 				end
+				Music.apply(Net.state.settings)
 			end
 			return nil
 		end)

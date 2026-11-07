@@ -496,6 +496,11 @@ function WorldService.init(c: any)
 	local existing = workspace:FindFirstChild("Map")
 	if existing then
 		map = existing :: Model
+		-- Places baked before the porch board still get it, without rebuilding the map.
+		local hub = map:FindFirstChild("Hub")
+		if hub then
+			WorldBuilder.yardBoard(hub, Content)
+		end
 	else
 		map = WorldBuilder.build(ENV, workspace, Config, Content)
 	end
