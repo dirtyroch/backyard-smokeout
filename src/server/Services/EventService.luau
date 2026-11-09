@@ -22,6 +22,7 @@ local Rarity = require(Shared.Logic.Rarity)
 local Economy = require(Shared.Logic.Economy)
 local CookOff = require(Shared.Logic.CookOff)
 local TimeUtil = require(Shared.Logic.TimeUtil)
+local Holiday = require(Shared.Logic.Holiday)
 local WorldBuilder = require(Shared.WorldBuilder)
 
 local EventService = {}
@@ -314,6 +315,14 @@ local potluckOn: string? = nil -- "turkeyday" | "holiday" | "" (none); nil = not
 local function refreshTurkey()
 	local EV = ctx.Game.potluckEvent()
 	local id = EV and EV.id or ""
+	local SOON, _, sw = ctx.Game.upcomingPotluck()
+	local soonText: string? = nil
+	if not EV and SOON and sw then
+		local fmt = SOON.id == "turkeyday" and Content.Signs.turkeySoon or Content.Signs.holidaySoon
+		local st = string.format(fmt, string.upper(Holiday.label(sw.startDay)))
+		soonText = st
+		id = "soon:" .. st
+	end
 	if id == potluckOn then
 		return
 	end
@@ -331,7 +340,7 @@ local function refreshTurkey()
 			decor:Destroy()
 		end
 	end
-	local text = Content.Signs.potluck
+	local text = soonText or Content.Signs.potluck
 	if id == "turkeyday" then
 		WorldBuilder.turkeyDay(pot, Content)
 		text = Content.Signs.turkeyPotluck
@@ -392,6 +401,11 @@ function EventService.start()
 			local _, EC = ctx.Game.potluckEvent()
 			if EC then
 				ctx.Game.toast(player, EC.login, "good")
+			else
+				local _, SC, sw = ctx.Game.upcomingPotluck()
+				if SC and sw then
+					ctx.Game.toast(player, string.format(SC.soon, Holiday.longLabel(sw.startDay)), "info")
+				end
 			end
 			if ctx.Game.isSaturday() then
 				ctx.Game.toast(player, "🏆 It's Cook-Off Saturday! Bring your best plate to Granny Pecan for 3x prizes.", "good")

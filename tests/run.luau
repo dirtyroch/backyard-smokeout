@@ -1258,6 +1258,62 @@ test("Analytics: onboarding steps log once each, in order; coin flows are batche
 	eq(#Funnels.SHOP, 4)
 end)
 
+test("event teaser: the week before Turkey Day and the Holiday Smokeout, with a date (no timer copy)", function()
+	local TD, HS = Config.TurkeyDay, Config.HolidaySmokeout
+	local N = Config.EventTeaserDays
+	eq(N, 7)
+	-- 2026: Turkey Day runs Nov 23-29; the teaser covers Nov 16-22
+	local function tw(y, m, d)
+		local day = Holiday.daysFromCivil(y, m, d)
+		return day, Holiday.turkeyWeek(day, TD.daysBefore, TD.daysAfter)
+	end
+	local day, w = tw(2026, 11, 15)
+	eq(Holiday.soon(day, w, N), nil, "8 days out is quiet")
+	day, w = tw(2026, 11, 16)
+	eq(Holiday.soon(day, w, N), 7)
+	day, w = tw(2026, 11, 22)
+	eq(Holiday.soon(day, w, N), 1)
+	day, w = tw(2026, 11, 23)
+	eq(Holiday.soon(day, w, N), nil, "no teaser once it's on")
+	day, w = tw(2026, 11, 30)
+	eq(Holiday.soon(day, w, N), nil, "no teaser after it ends")
+	eq(Holiday.longLabel(w.startDay), "Mon, Nov 23")
+	-- Holiday Smokeout: Dec 12-18 teases Dec 19; Jan 1 (still on) and Jan 2 (just ended) don't
+	local function hw(y, m, d)
+		local dd = Holiday.daysFromCivil(y, m, d)
+		return dd, Holiday.dateWindow(dd, HS.start, HS.finish, HS.peak)
+	end
+	day, w = hw(2026, 12, 11)
+	eq(Holiday.soon(day, w, N), nil)
+	day, w = hw(2026, 12, 12)
+	eq(Holiday.soon(day, w, N), 7)
+	eq(Holiday.label(w.startDay), "Dec 19")
+	day, w = hw(2027, 1, 1)
+	eq(Holiday.soon(day, w, N), nil)
+	day, w = hw(2027, 1, 2)
+	eq(Holiday.soon(day, w, N), nil)
+	-- every day of 2026-2035: at most one teaser, never while an event is on
+	for y = 2026, 2035 do
+		for dd = Holiday.daysFromCivil(y, 1, 1), Holiday.daysFromCivil(y, 12, 31) do
+			local t = Holiday.turkeyWeek(dd, TD.daysBefore, TD.daysAfter)
+			local h = Holiday.dateWindow(dd, HS.start, HS.finish, HS.peak)
+			local a, b = Holiday.soon(dd, t, N), Holiday.soon(dd, h, N)
+			truthy(not (a and b), "one teaser at a time")
+			if t.active or h.active then
+				truthy(a == nil and b == nil, "no teaser during an event")
+			end
+		end
+	end
+	-- calm copy: a date, no countdown or pressure words
+	for _, s in ipairs({ Content.TurkeyDay.soon, Content.HolidaySmokeout.soon, Content.Signs.turkeySoon, Content.Signs.holidaySoon }) do
+		local low = string.lower(s)
+		for _, bad in ipairs({ "hurry", "only", "left", "ends", "last chance", "don't miss", "countdown", "hours" }) do
+			truthy(string.find(low, bad, 1, true) == nil, "pressure word '" .. bad .. "' in: " .. s)
+		end
+	end
+end)
+
+
 print(string.format("\n%d passed, %d failed", passed, failed))
 if failed > 0 then
 	process.exit(1)

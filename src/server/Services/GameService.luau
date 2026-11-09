@@ -126,6 +126,24 @@ function GameService.potluckEvent(): (any?, any?, Holiday.Week?)
 	return nil, nil, nil
 end
 
+-- The potluck event opening within the next `Config.EventTeaserDays` days (config, copy, window),
+-- or nil. Nothing is on yet; this only drives a "coming up" sign and a one-line login note.
+function GameService.upcomingPotluck(): (any?, any?, Holiday.Week?)
+	if GameService.potluckEvent() then
+		return nil, nil, nil
+	end
+	local d = today()
+	local tw = GameService.turkeyWeek()
+	if Holiday.soon(d, tw, Config.EventTeaserDays) then
+		return Config.TurkeyDay, Content.TurkeyDay, tw
+	end
+	local hw = GameService.holidayWeek()
+	if Holiday.soon(d, hw, Config.EventTeaserDays) then
+		return Config.HolidaySmokeout, Content.HolidaySmokeout, hw
+	end
+	return nil, nil, nil
+end
+
 local function profileOf(player: Player): any?
 	local p = ctx.Data.get(player)
 	return p and p.data or nil

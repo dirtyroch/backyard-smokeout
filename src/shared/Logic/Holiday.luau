@@ -122,11 +122,30 @@ function Holiday.pickPlate(cooler: { any }, meatId: string, rarityIndex: (string
 	return bestI
 end
 
+-- Days until a window opens, if it opens within the next `lookahead` days (1..lookahead), else nil.
+-- Used for the calm "coming up" sign and login note the week before an event; never a timer.
+function Holiday.soon(day: number, w: Week, lookahead: number): number?
+	if w.active then
+		return nil
+	end
+	local d = w.startDay - day
+	if d >= 1 and d <= lookahead then
+		return d
+	end
+	return nil
+end
+
 -- "Nov 23" style label for a day number.
 local MONTHS = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" }
 function Holiday.label(day: number): string
 	local _, m, d = Holiday.civilFromDays(day)
 	return MONTHS[m] .. " " .. d
+end
+
+-- "Mon, Nov 23" style label for a day number.
+local WEEKDAYS = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" }
+function Holiday.longLabel(day: number): string
+	return WEEKDAYS[Holiday.weekdayOf(day)] .. ", " .. Holiday.label(day)
 end
 
 return Holiday

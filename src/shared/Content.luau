@@ -109,6 +109,7 @@ Content.TurkeyDay = {
 	progress = "🥧 Potluck table: %d/%d dishes. %d more pitmasters sharing in the next few minutes fills the table, and everybody gets bonus tips!",
 	full = "🦃 THE POTLUCK'S FULL! %d pitmasters shared a dish. Everyone gets +%d%% tips for %d min!",
 	over = "The Turkey Day potluck is packed up for the year. See y'all next Thanksgiving!",
+	soon = "🦃 Coming up: the Turkey Day Smokeout opens %s. Granny Pecan's potluck table runs all week, and your first dish earns a free Thankful & Full Apron.",
 	thanks = {
 		"Granny Pecan: \"I'm thankful for good smoke and better company.\"",
 		"Unc Hank: \"I'm thankful for elastic waistbands. That's it. That's the joke.\"",
@@ -130,6 +131,7 @@ Content.HolidaySmokeout = {
 	progress = "🎄 Christmas potluck: %d/%d dishes. %d more pitmasters sharing in the next few minutes fills the table, and everybody gets bonus tips!",
 	full = "🎄 THE CHRISTMAS POTLUCK'S FULL! %d pitmasters shared a dish. Everyone gets +%d%% tips for %d min!",
 	over = "The Christmas potluck is packed up till next December. Happy New Year, y'all!",
+	soon = "🎄 Coming up: the Holiday Smokeout opens %s and runs through New Year's Day. Your first Holiday Glazed Ham at the potluck table earns a free Merry & Smoky Apron.",
 	thanks = {
 		"Granny Pecan: \"Merry Christmas, sugar. Grab a tamale before Unc finds 'em.\"",
 		"Unc Hank: \"I asked for a new grill brush. Got socks again. Unc things.\"",
@@ -168,6 +170,8 @@ Content.Signs = {
 	turkeyPotluck = "TURKEY DAY POTLUCK",
 	turkeyBanner = "TURKEY DAY SMOKEOUT\nBring a dish!",
 	holidayPotluck = "CHRISTMAS POTLUCK",
+	turkeySoon = "TURKEY DAY POTLUCK: %s",
+	holidaySoon = "CHRISTMAS POTLUCK: %s",
 	holidayBanner = "HOLIDAY SMOKEOUT\nMerry Christmas, y'all!",
 	creek = "(nothing to see here)",
 	welcome = "BACKYARD SMOKEOUT",

@@ -534,6 +534,10 @@ Config.HolidaySmokeout = {
 	tipBonus = 0.25,
 }
 
+-- The week before a potluck event, the table's sign and a login note say when it opens (a date,
+-- never a countdown timer).
+Config.EventTeaserDays = 7
+
 -- Season themes: the Cook-Off template reskins by month.
 Config.Seasons = {
 	{ months = { 10 }, id = "spooky", name = "Spooky Smoke-Off", color = "#FF7518" },
