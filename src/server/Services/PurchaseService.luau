@@ -326,12 +326,21 @@ local function processReceipt(info: any): Enum.ProductPurchaseDecision
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	local profile = ctx.Data.waitFor(player, 10)
-	if not profile or not ctx.Game.runtime[player] then
+	if not profile or not ctx.Game.runtime[player] or profile.released or not player.Parent then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if profile.memoryOnly and not IS_STUDIO then
+		-- Saving is down on this live server: nothing we grant would stick. Roblox retries later.
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	local data = profile.data
 	local purchaseId = tostring(info.PurchaseId)
 	if ReceiptLedger.has(data.receipts, purchaseId) then
+		-- Already granted in this session. Only confirm once that grant is actually saved
+		-- (an earlier save may have failed); never grant it a second time.
+		if not ctx.Data.save(profile, false) then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
 	local key = productById[info.ProductId]
@@ -345,9 +354,14 @@ local function processReceipt(info: any): Enum.ProductPurchaseDecision
 		local recipient = Players:GetPlayerByUserId(giftTo)
 		local rprofile = recipient and ctx.Data.get(recipient) or nil
 		local gok, gerr = pcall(function()
-			if recipient and rprofile and ctx.Game.runtime[recipient] then
-				deliverGift(player, data, recipient, rprofile.data, key)
+			local present = recipient ~= nil and rprofile ~= nil and not rprofile.released and ctx.Game.runtime[recipient] ~= nil
+			local landing = Gifting.landing(present, present and cosmeticsOwned(rprofile.data, Monetization.Products[key].grants))
+			if landing == "deliver" then
+				deliverGift(player, data, recipient :: Player, rprofile.data, key)
 				ctx.Data.save(rprofile, false)
+			elseif landing == "hold-owned" then
+				Gifting.hold(data.giftsHeld, key)
+				ctx.Game.toast(player, "They already got " .. Monetization.Products[key].name .. " while you were checking out, so your gift is saved for you. Open the shop and tap Gift on it to send it to anyone, free.", "info")
 			else
 				Gifting.hold(data.giftsHeld, key)
 				ctx.Game.toast(player, "They left before the gift landed, so it's saved for you. Open the shop and tap Gift on " .. Monetization.Products[key].name .. " to send it to anyone, free.", "info")

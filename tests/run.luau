@@ -444,6 +444,34 @@ test("session lock: only the holder can save; release clears lock", function()
 	truthy(again ~= nil, "released record can be locked by the next server")
 end)
 
+test("session lock: a late save after release is refused (no overwrite, no phantom lock)", function()
+	local rec = SessionLock.acquire(nil, "A", 0, 300)
+	local released = SessionLock.save(rec, "A", 10, { coins = 5 }, true)
+	local late, st = SessionLock.save(released, "A", 12, { coins = 1 }, false)
+	eq(late, nil, "late autosave after leaving can't write")
+	eq(st, "lost-lock")
+	-- another server loaded, played and released: our stale copy must not win
+	local b = SessionLock.acquire(released, "B", 20, 300)
+	local bRel = SessionLock.save(b, "B", 30, { coins = 99 }, true)
+	eq(SessionLock.save(bRel, "A", 31, { coins = 1 }, false), nil, "old server can't overwrite newer progress")
+	truthy(SessionLock.save(nil, "A", 0, { coins = 1 }, false) ~= nil, "brand-new record can be written")
+end)
+test("launch audit guards: receipts, saves and leaving mid-load", function()
+	local fs = require("@lune/fs")
+	local ds = fs.readFile("src/server/Services/DataService.luau")
+	truthy(string.find(ds, "if profile.released then", 1, true) ~= nil, "no saves after the final release")
+	local ps = fs.readFile("src/server/Services/PurchaseService.luau")
+	truthy(string.find(ps, "profile.memoryOnly and not IS_STUDIO", 1, true) ~= nil, "no receipts granted when saving is down")
+	truthy(string.find(ps, "profile.released or not player.Parent", 1, true) ~= nil, "no receipts for a player who is leaving")
+	local hit = string.find(ps, "ReceiptLedger.has(data.receipts, purchaseId)", 1, true)
+	truthy(hit ~= nil and string.find(string.sub(ps, hit, hit + 400), "ctx.Data.save(profile, false)", 1, true) ~= nil, "a repeat receipt is only confirmed once saved")
+	truthy(string.find(ps, "Gifting.landing(", 1, true) ~= nil, "gift receipts use Gifting.landing")
+	local gs = fs.readFile("src/server/Services/GameService.luau")
+	truthy(string.find(gs, "ctx.Data.get(player) ~= profile", 1, true) ~= nil, "onLoaded skips players who already left")
+	truthy(string.find(gs, "GameService.runtime[player] ~= r", 1, true) ~= nil, "no plot for a player who left during the pass check")
+	truthy(string.find(gs, "actionLimiter:forget(", 1, true) ~= nil, "per-action rate buckets are freed on leave")
+end)
+
 print("Content & monetization config")
 test("every cosmetic product grants real cosmetics; ids default to 0", function()
 	for key, p in pairs(Monetization.Products) do
@@ -825,6 +853,28 @@ test("held gifts (recipient left) are kept and sent later, one at a time", funct
 	local fs = require("@lune/fs")
 	truthy(string.find(fs.readFile("src/shared/DefaultData.luau"), "giftsHeld = {}", 1, true) ~= nil, "held gifts are saved")
 	truthy(Config.Gifting and Config.Gifting.ttlSeconds > 0 and Config.Gifting.firstGiftTitle ~= "", "gifting config")
+end)
+
+test("gift receipts: deliver, or hold if they left or already own it (Robux never wasted)", function()
+	eq(Gifting.landing(true, false), "deliver")
+	eq(Gifting.landing(false, false), "hold-left")
+	eq(Gifting.landing(true, true), "hold-owned", "recipient bought it meanwhile: giver keeps the gift")
+end)
+
+test("dinner bell: mashing the prompt doesn't farm bells / Season XP", function()
+	local last = {}
+	local cd = Config.DinnerBell.ringCooldown
+	truthy(type(cd) == "number" and cd > 0 and cd >= Config.DinnerBell.window, "ring cooldown set")
+	truthy(Hype.ringCounts(last, 1, 100, cd), "first ring counts")
+	local counted = 0
+	for i = 1, 50 do
+		if Hype.ringCounts(last, 1, 100 + i * 0.1, cd) then
+			counted += 1
+		end
+	end
+	eq(counted, 0, "50 quick rings add nothing")
+	truthy(Hype.ringCounts(last, 2, 101, cd), "other players are independent (pile-on still works)")
+	truthy(Hype.ringCounts(last, 1, 100 + cd, cd), "counts again after the cooldown")
 end)
 
 print("Profitability: season pass, offers, club, analytics")

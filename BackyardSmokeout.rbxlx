@@ -569,7 +569,7 @@ Config.FairPlay = { passTipMult = 1.5, passTipCap = 1.5, showerMinutes = 5, show
 
 -- Big Bertha's Dinner Bell: 3 different players ring the bell within 20 s, and the whole server
 -- gets +25% tips for 5 minutes (free, with a 10 minute cooldown).
-Config.DinnerBell = { window = 20, need = 3, cooldown = 600, minutes = 5, tipBonus = 0.25 }
+Config.DinnerBell = { window = 20, need = 3, cooldown = 600, minutes = 5, tipBonus = 0.25, ringCooldown = 30 } -- ringCooldown: a player's ring counts once per 30 s (anti-mash)
 
 -- Lunch Rush: every 150 s window, serve 4 plates for +50% of what those plates earned.
 Config.Rush = { period = 150, need = 4, bonusFrac = 0.5 }
@@ -1333,6 +1333,18 @@ function Gifting.claim(pending: { [string]: Pending }, key: string, now: number,
 	return p.to
 end
 
+-- When a gift receipt arrives: hand it over, or hold it on the giver's save so the Robux isn't
+-- wasted ("hold-left": the recipient left; "hold-owned": they got every look in it meanwhile).
+function Gifting.landing(recipientPresent: boolean, recipientOwnsAll: boolean): string
+	if not recipientPresent then
+		return "hold-left"
+	end
+	if recipientOwnsAll then
+		return "hold-owned"
+	end
+	return "deliver"
+end
+
 -- Held gifts live on the giver's save: { [productKey] = count }.
 function Gifting.hold(held: { [string]: number }, key: string)
 	held[key] = (held[key] or 0) + 1
@@ -1540,6 +1552,17 @@ function Hype.pileOn(rubs: { [number]: number }, now: number, window: number, ne
 		end
 	end
 	return n, n >= need and now - lastT >= cooldown
+end
+
+-- Does this bell ring count (stats / Season XP / pile-on)? At most one per `cooldown` seconds
+-- per player; records the time when it does.
+function Hype.ringCounts(last: { [number]: number }, id: number, now: number, cooldown: number): boolean
+	local t = last[id]
+	if t ~= nil and now - t < cooldown then
+		return false
+	end
+	last[id] = now
+	return true
 end
 
 export type Rush = { w: number, n: number, sum: number, done: boolean }
@@ -2214,12 +2237,15 @@ function SessionLock.acquire(old: Record?, jobId: string, now: number, staleAfte
 	return rec, stolen and "stale-taken" or "acquired"
 end
 
+-- Only the server that holds the lock may write. A record with no lock was released (the
+-- player left, or another server already loaded, played and released it), so a late write from
+-- us would overwrite newer progress and leave a phantom lock behind: refuse it.
 function SessionLock.canWrite(old: Record?, jobId: string): boolean
 	if old == nil then
 		return true
 	end
 	local lock = (old :: Record).lock
-	return lock == nil or lock.jobId == jobId
+	return lock ~= nil and lock.jobId == jobId
 end
 
 -- Transform for saves. `release` clears the lock (player left / server closing).
@@ -5120,6 +5146,11 @@ function DataService.save(profile: Profile, release: boolean): boolean
 		task.wait(0.25)
 		waited += 0.25
 	end
+	if profile.released then
+		-- The final save already ran and dropped our lock (e.g. an autosave that queued up behind
+		-- the leave save). Writing now would re-lock the record and block the player's next join.
+		return false
+	end
 	profile.saving = true
 	profile.data.lastSeen = os.time()
 	local s = store :: DataStore
@@ -5159,7 +5190,11 @@ function DataService.release(player: Player)
 		return
 	end
 	DataService.save(profile, true)
-	DataService.profiles[player] = nil
+	-- Whatever happened, this server is done with the profile: no more writes after this.
+	profile.released = true
+	if DataService.profiles[player] == profile then
+		DataService.profiles[player] = nil
+	end
 end
 
 function DataService.isStudioMemoryMode(player: Player): boolean
@@ -5247,6 +5282,7 @@ local tempPokes: { [Player]: number } = {}
 EggService.EGGS = { "blessed", "roof", "creek", "apron", "king", "temp", "rex", "meteorite", "cooked", "sixseven", "dinnerbell" }
 
 local bellRings: { [number]: number } = {}
+local lastRing: { [number]: number } = {} -- userId -> os.clock() of the last ring that counted
 local lastDinner = -1e9
 local potluckShares: { [number]: number } = {}
 local lastPotluck = -1e9
@@ -5514,10 +5550,14 @@ end
 
 handlers["landmark:bell"] = function(player, data)
 	local d = today()
-	data.stats.bells += 1
 	ctx.Game.fx(player, "bell", {})
-	ctx.Game.checkRookie(player, data)
-	checkDinnerBell(player)
+	-- Every ring is worth Season XP, so a ring only counts once per ringCooldown per player
+	-- (otherwise mashing the prompt farms the whole Smokehouse Pass). Ringing itself stays free.
+	if Hype.ringCounts(lastRing, player.UserId, os.clock(), Config.DinnerBell.ringCooldown) then
+		data.stats.bells += 1
+		ctx.Game.checkRookie(player, data)
+		checkDinnerBell(player)
+	end
 	local line = BELL_LINES[rng:NextInteger(1, #BELL_LINES)]
 	if data.daily.bellDay ~= d then
 		data.daily.bellDay = d
@@ -5583,6 +5623,7 @@ function EggService.start()
 	end)
 	game:GetService("Players").PlayerRemoving:Connect(function(p)
 		tempPokes[p] = nil
+		lastRing[p.UserId] = nil
 	end)
 end
 
@@ -7232,6 +7273,10 @@ end
 
 -- ===== Lifecycle =====
 local function onLoaded(player: Player, profile: any, isNew: boolean)
+	-- onLoaded is a (deferred) event: the player may already have left and been released.
+	if not player.Parent or ctx.Data.get(player) ~= profile then
+		return
+	end
 	local data = profile.data
 	local lastSeen = data.lastSeen or 0
 	local r: Runtime = {
@@ -7257,6 +7302,14 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 	}
 	GameService.runtime[player] = r
 	r.passes = ctx.Purchase.loadPasses(player)
+	-- loadPasses yields (game pass checks). If they left meanwhile, onRemoving already cleaned up;
+	-- stop here so we don't hand a plot (and a runtime) to someone who's gone.
+	if not player.Parent or GameService.runtime[player] ~= r then
+		if GameService.runtime[player] == r then
+			GameService.runtime[player] = nil
+		end
+		return
+	end
 	if Rookie.shouldSkip(data.rookie, data.tutorial.done, data.stats, Config.ROOKIE_VETERAN_SERVES) then
 		data.rookie.skipped = true
 	end
@@ -7312,6 +7365,10 @@ local function onRemoving(player: Player)
 	ctx.Social.onLeave(player)
 	ctx.World.releasePlot(player)
 	globalLimiter:forget(player)
+	local uid = tostring(player.UserId)
+	for name in pairs(Actions) do
+		actionLimiter:forget(uid .. name)
+	end
 	GameService.runtime[player] = nil
 	ctx.Data.release(player)
 end
@@ -8167,12 +8224,21 @@ local function processReceipt(info: any): Enum.ProductPurchaseDecision
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	local profile = ctx.Data.waitFor(player, 10)
-	if not profile or not ctx.Game.runtime[player] then
+	if not profile or not ctx.Game.runtime[player] or profile.released or not player.Parent then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if profile.memoryOnly and not IS_STUDIO then
+		-- Saving is down on this live server: nothing we grant would stick. Roblox retries later.
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	local data = profile.data
 	local purchaseId = tostring(info.PurchaseId)
 	if ReceiptLedger.has(data.receipts, purchaseId) then
+		-- Already granted in this session. Only confirm once that grant is actually saved
+		-- (an earlier save may have failed); never grant it a second time.
+		if not ctx.Data.save(profile, false) then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
 	local key = productById[info.ProductId]
@@ -8186,9 +8252,14 @@ local function processReceipt(info: any): Enum.ProductPurchaseDecision
 		local recipient = Players:GetPlayerByUserId(giftTo)
 		local rprofile = recipient and ctx.Data.get(recipient) or nil
 		local gok, gerr = pcall(function()
-			if recipient and rprofile and ctx.Game.runtime[recipient] then
-				deliverGift(player, data, recipient, rprofile.data, key)
+			local present = recipient ~= nil and rprofile ~= nil and not rprofile.released and ctx.Game.runtime[recipient] ~= nil
+			local landing = Gifting.landing(present, present and cosmeticsOwned(rprofile.data, Monetization.Products[key].grants))
+			if landing == "deliver" then
+				deliverGift(player, data, recipient :: Player, rprofile.data, key)
 				ctx.Data.save(rprofile, false)
+			elseif landing == "hold-owned" then
+				Gifting.hold(data.giftsHeld, key)
+				ctx.Game.toast(player, "They already got " .. Monetization.Products[key].name .. " while you were checking out, so your gift is saved for you. Open the shop and tap Gift on it to send it to anyone, free.", "info")
 			else
 				Gifting.hold(data.giftsHeld, key)
 				ctx.Game.toast(player, "They left before the gift landed, so it's saved for you. Open the shop and tap Gift on " .. Monetization.Products[key].name .. " to send it to anyone, free.", "info")

@@ -38,6 +38,7 @@ local tempPokes: { [Player]: number } = {}
 EggService.EGGS = { "blessed", "roof", "creek", "apron", "king", "temp", "rex", "meteorite", "cooked", "sixseven", "dinnerbell" }
 
 local bellRings: { [number]: number } = {}
+local lastRing: { [number]: number } = {} -- userId -> os.clock() of the last ring that counted
 local lastDinner = -1e9
 local potluckShares: { [number]: number } = {}
 local lastPotluck = -1e9
@@ -305,10 +306,14 @@ end
 
 handlers["landmark:bell"] = function(player, data)
 	local d = today()
-	data.stats.bells += 1
 	ctx.Game.fx(player, "bell", {})
-	ctx.Game.checkRookie(player, data)
-	checkDinnerBell(player)
+	-- Every ring is worth Season XP, so a ring only counts once per ringCooldown per player
+	-- (otherwise mashing the prompt farms the whole Smokehouse Pass). Ringing itself stays free.
+	if Hype.ringCounts(lastRing, player.UserId, os.clock(), Config.DinnerBell.ringCooldown) then
+		data.stats.bells += 1
+		ctx.Game.checkRookie(player, data)
+		checkDinnerBell(player)
+	end
 	local line = BELL_LINES[rng:NextInteger(1, #BELL_LINES)]
 	if data.daily.bellDay ~= d then
 		data.daily.bellDay = d
@@ -374,6 +379,7 @@ function EggService.start()
 	end)
 	game:GetService("Players").PlayerRemoving:Connect(function(p)
 		tempPokes[p] = nil
+		lastRing[p.UserId] = nil
 	end)
 end
 

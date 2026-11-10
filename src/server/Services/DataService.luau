@@ -192,6 +192,11 @@ function DataService.save(profile: Profile, release: boolean): boolean
 		task.wait(0.25)
 		waited += 0.25
 	end
+	if profile.released then
+		-- The final save already ran and dropped our lock (e.g. an autosave that queued up behind
+		-- the leave save). Writing now would re-lock the record and block the player's next join.
+		return false
+	end
 	profile.saving = true
 	profile.data.lastSeen = os.time()
 	local s = store :: DataStore
@@ -231,7 +236,11 @@ function DataService.release(player: Player)
 		return
 	end
 	DataService.save(profile, true)
-	DataService.profiles[player] = nil
+	-- Whatever happened, this server is done with the profile: no more writes after this.
+	profile.released = true
+	if DataService.profiles[player] == profile then
+		DataService.profiles[player] = nil
+	end
 end
 
 function DataService.isStudioMemoryMode(player: Player): boolean

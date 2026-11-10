@@ -485,7 +485,7 @@ Config.FairPlay = { passTipMult = 1.5, passTipCap = 1.5, showerMinutes = 5, show
 
 -- Big Bertha's Dinner Bell: 3 different players ring the bell within 20 s, and the whole server
 -- gets +25% tips for 5 minutes (free, with a 10 minute cooldown).
-Config.DinnerBell = { window = 20, need = 3, cooldown = 600, minutes = 5, tipBonus = 0.25 }
+Config.DinnerBell = { window = 20, need = 3, cooldown = 600, minutes = 5, tipBonus = 0.25, ringCooldown = 30 } -- ringCooldown: a player's ring counts once per 30 s (anti-mash)
 
 -- Lunch Rush: every 150 s window, serve 4 plates for +50% of what those plates earned.
 Config.Rush = { period = 150, need = 4, bonusFrac = 0.5 }

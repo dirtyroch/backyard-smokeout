@@ -25,6 +25,17 @@ function Hype.pileOn(rubs: { [number]: number }, now: number, window: number, ne
 	return n, n >= need and now - lastT >= cooldown
 end
 
+-- Does this bell ring count (stats / Season XP / pile-on)? At most one per `cooldown` seconds
+-- per player; records the time when it does.
+function Hype.ringCounts(last: { [number]: number }, id: number, now: number, cooldown: number): boolean
+	local t = last[id]
+	if t ~= nil and now - t < cooldown then
+		return false
+	end
+	last[id] = now
+	return true
+end
+
 export type Rush = { w: number, n: number, sum: number, done: boolean }
 
 function Hype.rushWindow(t: number, period: number): number

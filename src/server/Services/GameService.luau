@@ -1214,6 +1214,10 @@ end
 
 -- ===== Lifecycle =====
 local function onLoaded(player: Player, profile: any, isNew: boolean)
+	-- onLoaded is a (deferred) event: the player may already have left and been released.
+	if not player.Parent or ctx.Data.get(player) ~= profile then
+		return
+	end
 	local data = profile.data
 	local lastSeen = data.lastSeen or 0
 	local r: Runtime = {
@@ -1239,6 +1243,14 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 	}
 	GameService.runtime[player] = r
 	r.passes = ctx.Purchase.loadPasses(player)
+	-- loadPasses yields (game pass checks). If they left meanwhile, onRemoving already cleaned up;
+	-- stop here so we don't hand a plot (and a runtime) to someone who's gone.
+	if not player.Parent or GameService.runtime[player] ~= r then
+		if GameService.runtime[player] == r then
+			GameService.runtime[player] = nil
+		end
+		return
+	end
 	if Rookie.shouldSkip(data.rookie, data.tutorial.done, data.stats, Config.ROOKIE_VETERAN_SERVES) then
 		data.rookie.skipped = true
 	end
@@ -1294,6 +1306,10 @@ local function onRemoving(player: Player)
 	ctx.Social.onLeave(player)
 	ctx.World.releasePlot(player)
 	globalLimiter:forget(player)
+	local uid = tostring(player.UserId)
+	for name in pairs(Actions) do
+		actionLimiter:forget(uid .. name)
+	end
 	GameService.runtime[player] = nil
 	ctx.Data.release(player)
 end
