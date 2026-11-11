@@ -399,8 +399,35 @@ function PurchaseService.init(c: any)
 	ctx = c
 end
 
+-- Studio-only launch check in the Output window: how many shop items still need a Roblox ID.
+local function launchCheck()
+	local missing, total = 0, 0
+	for _, p in pairs(Monetization.Passes) do
+		total += 1
+		missing += if p.id == 0 then 1 else 0
+	end
+	for _, p in pairs(Monetization.Products) do
+		total += 1
+		missing += if p.id == 0 then 1 else 0
+	end
+	if missing > 0 then
+		print(
+			string.format(
+				"[Launch check] %d of %d shop items still have id = 0, so the live game hides them. One command creates them all: scripts/create-shop.luau (PUBLISHING.md step 6).",
+				missing,
+				total
+			)
+		)
+	else
+		print(string.format("[Launch check] All %d shop items have Roblox IDs.", total))
+	end
+end
+
 function PurchaseService.start()
 	MarketplaceService.ProcessReceipt = processReceipt
+	if IS_STUDIO then
+		launchCheck()
+	end
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, passId: number, purchased: boolean)
 		local key = passById[passId]
 		if purchased and key then

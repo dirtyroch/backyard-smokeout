@@ -3,6 +3,7 @@
 A Texas backyard BBQ tycoon for Roblox. Smoke brisket in real time (it keeps cooking while you're offline), flip 30-second burgers (faster with pit upgrades) while you wait, serve a yard full of original critter regulars, win the Saturday Cook-Off, swat the mosquito Queen at dusk, and climb to **OG Pitmaster** Unc Status.
 
 - **Just want to publish it?** Read **[PUBLISHING.md](PUBLISHING.md)**. No coding needed.
+- **Shop setup in one run:** `scripts/create-shop.luau` creates all 44 passes and products on Roblox (Open Cloud) with their icons from `marketing/shop-icons/` and writes the IDs into Monetization. See PUBLISHING.md step 6.
 - **Ready-to-open place file:** [`BackyardSmokeout.rbxlx`](BackyardSmokeout.rbxlx). Built geometry, code-built UI and public Roblox-library sound effects mean there are no uploaded assets to set up.
 
 ## What's in the game
@@ -30,6 +31,8 @@ src/server/          Main.server + Services (Data, Game, World, Social, Event, E
 src/client/          Main.client + UI, Net, Fx, Sfx, Hud, Panels, RookieGuide, WorldClient
 tests/run.luau       Lune unit tests for the pure logic
 scripts/bake-map.luau  Bakes the map into the .rbxlx so Studio shows the world before Play
+scripts/create-shop.luau  Creates every pass/product on Roblox via Open Cloud and saves the IDs (dry run by default)
+scripts/make-shop-icons.py  Rebuilds marketing/shop-icons/<Key>.png (512x512 store icons)
 ```
 
 ## Tech notes

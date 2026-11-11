@@ -27,6 +27,7 @@ end
 local SeasonPass = require("../src/shared/Logic/SeasonPass")
 local Storefront = require("../src/shared/Logic/Storefront")
 local Funnels = require("../src/shared/Logic/Funnels")
+local ShopSync = require("../scripts/lib/ShopSync")
 
 local passed, failed = 0, 0
 local current = ""
@@ -473,9 +474,9 @@ test("launch audit guards: receipts, saves and leaving mid-load", function()
 end)
 
 print("Content & monetization config")
-test("every cosmetic product grants real cosmetics; ids default to 0", function()
+test("every cosmetic product grants real cosmetics; ids are 0 (hidden) or a real ID", function()
 	for key, p in pairs(Monetization.Products) do
-		eq(p.id, 0, key .. " id placeholder")
+		truthy(p.id == 0 or (p.id > 0 and p.id == math.floor(p.id)), key .. " id is 0 or a whole number")
 		if p.grants then
 			for _, c in ipairs(p.grants) do
 				truthy(Config.Cosmetics[c], key .. " grants unknown cosmetic " .. c)
@@ -484,7 +485,7 @@ test("every cosmetic product grants real cosmetics; ids default to 0", function(
 		truthy(p.price > 0)
 	end
 	for key, p in pairs(Monetization.Passes) do
-		eq(p.id, 0, key .. " id placeholder")
+		truthy(p.id == 0 or (p.id > 0 and p.id == math.floor(p.id)), key .. " id is 0 or a whole number")
 	end
 end)
 test("rotation pool entries are rotation products", function()
@@ -1049,12 +1050,19 @@ test("value notes add up: Whole Hog R$499 vs R$730, Turkey and Holiday sets, sta
 	end
 	truthy(low < 80 and top == 499, "ladder from under R$80 to R$499")
 end)
-test("all new IDs are placeholders: products/passes 0, subscription empty string", function()
-	for key, p in pairs(Monetization.Products) do
-		eq(p.id, 0, key)
+test("IDs are placeholders or real and never pasted twice; subscription is empty or EXP-", function()
+	local seen = {}
+	for _, group in ipairs({ Monetization.Products, Monetization.Passes }) do
+		for key, p in pairs(group) do
+			truthy(p.id == 0 or (p.id > 0 and p.id == math.floor(p.id)), key)
+			if p.id ~= 0 then
+				truthy(seen[p.id] == nil, key .. " reuses the ID of " .. tostring(seen[p.id]))
+				seen[p.id] = key
+			end
+		end
 	end
 	for key, sub in pairs(Monetization.Subscriptions) do
-		eq(sub.id, "", key)
+		truthy(sub.id == "" or string.sub(sub.id, 1, 4) == "EXP-", key)
 		truthy(sub.priceText ~= "" and string.find(sub.priceText, "month", 1, true), "price and length shown")
 	end
 	truthy(Monetization.PrivateServer.price > 0)
@@ -1361,6 +1369,78 @@ test("event teaser: the week before Turkey Day and the Holiday Smokeout, with a 
 			truthy(string.find(low, bad, 1, true) == nil, "pressure word '" .. bad .. "' in: " .. s)
 		end
 	end
+end)
+
+print("ShopSync (one-run shop setup)")
+test("every pass and product is planned once, with a valid name, price and its own icon file", function()
+	local items = ShopSync.items(Monetization)
+	local n = 0
+	for _ in pairs(Monetization.Passes) do
+		n += 1
+	end
+	for _ in pairs(Monetization.Products) do
+		n += 1
+	end
+	eq(#items, n)
+	local plan = ShopSync.plan(items, { pass = {}, product = {} })
+	eq(#plan.problems, 0, "problems: " .. table.concat(plan.problems, "; "))
+	eq(#plan.create + #plan.done, n)
+	local fs = require("@lune/fs")
+	for _, it in ipairs(items) do
+		truthy(fs.isFile("marketing/shop-icons/" .. it.key .. ".png"), "missing icon for " .. it.key)
+	end
+end)
+test("re-runs link existing items by exact name (oldest ID) and never touch filled IDs", function()
+	local items = {
+		{ key = "A", kind = "product", id = 0, name = "Gobble Hat", price = 59, desc = "" },
+		{ key = "B", kind = "product", id = 777, name = "Done Already", price = 49, desc = "" },
+		{ key = "C", kind = "pass", id = 0, name = "Gobble Hat", price = 99, desc = "" }, -- same name, other kind
+		{ key = "D", kind = "product", id = 0, name = "Brand New", price = 79, desc = "" },
+	}
+	local plan = ShopSync.plan(items, {
+		product = { { id = 900, name = "Gobble Hat" }, { id = 500, name = "Gobble Hat" }, { id = 12, name = "Done Already" } },
+		pass = {},
+	})
+	eq(#plan.link, 1)
+	eq(plan.link[1].key, "A")
+	eq(plan.link[1].id, 500)
+	eq(#plan.done, 1)
+	eq(plan.done[1].key, "B")
+	eq(#plan.create, 2) -- the pass "Gobble Hat" is a different kind, so it's still created
+	local bad = ShopSync.plan({
+		{ key = "X", kind = "product", id = 0, name = string.rep("a", 51), price = 10, desc = "" },
+		{ key = "Y", kind = "product", id = 0, name = "Twin", price = 0, desc = "" },
+		{ key = "Z", kind = "product", id = 0, name = "Twin", price = 10.5, desc = "" },
+	}, {})
+	eq(#bad.problems, 4) -- too long, free, fractional price, duplicate name
+end)
+test("IDs are written over id = 0 only, for the exact key, and the module still loads", function()
+	local fs = require("@lune/fs")
+	-- start from the real file with every ID reset to 0, so this holds after launch too
+	local src = string.gsub(fs.readFile("src/shared/Monetization.luau"), "= { id = %d+,", "= { id = 0,")
+	local out, written = ShopSync.applyIds(src, { Boost30 = 3301234567, Rot_HatTurkey = 42, ExtraSmokers = 99, NotAKey = 5 })
+	eq(#written, 3)
+	truthy(string.find(out, "\n\tBoost30 = { id = 3301234567, name", 1, true), "Boost30 written")
+	truthy(string.find(out, "\n\tBoost120 = { id = 0, name", 1, true), "Boost120 untouched (prefix key)")
+	truthy(string.find(out, "\n\tRot_HatTurkey = { id = 42, name", 1, true), "underscore key written")
+	truthy(string.find(out, "\n\tExtraSmokers = { id = 99, name", 1, true), "pass written")
+	-- a second run can't overwrite a real ID
+	local again, w2 = ShopSync.applyIds(out, { Boost30 = 1 })
+	eq(#w2, 0)
+	eq(again, out)
+	local fn = assert((loadstring :: any)(out), "rewritten module parses")
+	truthy(type(fn) == "function")
+end)
+test("multipart form: text fields, PNG file part and closing boundary", function()
+	local it = { key = "K", kind = "product", id = 0, name = "Sparkler Trail", price = 79, desc = "Zap" }
+	local body = ShopSync.multipart(ShopSync.formFields(it, "PNGDATA"), "bnd")
+	truthy(string.find(body, 'name="name"\r\n\r\nSparkler Trail\r\n', 1, true))
+	truthy(string.find(body, 'name="price"\r\n\r\n79\r\n', 1, true))
+	truthy(string.find(body, 'name="isForSale"\r\n\r\ntrue\r\n', 1, true))
+	truthy(string.find(body, 'filename="K.png"\r\nContent-Type: image/png\r\n\r\nPNGDATA\r\n', 1, true))
+	eq(string.sub(body, -9), "--bnd--\r\n")
+	local noIcon = ShopSync.multipart(ShopSync.formFields(it, nil), "bnd")
+	truthy(string.find(noIcon, "imageFile", 1, true) == nil)
 end)
 
 

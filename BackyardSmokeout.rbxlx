@@ -2486,7 +2486,10 @@ return TimeUtil
 --[[
 	Monetization.luau — THE ONE PLACE FOR ROBUX IDS.
 
-	HOW TO FILL THIS IN (no coding needed, see PUBLISHING.md for screenshots-level steps):
+	FASTEST: `lune run scripts/create-shop <universeId> --apply` with an Open Cloud key creates every
+	pass and product below (with its icon from marketing/shop-icons/) and fills in the IDs for you.
+
+	HOW TO FILL THIS IN BY HAND (no coding needed, see PUBLISHING.md for screenshots-level steps):
 	  1. Publish the game once (File > Publish to Roblox).
 	  2. Go to https://create.roblox.com/dashboard/creations, click the game.
 	  3. Monetization > Passes > "Create a Pass" for every entry in `Passes` below.
@@ -8297,8 +8300,35 @@ function PurchaseService.init(c: any)
 	ctx = c
 end
 
+-- Studio-only launch check in the Output window: how many shop items still need a Roblox ID.
+local function launchCheck()
+	local missing, total = 0, 0
+	for _, p in pairs(Monetization.Passes) do
+		total += 1
+		missing += if p.id == 0 then 1 else 0
+	end
+	for _, p in pairs(Monetization.Products) do
+		total += 1
+		missing += if p.id == 0 then 1 else 0
+	end
+	if missing > 0 then
+		print(
+			string.format(
+				"[Launch check] %d of %d shop items still have id = 0, so the live game hides them. One command creates them all: scripts/create-shop.luau (PUBLISHING.md step 6).",
+				missing,
+				total
+			)
+		)
+	else
+		print(string.format("[Launch check] All %d shop items have Roblox IDs.", total))
+	end
+end
+
 function PurchaseService.start()
 	MarketplaceService.ProcessReceipt = processReceipt
+	if IS_STUDIO then
+		launchCheck()
+	end
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, passId: number, purchased: boolean)
 		local key = passById[passId]
 		if purchased and key then

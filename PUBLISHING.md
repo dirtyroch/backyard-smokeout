@@ -55,11 +55,34 @@ Saving works in the live game either way. This setting only lets Studio test sav
 
 The game reads every price ID from one file: **`src/shared/Monetization.luau`**. In Studio it shows up as **ReplicatedStorage > Shared > Monetization**. Any item still set to **0** is simply hidden in the live game, so you can launch with only a few items and add the rest later.
 
+### Fast way: create all 44 in one run (about 30 seconds)
+
+Instead of creating every pass and product by hand, one script makes them all on Roblox with the right name, description, price and icon, then pastes every ID into Monetization for you.
+
+1. On the Creator Dashboard go to **Open Cloud > API Keys > Create API Key**. Name it `Smokeout shop setup`.
+2. Under **Access Permissions** add **game-passes** and **developer-products**, pick **Backyard Smokeout** as the experience, and tick **read** and **write** for both. Leave **Accepted IP Addresses** as `0.0.0.0/0` and set an expiration of a day or so. Click **Save & Generate Key** and copy it.
+3. Copy the **Universe ID** from the game's dashboard page (Overview). It's a different number from the place ID in the game's web address.
+4. From the project folder, run a dry run first. It only reads, and it lists exactly what it will create:
+   ```bash
+   ROBLOX_API_KEY=your-key lune run scripts/create-shop YOUR_UNIVERSE_ID
+   ```
+5. If the list looks right, run it for real:
+   ```bash
+   ROBLOX_API_KEY=your-key lune run scripts/create-shop YOUR_UNIVERSE_ID --apply
+   ```
+6. Run `./scripts/build.sh`, open the new `BackyardSmokeout.rbxlx` and **File > Publish to Roblox**. Then delete the API key on the dashboard.
+
+It's safe to run twice: anything already on Roblox under the same name is reused, and IDs you've already filled in are never changed. Prices stay exactly as written in Monetization (regional pricing is left off, so the shop and the Roblox prompt always match). Don't want to use a terminal? Have your game-dev bot run it with the key and universe ID. In Studio, the Output window shows a **[Launch check]** line on Play telling you how many items still need an ID.
+
+The icons come from `marketing/shop-icons/` (one 512×512 PNG per item, named after its key, made by `scripts/make-shop-icons.py`). If you create items by hand, upload the matching icon from that folder.
+
+The manual steps below still work if you'd rather click through the dashboard.
+
 ### Game Passes (one-time buys)
 
 1. Go to the Creator Dashboard, open your game, then **Monetization > Passes > Create a Pass**.
 2. For each pass below:
-   - Add a picture. Any simple 512×512 icon works. Crop a screenshot of the item in game if you like.
+   - Add a picture: use the matching file in `marketing/shop-icons/` (for example `ExtraSmokers.png`).
    - Enter the name and description, then click **Create Pass**.
 3. Open the pass, go to **Sales**, turn on **Item for Sale**, set the price and click **Save**.
 4. Copy the pass ID. It's the number in the web address.
@@ -214,6 +237,6 @@ To take a clean Studio screenshot:
 - Check **Analytics** on the dashboard after a day. Look at **Day 1 retention** and **Average session time**.
 - **Funnels** (Analytics > Funnels): **Onboarding** shows where new players stop (joined, first brisket, first plate, tutorial, each Rookie goal). **PitShop** shows opened shop, opened a tab, tapped buy and bought. Use them to see whether a price is too high before you change it.
 - **Economy** (Analytics > Economy): coin sources (tips, rewards) and sinks (meat, sauce, upgrades, slots). Use it to check that the coin economy stays balanced.
-- **Seasons:** Season 1 (Harvest Smoke) runs Nov 2 to Dec 13, 2026, Season 2 (Winter Smoke) Dec 14, 2026 to Jan 24, 2027, Season 3 (Rodeo Smoke) Jan 25 to Mar 7, 2027, and Season 4 (Bluebonnet Smoke) Mar 8 to Apr 18, 2027. Add Season 5 to `Config.SeasonPass.seasons` (15 paid looks or titles plus 5 free ones) **before Apr 19, 2027**. If you don't, the pass hides itself until you add one.
+- **Seasons:** Season 1 (Harvest Smoke) runs Nov 2 to Dec 13, 2026, Season 2 (Winter Smoke) Dec 14, 2026 to Jan 24, 2027, Season 3 (Rodeo Smoke) Jan 25 to Mar 7, 2027, Season 4 (Bluebonnet Smoke) Mar 8 to Apr 18, 2027, and Season 5 (Firefly Smoke) Apr 19 to May 30, 2027. Add Season 6 to `Config.SeasonPass.seasons` (15 paid looks or titles plus 5 free ones) **before May 31, 2027**. If you don't, the pass hides itself until you add one.
 - Every update is the same: edit in Studio, then **File > Publish to Roblox**.
 - Want to change prices or add items later? Edit **Monetization** and create the matching item on the dashboard.
