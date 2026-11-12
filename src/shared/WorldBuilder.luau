@@ -125,14 +125,15 @@ local function surfaceText(p, face, text, textColor, bg, font)
 end
 WorldBuilder.surfaceText = surfaceText
 
--- `studs` (optional {w, h}) sizes the label in world studs instead of pixels, so labels on
--- closely spaced things (smoker row, grill spots, customer tables) shrink with distance
--- instead of piling on top of each other.
+-- `studs` (optional {w, h} or {w, h, minPxW, minPxH}) sizes the label in world studs instead of
+-- pixels, so labels on closely spaced things (smoker row, grill spots, customer tables, the hub
+-- NPCs) shrink with distance instead of piling on top of each other. The optional pixel part keeps
+-- a readable floor far away (Roblox adds it on top of the stud size).
 local function billboard(adornee, name, text, offsetY, maxDist, color, w, h, studs: { number }?)
 	local b = E.Instance.new("BillboardGui")
 	b.Name = name
 	if studs then
-		b.Size = E.UDim2.new(studs[1], 0, studs[2], 0)
+		b.Size = E.UDim2.new(studs[1], studs[3] or 0, studs[2], studs[4] or 0)
 	else
 		b.Size = E.UDim2.new(0, w or 160, 0, h or 40)
 	end
@@ -302,7 +303,7 @@ function WorldBuilder.npc(parent, name, cf, o)
 	end
 	m.PrimaryPart = torso
 	if o.label then
-		billboard(head, "NameTag", o.label, 2.8, 60, o.labelColor or "#FFE9A8", 200, 36)
+		billboard(head, "NameTag", o.label, 2.8, 60, o.labelColor or "#FFE9A8", 200, 36, { 4, 0.8, 80, 16 })
 	end
 	return m, head, torso
 end
@@ -793,14 +794,21 @@ local function buildHub(root, cfg, content)
 	local cat = WorldBuilder.critter(E, stage, catDef, E.CFrame.new(0, 5, 37.3))
 	cat.Name = "ClapCatJudge"
 	-- leaderboard
-	-- faces the square (it used to show its blank back to players), in a wood frame
-	local lbCf = lookAt(V(26, 9, 36), V(4, 9, 8))
+	-- Faces the welcome arch from the open east edge of the square. It used to stand behind the
+	-- King of the Pit (seen from spawn his name tag and the Dinner Bell label sat right on top of
+	-- the standings), so it now has its own clear sight line, on two wooden posts.
+	local lbCf = lookAt(V(37, 9.4, 10), V(2, 9.4, -20))
 	local lb = part(stage, "Leaderboard", V(14, 16, 0.6), lbCf, "#1F2A1F", E.Enum.Material.SmoothPlastic)
 	deco(stage, "LBFrame", V(15.2, 17.2, 0.5), lbCf * E.CFrame.new(0, 0, 0.45), "#6B4226", E.Enum.Material.Wood, true)
 	local lbHead = deco(stage, "LBHeader", V(15.6, 1.8, 0.9), lbCf * E.CFrame.new(0, 9.0, 0), "#B22222", E.Enum.Material.SmoothPlastic, true)
 	surfaceText(lbHead, E.Enum.NormalId.Front, "🏆 COOK-OFF LEADERBOARD", "#FFFFFF", nil)
 	surfaceText(lb, E.Enum.NormalId.Front, "This week's Cook-Off\n(Saturday)\n\nNo entries yet", "#FFE9A8", nil).Name = "BoardText"
-	part(stage, "LBLegL", V(0.6, 2, 0.6), E.CFrame.new(21, 1, 36.5), "#333333", E.Enum.Material.Metal)
+	-- the back faces the east road in from the ranches, so it points the way instead of being blank
+	local lbBack = deco(stage, "LBBackSign", V(11, 4.6, 0.1), lbCf * E.CFrame.new(0, 4.2, 0.75), "#B22222", E.Enum.Material.SmoothPlastic)
+	surfaceText(lbBack, E.Enum.NormalId.Back, "🏆 " .. content.Signs.cookoff .. "\nEnter at the stage", "#FFFFFF", nil)
+	for i, sx in { -6.2, 6.2 } do
+		part(stage, i == 1 and "LBLegL" or "LBLegR", V(0.8, 9.6, 0.8), lbCf * E.CFrame.new(sx, -4.4, 0.9), "#6B4226", E.Enum.Material.Wood)
+	end
 
 	-- Unc Hank: dad jokes
 	local unc = WorldBuilder.npc(hub, "UncHank", lookAt(V(-18, 0.4, 10), V(-8, 0.4, -12)), { skin = "#D1A27A", shirt = "#F39C12", pants = "#2C3E50", hat = "cap", hatColor = "#2C3E50", label = "Unc Hank", apron = "#B22222", apronText = "UNC", mustache = "#6B4A2E", belly = true, sandals = true })
@@ -849,7 +857,7 @@ local function buildHub(root, cfg, content)
 		part(temp, "Tick", V(k % 2 == 0 and 0.5 or 0.3, 0.08, 0.06), tp(0.25, 5.2 + k, -0.72), "#2A2A2A")
 	end
 	ball(temp, "Cap", 1.45, tp(0, 11.0, 0), "#C9CED4", E.Enum.Material.Metal)
-	billboard(stem, "NameTag", "Temp", 4.6, 60, "#FFFFFF", 120, 30)
+	billboard(stem, "NameTag", "Temp", 4.6, 60, "#FFFFFF", 120, 30, { 2.4, 0.8, 48, 16 })
 	prompt(stem, "npc:temp", "Talk to Temp", "Temp", 0, 10)
 
 	-- Sunday potluck table with the tiny "Jesus loves you" figure (Mike's egg)
@@ -1545,7 +1553,7 @@ function WorldBuilder.bertha(parent, base, content)
 	dball(bellModel, "Clapper", 0.7, frameCf * E.CFrame.new(0, 6.6, 0), "#5A4520", E.Enum.Material.Metal, false)
 	deco(bellModel, "Rope", V(0.15, 4.8, 0.15), frameCf * E.CFrame.new(0.9, 5.0, 0), "#D9C29A", E.Enum.Material.Fabric, false)
 	bellModel.PrimaryPart = yoke
-	billboard(bell, "Label", "🔔 Big Bertha's Dinner Bell", 4.2, 160, "#FFC83C", 300, 40)
+	billboard(bell, "Label", "🔔 Big Bertha's Dinner Bell", 3.4, 160, "#FFC83C", 300, 40, { 6, 0.8, 110, 18 })
 	prompt(bell, "landmark:bell", "Ring the bell", "Big Bertha's Dinner Bell", 0, 14)
 
 	-- "Say Brisket!" photo spot: a camera on a tripod aimed at Bertha (opens the share sheet)

@@ -1443,6 +1443,53 @@ test("multipart form: text fields, PNG file part and closing boundary", function
 	truthy(string.find(noIcon, "imageFile", 1, true) == nil)
 end)
 
+test("hub from spawn: name tags and the Dinner Bell label don't cover the Cook-Off leaderboard", function()
+	local roblox = require("@lune/roblox")
+	local WorldBuilder = require("../src/shared/WorldBuilder")
+	local V3, CF = roblox.Vector3, roblox.CFrame
+	local dm = roblox.Instance.new("DataModel")
+	local ws = dm:GetService("Workspace")
+	local env = { Instance = roblox.Instance, Vector3 = V3, CFrame = CF, Color3 = roblox.Color3, Enum = roblox.Enum, UDim2 = roblox.UDim2, NumberSequence = roblox.NumberSequence, NumberRange = roblox.NumberRange, ColorSequence = roblox.ColorSequence, Vector2 = roblox.Vector2 }
+	local map = WorldBuilder.build(env, ws, Config, Content)
+	-- a player standing on the hub spawn, looking at Big Bertha (Roblox default FOV 70), on a
+	-- desktop window and on a phone in landscape (pixel floors are relatively bigger on phones)
+	local eye = map.Hub.HubSpawn.CFrame.Position + V3.new(0, 5, 2)
+	local cam = CF.lookAt(eye, V3.new(0, 7, 10))
+	local lb = map.Hub.CookOff.Leaderboard
+	local tags = {
+		map.Hub.KingOfThePit.Head.NameTag,
+		map.Hub.UncHank.Head.NameTag,
+		map.Hub.Temp.Stem.NameTag,
+		map.Scenery.HubDecor.BigBertha.DinnerBell.Bell.Label,
+	}
+	for _, screen in { { 1280, 720 }, { 844, 390 } } do
+		local W, H = screen[1], screen[2]
+		local f = H / (2 * math.tan(math.rad(35)))
+		local function project(p)
+			local l = cam:PointToObjectSpace(p)
+			assert(l.Z < 0, "point is in front of the camera")
+			return W / 2 + f * l.X / -l.Z, H / 2 - f * l.Y / -l.Z, -l.Z
+		end
+		local r = { math.huge, math.huge, -math.huge, -math.huge }
+		for _, sx in { -1, 1 } do
+			for _, sy in { -1, 1 } do
+				local x, y = project((lb.CFrame * CF.new(sx * lb.Size.X / 2, sy * lb.Size.Y / 2 + 1, 0)).Position)
+				r = { math.min(r[1], x), math.min(r[2], y), math.max(r[3], x), math.max(r[4], y) }
+			end
+		end
+		truthy(r[3] > 0 and r[1] < W, "leaderboard is on screen from spawn")
+		for _, gui in tags do
+			local who = gui.Parent.Parent.Name
+			truthy(gui.Size.X.Scale > 0 and gui.Size.Y.Scale > 0, who .. " label shrinks with distance")
+			local x, y, d = project(gui.Parent.CFrame.Position + gui.StudsOffset)
+			local w = gui.Size.X.Scale * f / d + gui.Size.X.Offset
+			local h = gui.Size.Y.Scale * f / d + gui.Size.Y.Offset
+			local overlap = x - w / 2 < r[3] and x + w / 2 > r[1] and y - h / 2 < r[4] and y + h / 2 > r[2]
+			truthy(not overlap, string.format("%s label covers the leaderboard from spawn (%dx%d)", who, W, H))
+		end
+	end
+end)
+
 
 print(string.format("\n%d passed, %d failed", passed, failed))
 if failed > 0 then
