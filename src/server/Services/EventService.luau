@@ -354,6 +354,50 @@ local function refreshTurkey()
 end
 EventService.refreshTurkey = refreshTurkey
 
+-- The banner's second line shows how full the table is, live, for the whole server:
+-- "Bring a dish!" -> "Dishes on the table: 2/3" -> "Table's full! +25% tips for everyone".
+local function refreshTable()
+	local EV, EC = ctx.Game.potluckEvent()
+	if not EV or not EC then
+		return
+	end
+	local pot = ctx.World.map().Hub:FindFirstChild("Potluck")
+	local decor = pot and pot:FindFirstChild(EV.id == "holiday" and "HolidaySmokeout" or "TurkeyDay")
+	local banner = decor and decor:FindFirstChild("Banner")
+	local gui = banner and banner:FindFirstChild("SignGui")
+	local label = gui and gui:FindFirstChild("BannerText") :: TextLabel?
+	if not label then
+		return
+	end
+	local now = workspace:GetServerTimeNow()
+	local n = ctx.Egg.potluckCount(now, EV.window)
+	local line = Holiday.tableLine(n, EV.need, now < ctx.Game.potluckUntil, math.floor(EV.tipBonus * 100 + 0.5), {
+		idle = EC.bannerIdle,
+		count = Content.PotluckTable.count,
+		full = Content.PotluckTable.full,
+	})
+	local text = EC.bannerTop .. "\n" .. line
+	if label.Text ~= text then
+		label.Text = text
+	end
+end
+EventService.refreshTable = refreshTable
+
+-- The event's one-line note: "It's Turkey Day Smokeout week!" while it's on, or the calm
+-- "Coming up: ... opens Mon, Nov 23" the week before. Sent when a player joins and again at
+-- Texas midnight to players already in the server (so nobody misses the day it opens).
+function EventService.eventNote(player: Player)
+	local _, EC = ctx.Game.potluckEvent()
+	if EC then
+		ctx.Game.toast(player, EC.login, "good")
+		return
+	end
+	local _, SC, sw = ctx.Game.upcomingPotluck()
+	if SC and sw then
+		ctx.Game.toast(player, string.format(SC.soon, Holiday.longLabel(sw.startDay)), "info")
+	end
+end
+
 function EventService.init(c: any)
 	ctx = c
 end
@@ -373,6 +417,13 @@ function EventService.start()
 			if not okT then
 				warn("[EventService] turkey day: " .. tostring(errT))
 			end
+			local okL, errL = pcall(function(): any
+				refreshTable()
+				return nil
+			end)
+			if not okL then
+				warn("[EventService] potluck banner: " .. tostring(errL))
+			end
 			local okB, err = pcall(function(): any
 				refreshBoard()
 				return nil
@@ -390,6 +441,12 @@ function EventService.start()
 			end
 		end
 	end)
+	task.spawn(function()
+		while true do
+			task.wait(5)
+			pcall(refreshTable)
+		end
+	end)
 	ctx.Data.onLoaded.Event:Connect(function(player: Player)
 		task.delay(4, function()
 			if not player.Parent then
@@ -398,15 +455,7 @@ function EventService.start()
 			if ctx.Game.isSudsWeekend() then
 				ctx.Game.toast(player, "🫧 Suds Saturday & Sunday! Muddy pups need a bath. Wash one for a free bandana.", "good")
 			end
-			local _, EC = ctx.Game.potluckEvent()
-			if EC then
-				ctx.Game.toast(player, EC.login, "good")
-			else
-				local _, SC, sw = ctx.Game.upcomingPotluck()
-				if SC and sw then
-					ctx.Game.toast(player, string.format(SC.soon, Holiday.longLabel(sw.startDay)), "info")
-				end
-			end
+			EventService.eventNote(player)
 			if ctx.Game.isSaturday() then
 				ctx.Game.toast(player, "🏆 It's Cook-Off Saturday! Bring your best plate to Granny Pecan for 3x prizes.", "good")
 			end

@@ -1422,6 +1422,9 @@ function GameService.start()
 						ctx.Season.sync(player, data)
 						ctx.Membership.onNewDay(player, data)
 						GameService.toast(player, "A new day at the ranch! Daily reward and a new Path step are ready.", "good")
+						if ctx.Event and ctx.Event.eventNote then
+							ctx.Event.eventNote(player) -- an event (or its teaser week) may start today
+						end
 						r.dirty = true
 					end
 					-- customers

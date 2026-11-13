@@ -746,7 +746,9 @@ Content.TurkeyDay = {
 	already = "You already brought a dish today. Thank you, sugar! Come back tomorrow, and bring your crew: when 3 pitmasters share, the table's full for everybody.",
 	firstShare = "You set your %s on the table. Granny Pecan gives you a hug and a brand-new apron.\n\n+%d coins, the Thankful & Full Apron, and a new title: Thankful.",
 	share = "You set your %s on the table. \"Now THAT's a potluck!\"\n\n+%d coins. Come back tomorrow with another dish.",
-	progress = "🥧 Potluck table: %d/%d dishes. %d more pitmasters sharing in the next few minutes fills the table, and everybody gets bonus tips!",
+	progress = "🥧 %s set a dish on the Turkey Day potluck table: %d/%d. %d more pitmasters sharing in the next few minutes fills it, and everybody gets bonus tips!",
+	bannerTop = "TURKEY DAY SMOKEOUT",
+	bannerIdle = "Bring a dish!",
 	full = "🦃 THE POTLUCK'S FULL! %d pitmasters shared a dish. Everyone gets +%d%% tips for %d min!",
 	over = "The Turkey Day potluck is packed up for the year. See y'all next Thanksgiving!",
 	soon = "🦃 Coming up: the Turkey Day Smokeout opens %s. Granny Pecan's potluck table runs all week, and your first dish earns a free Thankful & Full Apron.",
@@ -768,7 +770,9 @@ Content.HolidaySmokeout = {
 	already = "You already brought a dish today, sugar. Merry Christmas! Come back tomorrow, and bring your crew: when 3 pitmasters share, the table's full for everybody.",
 	firstShare = "You set your %s on the table. Granny Pecan tucks a wrapped box under your arm: it's an apron!\n\n+%d coins, the Merry & Smoky Apron, and a new title: Merry & Smoky.",
 	share = "You set your %s on the table. \"Now THAT's a Christmas spread!\"\n\n+%d coins. Come back tomorrow with another dish.",
-	progress = "🎄 Christmas potluck: %d/%d dishes. %d more pitmasters sharing in the next few minutes fills the table, and everybody gets bonus tips!",
+	progress = "🎄 %s set a dish on the Christmas potluck table: %d/%d. %d more pitmasters sharing in the next few minutes fills it, and everybody gets bonus tips!",
+	bannerTop = "HOLIDAY SMOKEOUT",
+	bannerIdle = "Merry Christmas, y'all!",
 	full = "🎄 THE CHRISTMAS POTLUCK'S FULL! %d pitmasters shared a dish. Everyone gets +%d%% tips for %d min!",
 	over = "The Christmas potluck is packed up till next December. Happy New Year, y'all!",
 	soon = "🎄 Coming up: the Holiday Smokeout opens %s and runs through New Year's Day. Your first Holiday Glazed Ham at the potluck table earns a free Merry & Smoky Apron.",
@@ -800,6 +804,14 @@ Content.Rookie = {
 	skipped = "Rookie List tucked away. Bring it back any time in Settings > Game.",
 	resumed = "Unc's Rookie List is back (top right)! Goals you already did count right away.",
 	stepDone = "✅ %s  +%d coins",
+}
+
+-- Second line of the potluck banner while an event is on, so the whole server can see how full
+-- the table is (a count, never a timer). Also used when nothing's on and the prompt is stale.
+Content.PotluckTable = {
+	count = "Dishes on the table: %d/%d",
+	full = "Table's full! +%d%% tips for all",
+	closed = "The potluck table is packed up for now. Granny Pecan sets it out again for Turkey Day week and at Christmas.",
 }
 
 Content.Signs = {
@@ -1505,6 +1517,30 @@ function Holiday.soon(day: number, w: Week, lookahead: number): number?
 		return d
 	end
 	return nil
+end
+
+-- How many different pitmasters shared at the potluck table inside the last `window` seconds
+-- (`shares` maps userId -> share time). Read-only: it doesn't prune the table.
+function Holiday.recentShares(shares: { [number]: number }, now: number, window: number): number
+	local n = 0
+	for _, t in pairs(shares) do
+		if now - t <= window then
+			n += 1
+		end
+	end
+	return n
+end
+
+-- The potluck banner's second line: the event's idle line, the live dish count, or the "full"
+-- line while the server tip bonus from a full table is on. `L` = { idle, count, full }.
+function Holiday.tableLine(n: number, need: number, full: boolean, bonusPct: number, L: { [string]: string }): string
+	if full then
+		return string.format(L.full, bonusPct)
+	end
+	if n <= 0 then
+		return L.idle
+	end
+	return string.format(L.count, math.min(n, need), need)
 end
 
 -- "Nov 23" style label for a day number.
@@ -5520,14 +5556,24 @@ local function checkPotluck(player: Player, EV: any, EC: any)
 			ctx.Game.markDirty(p)
 		end
 	elseif now - lastPotluck >= EV.cooldown then
-		ctx.Game.toast(player, string.format(EC.progress, n, EV.need, EV.need - n), "info")
+		-- Everyone hears it (not just the sharer), so the rest of the server knows the table is
+		-- filling up. Each player can share once a day, so this can't be spammed.
+		ctx.Game.announce(string.format(EC.progress, player.DisplayName, n, EV.need, EV.need - n), EV.id == "holiday" and "#3FA35B" or "#E8761E")
 	end
+	if ctx.Event and ctx.Event.refreshTable then
+		ctx.Event.refreshTable()
+	end
+end
+
+-- Dishes on the potluck table right now (for the banner's live count).
+function EggService.potluckCount(now: number, window: number): number
+	return Holiday.recentShares(potluckShares, now, window)
 end
 
 handlers["event:potluck"] = function(player, data)
 	local EV, EC = ctx.Game.potluckEvent()
 	if not EV or not EC then
-		dialog(player, "Granny Pecan", Content.TurkeyDay.over)
+		dialog(player, "Granny Pecan", Content.PotluckTable.closed)
 		return
 	end
 	local d = today()
@@ -6001,6 +6047,50 @@ local function refreshTurkey()
 end
 EventService.refreshTurkey = refreshTurkey
 
+-- The banner's second line shows how full the table is, live, for the whole server:
+-- "Bring a dish!" -> "Dishes on the table: 2/3" -> "Table's full! +25% tips for everyone".
+local function refreshTable()
+	local EV, EC = ctx.Game.potluckEvent()
+	if not EV or not EC then
+		return
+	end
+	local pot = ctx.World.map().Hub:FindFirstChild("Potluck")
+	local decor = pot and pot:FindFirstChild(EV.id == "holiday" and "HolidaySmokeout" or "TurkeyDay")
+	local banner = decor and decor:FindFirstChild("Banner")
+	local gui = banner and banner:FindFirstChild("SignGui")
+	local label = gui and gui:FindFirstChild("BannerText") :: TextLabel?
+	if not label then
+		return
+	end
+	local now = workspace:GetServerTimeNow()
+	local n = ctx.Egg.potluckCount(now, EV.window)
+	local line = Holiday.tableLine(n, EV.need, now < ctx.Game.potluckUntil, math.floor(EV.tipBonus * 100 + 0.5), {
+		idle = EC.bannerIdle,
+		count = Content.PotluckTable.count,
+		full = Content.PotluckTable.full,
+	})
+	local text = EC.bannerTop .. "\n" .. line
+	if label.Text ~= text then
+		label.Text = text
+	end
+end
+EventService.refreshTable = refreshTable
+
+-- The event's one-line note: "It's Turkey Day Smokeout week!" while it's on, or the calm
+-- "Coming up: ... opens Mon, Nov 23" the week before. Sent when a player joins and again at
+-- Texas midnight to players already in the server (so nobody misses the day it opens).
+function EventService.eventNote(player: Player)
+	local _, EC = ctx.Game.potluckEvent()
+	if EC then
+		ctx.Game.toast(player, EC.login, "good")
+		return
+	end
+	local _, SC, sw = ctx.Game.upcomingPotluck()
+	if SC and sw then
+		ctx.Game.toast(player, string.format(SC.soon, Holiday.longLabel(sw.startDay)), "info")
+	end
+end
+
 function EventService.init(c: any)
 	ctx = c
 end
@@ -6020,6 +6110,13 @@ function EventService.start()
 			if not okT then
 				warn("[EventService] turkey day: " .. tostring(errT))
 			end
+			local okL, errL = pcall(function(): any
+				refreshTable()
+				return nil
+			end)
+			if not okL then
+				warn("[EventService] potluck banner: " .. tostring(errL))
+			end
 			local okB, err = pcall(function(): any
 				refreshBoard()
 				return nil
@@ -6037,6 +6134,12 @@ function EventService.start()
 			end
 		end
 	end)
+	task.spawn(function()
+		while true do
+			task.wait(5)
+			pcall(refreshTable)
+		end
+	end)
 	ctx.Data.onLoaded.Event:Connect(function(player: Player)
 		task.delay(4, function()
 			if not player.Parent then
@@ -6045,15 +6148,7 @@ function EventService.start()
 			if ctx.Game.isSudsWeekend() then
 				ctx.Game.toast(player, "🫧 Suds Saturday & Sunday! Muddy pups need a bath. Wash one for a free bandana.", "good")
 			end
-			local _, EC = ctx.Game.potluckEvent()
-			if EC then
-				ctx.Game.toast(player, EC.login, "good")
-			else
-				local _, SC, sw = ctx.Game.upcomingPotluck()
-				if SC and sw then
-					ctx.Game.toast(player, string.format(SC.soon, Holiday.longLabel(sw.startDay)), "info")
-				end
-			end
+			EventService.eventNote(player)
 			if ctx.Game.isSaturday() then
 				ctx.Game.toast(player, "🏆 It's Cook-Off Saturday! Bring your best plate to Granny Pecan for 3x prizes.", "good")
 			end
@@ -7492,6 +7587,9 @@ function GameService.start()
 						ctx.Season.sync(player, data)
 						ctx.Membership.onNewDay(player, data)
 						GameService.toast(player, "A new day at the ranch! Daily reward and a new Path step are ready.", "good")
+						if ctx.Event and ctx.Event.eventNote then
+							ctx.Event.eventNote(player) -- an event (or its teaser week) may start today
+						end
 						r.dirty = true
 					end
 					-- customers

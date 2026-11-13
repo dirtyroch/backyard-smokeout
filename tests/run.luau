@@ -657,13 +657,104 @@ test("Turkey Day reward is a free event cosmetic with copy in place", function()
 	local C = Content.TurkeyDay
 	truthy(#C.thanks >= 3)
 	truthy(string.format(C.firstShare, "Juicy Harvest Turkey Leg", 520) ~= "")
-	truthy(string.format(C.progress, 1, TD.need, TD.need - 1) ~= "")
+	truthy(string.find(string.format(C.progress, "Mike", 1, TD.need, TD.need - 1), "Mike set a dish", 1, true) ~= nil, "progress names the sharer")
 	truthy(string.format(C.full, 3, 25, 5) ~= "")
 	truthy(Content.Signs.turkeyPotluck and Content.Signs.turkeyBanner)
 	for _, line in ipairs({ C.login, C.needDish, C.already, C.firstShare, C.share, C.over, Content.Signs.turkeyBanner }) do
 		local low = string.lower(line)
 		truthy(not string.find(low, "pilgrim", 1, true) and not string.find(low, "buy", 1, true) and not string.find(low, "robux", 1, true), "no pressure or loaded copy: " .. line)
 	end
+end)
+
+-- ===== Turkey Day audit (Nov 13, 2026): Texas-midnight edges, teaser, live table count =====
+test("Turkey Day opens and closes at Texas midnight (06:00 UTC), teaser starts Mon Nov 16", function()
+	local TD = Config.TurkeyDay
+	local off = Config.TIMEZONE_OFFSET_HOURS
+	eq(off, -6, "Texas is UTC-6 all of November and December (CST)")
+	local function utc(y, mo, d, h, m, sec)
+		return Holiday.daysFromCivil(y, mo, d) * 86400 + h * 3600 + (m or 0) * 60 + (sec or 0)
+	end
+	local function at(t)
+		local day = TimeUtil.dayNumber(t, off)
+		local w = Holiday.turkeyWeek(day, TD.daysBefore, TD.daysAfter)
+		return w, Holiday.soon(day, w, Config.EventTeaserDays), day
+	end
+	-- opens: Sun Nov 22 11:59:59 PM CST = Nov 23 05:59:59 UTC
+	eq((at(utc(2026, 11, 23, 5, 59, 59))).active, false, "still Sunday night in Texas")
+	eq((at(utc(2026, 11, 23, 6, 0, 0))).active, true, "Texas midnight Monday: open")
+	-- closes: Sun Nov 29 11:59:59 PM CST open, Mon midnight closed
+	eq((at(utc(2026, 11, 30, 5, 59, 59))).active, true, "last minute of Sunday")
+	eq((at(utc(2026, 11, 30, 6, 0, 0))).active, false, "Monday in Texas: packed up")
+	-- UTC midnight is NOT the boundary
+	eq((at(utc(2026, 11, 23, 0, 0, 0))).active, false, "UTC midnight Nov 23 is still Nov 22 in Texas")
+	-- teaser: 7 days ahead, from Texas midnight Mon Nov 16 through Sun Nov 22
+	local _, s1 = at(utc(2026, 11, 16, 5, 59, 59))
+	eq(s1, nil, "Sun Nov 15 night: no teaser yet")
+	local _, s2, d2 = at(utc(2026, 11, 16, 6, 0, 0))
+	eq(s2, 7, "Mon Nov 16: teaser on, 7 days out")
+	eq(Holiday.longLabel(d2 + s2), "Mon, Nov 23", "note says the opening date")
+	eq(string.upper(Holiday.label(d2 + s2)), "NOV 23", "sign says the opening date")
+	local _, s3 = at(utc(2026, 11, 23, 5, 59, 59))
+	eq(s3, 1, "last teaser day")
+	local _, s4 = at(utc(2026, 11, 23, 6, 0, 0))
+	eq(s4, nil, "no teaser once it's open")
+	-- once-a-day share: a share at 11:59 PM and another at 12:01 AM Texas time are different days
+	eq(TimeUtil.dayNumber(utc(2026, 11, 24, 5, 59), off) + 1, TimeUtil.dayNumber(utc(2026, 11, 24, 6, 1), off), "share resets at Texas midnight")
+	eq(TimeUtil.dayNumber(utc(2026, 11, 24, 1, 0), off), TimeUtil.dayNumber(utc(2026, 11, 23, 7, 0), off), "7 PM Mon and 1 AM UTC Tue are both Monday in Texas")
+end)
+test("potluck windows, 2026-2060: exact dates, never overlap, teasers never run during the other event", function()
+	local TD, H = Config.TurkeyDay, Config.HolidaySmokeout
+	for day = Holiday.daysFromCivil(2026, 1, 1), Holiday.daysFromCivil(2060, 12, 31) do
+		local tw = Holiday.turkeyWeek(day, TD.daysBefore, TD.daysAfter)
+		local hw = Holiday.dateWindow(day, H.start, H.finish, H.peak)
+		local _, m, d = Holiday.civilFromDays(day)
+		eq(hw.active, (m == 12 and d >= 19) or (m == 1 and d == 1), "Holiday Smokeout is exactly Dec 19 - Jan 1")
+		truthy(not (tw.active and hw.active), "events never overlap")
+		local ts = Holiday.soon(day, tw, Config.EventTeaserDays)
+		local hs = Holiday.soon(day, hw, Config.EventTeaserDays)
+		truthy(not (ts and hw.active) and not (hs and tw.active), "a teaser never shows during the other event")
+		truthy(not (ts and hs), "one teaser at a time")
+		if tw.active then
+			truthy(tw.endDay - tw.startDay == 6 and Holiday.weekdayOf(tw.startDay) == 2, "Mon-Sun week")
+		end
+	end
+end)
+test("potluck banner: live dish count for the whole server, then 'full' while the bonus runs", function()
+	local TD = Config.TurkeyDay
+	local L = { idle = Content.TurkeyDay.bannerIdle, count = Content.PotluckTable.count, full = Content.PotluckTable.full }
+	eq(Holiday.tableLine(0, TD.need, false, 25, L), "Bring a dish!")
+	eq(Holiday.tableLine(1, TD.need, false, 25, L), "Dishes on the table: 1/3")
+	eq(Holiday.tableLine(2, TD.need, false, 25, L), "Dishes on the table: 2/3")
+	eq(Holiday.tableLine(5, TD.need, false, 25, L), "Dishes on the table: 3/3", "never shows more than need")
+	eq(Holiday.tableLine(0, TD.need, true, 25, L), "Table's full! +25% tips for all")
+	-- shares older than the window drop off the count, and counting doesn't prune
+	local shares = { [1] = 1000, [2] = 1000 + TD.window - 1, [3] = 1000 + TD.window + 5 }
+	eq(Holiday.recentShares(shares, 1000 + TD.window, TD.window), 3, "all inside the window (edge counts)")
+	eq(Holiday.recentShares(shares, 1000 + TD.window + 1, TD.window), 2, "first share expired")
+	eq(Holiday.recentShares({}, 0, TD.window), 0)
+	truthy(shares[1] ~= nil, "read-only")
+	-- the built banner and the live banner agree (no flicker when the first refresh runs)
+	for _, C in ipairs({ Content.TurkeyDay, Content.HolidaySmokeout }) do
+		truthy(C.bannerTop and C.bannerIdle, "banner lines")
+	end
+	eq(Content.Signs.turkeyBanner, Content.TurkeyDay.bannerTop .. "\n" .. Content.TurkeyDay.bannerIdle)
+	eq(Content.Signs.holidayBanner, Content.HolidaySmokeout.bannerTop .. "\n" .. Content.HolidaySmokeout.bannerIdle)
+	for _, line in ipairs({ Content.PotluckTable.count, Content.PotluckTable.full, Content.PotluckTable.closed, Content.HolidaySmokeout.progress, Content.TurkeyDay.progress }) do
+		local low = string.lower(line)
+		truthy(not string.find(low, "buy", 1, true) and not string.find(low, "robux", 1, true) and not string.find(low, "hurry", 1, true) and not string.find(low, "last chance", 1, true), "calm copy: " .. line)
+	end
+	truthy(string.find(string.format(Content.HolidaySmokeout.progress, "Ana", 2, 3, 1), "Ana set a dish", 1, true) ~= nil)
+end)
+test("potluck wiring: progress is announced to the server, banner refreshes, midnight note for players already in", function()
+	local fs = require("@lune/fs")
+	local egg = fs.readFile("src/server/Services/EggService.luau")
+	local ev = fs.readFile("src/server/Services/EventService.luau")
+	local gs = fs.readFile("src/server/Services/GameService.luau")
+	truthy(string.find(egg, "ctx.Game.announce(string.format(EC.progress, player.DisplayName", 1, true), "progress goes to everyone")
+	truthy(string.find(egg, "ctx.Event.refreshTable()", 1, true), "a share updates the banner right away")
+	truthy(not string.find(egg, "Content.TurkeyDay.over", 1, true), "a stale prompt after Christmas doesn't talk about Thanksgiving")
+	truthy(string.find(ev, "function EventService.eventNote", 1, true) and string.find(ev, "EventService.eventNote(player)", 1, true), "join note")
+	truthy(string.find(gs, "ctx.Event.eventNote(player)", 1, true), "day rollover note")
 end)
 
 test("Rookie List: five quick, free goals that each point somewhere real", function()
@@ -1175,7 +1266,7 @@ test("Holiday Smokeout: the ham is a winter cut, the reward is free, the copy is
 	for _, C in ipairs({ Content.TurkeyDay, Content.HolidaySmokeout }) do
 		truthy(C.dialog and C.host and C.hud and #C.thanks >= 3, "potluck copy has a title, host and HUD line")
 		truthy(string.format(C.firstShare, "Juicy Holiday Glazed Ham", 680) ~= "")
-		truthy(string.format(C.progress, 1, 3, 2) ~= "" and string.format(C.full, 3, 25, 5) ~= "")
+		truthy(string.format(C.progress, "Mike", 1, 3, 2) ~= "" and string.format(C.full, 3, 25, 5) ~= "")
 	end
 	local C = Content.HolidaySmokeout
 	truthy(Content.Signs.holidayPotluck and Content.Signs.holidayBanner)

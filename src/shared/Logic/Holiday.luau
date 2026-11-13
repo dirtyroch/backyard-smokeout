@@ -135,6 +135,30 @@ function Holiday.soon(day: number, w: Week, lookahead: number): number?
 	return nil
 end
 
+-- How many different pitmasters shared at the potluck table inside the last `window` seconds
+-- (`shares` maps userId -> share time). Read-only: it doesn't prune the table.
+function Holiday.recentShares(shares: { [number]: number }, now: number, window: number): number
+	local n = 0
+	for _, t in pairs(shares) do
+		if now - t <= window then
+			n += 1
+		end
+	end
+	return n
+end
+
+-- The potluck banner's second line: the event's idle line, the live dish count, or the "full"
+-- line while the server tip bonus from a full table is on. `L` = { idle, count, full }.
+function Holiday.tableLine(n: number, need: number, full: boolean, bonusPct: number, L: { [string]: string }): string
+	if full then
+		return string.format(L.full, bonusPct)
+	end
+	if n <= 0 then
+		return L.idle
+	end
+	return string.format(L.count, math.min(n, need), need)
+end
+
 -- "Nov 23" style label for a day number.
 local MONTHS = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" }
 function Holiday.label(day: number): string

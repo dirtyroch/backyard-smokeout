@@ -265,14 +265,24 @@ local function checkPotluck(player: Player, EV: any, EC: any)
 			ctx.Game.markDirty(p)
 		end
 	elseif now - lastPotluck >= EV.cooldown then
-		ctx.Game.toast(player, string.format(EC.progress, n, EV.need, EV.need - n), "info")
+		-- Everyone hears it (not just the sharer), so the rest of the server knows the table is
+		-- filling up. Each player can share once a day, so this can't be spammed.
+		ctx.Game.announce(string.format(EC.progress, player.DisplayName, n, EV.need, EV.need - n), EV.id == "holiday" and "#3FA35B" or "#E8761E")
 	end
+	if ctx.Event and ctx.Event.refreshTable then
+		ctx.Event.refreshTable()
+	end
+end
+
+-- Dishes on the potluck table right now (for the banner's live count).
+function EggService.potluckCount(now: number, window: number): number
+	return Holiday.recentShares(potluckShares, now, window)
 end
 
 handlers["event:potluck"] = function(player, data)
 	local EV, EC = ctx.Game.potluckEvent()
 	if not EV or not EC then
-		dialog(player, "Granny Pecan", Content.TurkeyDay.over)
+		dialog(player, "Granny Pecan", Content.PotluckTable.closed)
 		return
 	end
 	local d = today()
