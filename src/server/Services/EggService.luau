@@ -29,11 +29,13 @@ local Hype = require(Shared.Logic.Hype)
 local Economy = require(Shared.Logic.Economy)
 local Rarity = require(Shared.Logic.Rarity)
 local Holiday = require(Shared.Logic.Holiday)
+local Howdy = require(Shared.Logic.Howdy)
 
 local EggService = {}
 local ctx: any = nil
 local rng = Random.new()
 local tempPokes: { [Player]: number } = {}
+local lastHowdy: { [Player]: number } = {}
 
 EggService.EGGS = { "blessed", "roof", "creek", "apron", "king", "temp", "rex", "meteorite", "cooked", "sixseven", "dinnerbell" }
 
@@ -126,20 +128,45 @@ handlers.cookoff = function(player)
 	ctx.Event.enterCookOff(player)
 end
 
-handlers["npc:king"] = function(player, data)
-	local line = Content.KingLines[rng:NextInteger(1, #Content.KingLines)]
-	local hat = data.equipped.hat
+-- Saying howdy (the King's prompt, or the word in chat) always waves at the yard.
+-- The sauce is only after dark, in a cowboy hat, once a day.
+function EggService.greet(player: Player, data: any)
+	local now = os.clock()
+	if lastHowdy[player] and now - lastHowdy[player] < 1.5 then
+		return
+	end
+	lastHowdy[player] = now
+	local hat = data.equipped and data.equipped.hat
 	local cowboy = hat == "hat_pitmaster" or hat == "hat_straw"
-	if ctx.Event.isNight() and cowboy and not data.daily.kingDone then
+	local line = Content.KingLines[rng:NextInteger(1, #Content.KingLines)]
+	local rewarded = false
+	if Howdy.rewardDue(ctx.Event.isNight(), cowboy, data.daily.kingDone == true) then
 		data.daily.kingDone = true
 		ctx.Game.addSauce(data, "straitshootin")
 		EggService.found(player, data, "king")
-		dialog(player, "The King of the Pit", "Well now, that's a fine hat, partner. A pitmaster after dark is a pitmaster for life.\nTake a bottle of my Strait-Shootin' Sauce. Don't tell Unc.\n\n(Strait-Shootin' Sauce: +30% cook speed for 3 cooks)")
+		rewarded = true
+		line = "Well now, that's a fine hat, partner. A pitmaster after dark is a pitmaster for life.\nTake a bottle of my Strait-Shootin' Sauce. Don't tell Unc.\n\n(Strait-Shootin' Sauce: +30% cook speed for 3 cooks)"
 	elseif not data.daily.kingDone then
-		dialog(player, "The King of the Pit", line .. "\n\n(He tips his hat.) Come see me after sundown in a proper cowboy hat, partner.")
-	else
-		dialog(player, "The King of the Pit", line)
+		line = line .. "\n\n(He tips his hat.) Come see me after sundown in a proper cowboy hat, partner."
 	end
+	dialog(player, "The King of the Pit", line)
+	ctx.Remotes.Push:FireAllClients("fx", { kind = "howdy", data = { userId = player.UserId, name = player.DisplayName, rewarded = rewarded } })
+	ctx.Game.markDirty(player)
+end
+
+function EggService.onChat(player: Player, text: string)
+	if not Howdy.isGreeting(text) then
+		return
+	end
+	local data = ctx.Game.dataOf(player)
+	if not data or not ctx.Game.runtime[player] then
+		return
+	end
+	EggService.greet(player, data)
+end
+
+handlers["npc:king"] = function(player, data)
+	EggService.greet(player, data)
 end
 
 handlers["npc:temp"] = function(player, data)
@@ -344,6 +371,42 @@ function EggService.init(c: any)
 end
 
 function EggService.start()
+	-- TextChatService is what live servers use. Player.Chatted still arrives in
+	-- Studio and on older chat. The greet function ignores a second copy.
+	local TextChatService = game:GetService("TextChatService")
+	local function bindChannel(channel: Instance)
+		if not channel:IsA("TextChannel") or channel:GetAttribute("HowdyBound") then
+			return
+		end
+		channel:SetAttribute("HowdyBound", true)
+		channel.MessageReceived:Connect(function(message)
+			local src = message.TextSource
+			local speaker = src and Players:GetPlayerByUserId(src.UserId)
+			if speaker then
+				EggService.onChat(speaker, message.Text)
+			end
+		end)
+	end
+	task.spawn(function()
+		local channels = TextChatService:FindFirstChild("TextChannels") or TextChatService:WaitForChild("TextChannels", 30)
+		if not channels then
+			return
+		end
+		for _, channel in ipairs(channels:GetChildren()) do
+			bindChannel(channel)
+		end
+		channels.ChildAdded:Connect(bindChannel)
+	end)
+	local function bindPlayer(plr: Player)
+		plr.Chatted:Connect(function(message)
+			EggService.onChat(plr, message)
+		end)
+	end
+	Players.PlayerAdded:Connect(bindPlayer)
+	for _, plr in ipairs(Players:GetPlayers()) do
+		bindPlayer(plr)
+	end
+
 	ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, player: Player)
 		local kind = prompt:GetAttribute("Kind")
 		if typeof(kind) ~= "string" then
@@ -389,6 +452,7 @@ function EggService.start()
 	end)
 	game:GetService("Players").PlayerRemoving:Connect(function(p)
 		tempPokes[p] = nil
+		lastHowdy[p] = nil
 		lastRing[p.UserId] = nil
 	end)
 end

@@ -1,6 +1,6 @@
 # Porch Light
 
-Original instrumental written for Backyard Smokeout in November 2026.
+Original instrumental written for Backyard Cookout in November 2026.
 
 - File: `porch-light.ogg` (and `porch-light.wav`, the same take)
 - How it was made: `compose_porch_light.py` writes every sample. There is no recording, sample pack, MIDI import, or reference track.

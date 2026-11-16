@@ -10,6 +10,7 @@ local Net = require(script.Parent.Net)
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local CookLogic = require(Shared.Logic.CookLogic)
+local HudMenu = require(Shared.Logic.HudMenu)
 local TimeUtil = require(Shared.Logic.TimeUtil)
 local T = UI.Theme
 
@@ -19,7 +20,7 @@ local root: Frame = nil :: any
 local refs: any = {}
 local cards: { [string]: any } = {}
 local cardLayoutKey = ""
-local menuButtons: { TextButton } = {}
+local menuButtons: { Frame } = {}
 local styleCard: (any) -> ()
 
 function Hud.view(st: any, boost: any): (number, number, boolean, number?)
@@ -51,17 +52,43 @@ local function topPill(parent: Instance, icon: string, order: number, color: Col
 	return value
 end
 
-local function menuButton(parent: Instance, icon: string, text: string, order: number, panel: string): TextButton
-	local b = UI.button("", T.bg, { Size = UDim2.new(0, 96, 0, 72), LayoutOrder = order, BackgroundTransparency = 0.05, Parent = parent }, function()
-		Panels.toggle(panel)
-	end)
-	UI.label(icon, { Size = UDim2.new(1, 0, 0, 36), Position = UDim2.new(0, 0, 0, 4), TextSize = 28, TextXAlignment = Enum.TextXAlignment.Center, Parent = b })
-	local caption = UI.label(text, { Size = UDim2.new(1, -8, 0, 24), Position = UDim2.new(0, 4, 1, -28), TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center, Font = T.bold, Parent = b })
+-- Art sits under a childless hit button. Labels used to cover the TextButton,
+-- so the click landed on the icon or the caption and Activated never ran.
+local function menuButton(parent: Instance, entry: HudMenu.Entry): Frame
+	local holder = UI.frame({
+		Name = entry.id,
+		BackgroundColor3 = T.bg,
+		BackgroundTransparency = 0.05,
+		Size = UDim2.new(0, 96, 0, 72),
+		LayoutOrder = entry.order,
+		ZIndex = 2,
+		Parent = parent,
+	})
+	UI.corner(holder, 10)
+	UI.stroke(holder, Color3.fromHex("#2A160E"), 2)
+	UI.label(entry.icon, { Size = UDim2.new(1, 0, 0, 36), Position = UDim2.new(0, 0, 0, 4), TextSize = 28, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 3, Parent = holder })
+	local caption = UI.label(entry.label, { Size = UDim2.new(1, -8, 0, 24), Position = UDim2.new(0, 4, 1, -28), TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center, Font = T.bold, ZIndex = 3, Parent = holder })
 	UI.fitText(caption, 16, 12)
-	local dot = UI.frame({ Name = "Dot", BackgroundColor3 = T.red, Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(1, -12, 0, -2), Visible = false, Parent = b })
+	local dot = UI.frame({ Name = "Dot", BackgroundColor3 = T.red, Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(1, -12, 0, -2), Visible = false, ZIndex = 4, Parent = holder })
 	UI.corner(dot, 7)
-	table.insert(menuButtons, b)
-	return b
+	local hit = UI.button("", T.bg, {
+		Name = "Hit",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		TextTransparency = 1,
+		Text = "",
+		ZIndex = HudMenu.HIT_Z,
+		Parent = holder,
+	}, function()
+		Panels.toggle(entry.panel)
+	end)
+	local stroke = hit:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Transparency = 1
+	end
+	HudMenu.releaseDecorations(holder)
+	table.insert(menuButtons, holder)
+	return holder
 end
 
 local function statusLine(parent: Instance, order: number, color: Color3): TextLabel
@@ -115,6 +142,8 @@ function Hud.mount(screen: GuiObject, panels: any)
 		Name = "Menu",
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
+		Active = true,
+		ZIndex = HudMenu.SCROLL_Z,
 		ScrollBarThickness = 6,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
@@ -124,15 +153,19 @@ function Hud.mount(screen: GuiObject, panels: any)
 	})
 	refs.menu = menu
 	refs.menuList = UI.list(menu, Enum.FillDirection.Vertical, 6, Enum.HorizontalAlignment.Center)
-	refs.btnShop = menuButton(menu, "🛒", "Pit Shop", 1, "shop")
-	refs.btnSeason = menuButton(menu, "🎟️", "Season", 2, "season")
-	refs.btnSauce = menuButton(menu, "🥫", "Sauce", 3, "sauce")
-	refs.btnIndex = menuButton(menu, "📖", "Index", 4, "index")
-	refs.btnPath = menuButton(menu, "🗺️", "Path", 5, "path")
-	refs.btnUp = menuButton(menu, "⬆️", "Upgrade", 6, "upgrades")
-	refs.btnDaily = menuButton(menu, "🎁", "Daily", 7, "daily")
-	refs.btnSettings = menuButton(menu, "⚙️", "Settings", 8, "settings")
-	refs.btnInvite = menuButton(menu, "👋", "Invite", 9, "invite")
+	local byId: { [string]: Frame } = {}
+	for _, entry in ipairs(HudMenu.entries) do
+		byId[entry.id] = menuButton(menu, entry)
+	end
+	refs.btnShop = byId.shop
+	refs.btnSeason = byId.season
+	refs.btnSauce = byId.sauce
+	refs.btnIndex = byId.index
+	refs.btnPath = byId.path
+	refs.btnUp = byId.upgrades
+	refs.btnDaily = byId.daily
+	refs.btnSettings = byId.settings
+	refs.btnInvite = byId.invite
 
 	local right = UI.frame({ BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -12, 1, -196), Size = UDim2.new(0, 188, 0, 164), Parent = root })
 	local rightList = UI.list(right, Enum.FillDirection.Vertical, 8, Enum.HorizontalAlignment.Right)

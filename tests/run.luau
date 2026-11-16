@@ -24,6 +24,9 @@ local Music = require("../src/shared/Music")
 local MusicPrefs = require("../src/shared/Logic/MusicPrefs")
 local CuteFace = require("../src/shared/Logic/CuteFace")
 local Gifting = require("../src/shared/Logic/Gifting")
+local HudMenu = require("../src/shared/Logic/HudMenu")
+local ShopCatalog = require("../src/shared/Logic/ShopCatalog")
+local Howdy = require("../src/shared/Logic/Howdy")
 local function fs_read(path: string): string
 	return require("@lune/fs").readFile(path)
 end
@@ -830,6 +833,10 @@ test("potluck banner: live dish count for the whole server, then 'full' while th
 	end
 	eq(Content.Signs.turkeyBanner, Content.TurkeyDay.bannerTop .. "\n" .. Content.TurkeyDay.bannerIdle)
 	eq(Content.Signs.holidayBanner, Content.HolidaySmokeout.bannerTop .. "\n" .. Content.HolidaySmokeout.bannerIdle)
+	eq(Content.TurkeyDay.bannerTop, "TURKEY DAY COOKOUT")
+	eq(Content.HolidaySmokeout.bannerTop, "HOLIDAY COOKOUT")
+	truthy(string.find(Content.Signs.turkeyBanner, "SMOKEOUT", 1, true) == nil)
+	truthy(string.find(Content.Signs.holidayBanner, "SMOKEOUT", 1, true) == nil)
 	for _, line in ipairs({ Content.PotluckTable.count, Content.PotluckTable.full, Content.PotluckTable.closed, Content.HolidaySmokeout.progress, Content.TurkeyDay.progress }) do
 		local low = string.lower(line)
 		truthy(not string.find(low, "buy", 1, true) and not string.find(low, "robux", 1, true) and not string.find(low, "hurry", 1, true) and not string.find(low, "last chance", 1, true), "calm copy: " .. line)
@@ -1295,6 +1302,24 @@ test("value notes add up: Whole Hog R$499 vs R$730, Turkey and Holiday sets, sta
 		top = math.max(top, p.price)
 	end
 	truthy(low < 80 and top == 499, "ladder from under R$80 to R$499")
+end)
+test("every game pass and developer product has a real Roblox ID", function()
+	local n = 0
+	local seen: { [number]: string } = {}
+	for key, p in pairs(Monetization.Passes) do
+		n += 1
+		truthy(p.id > 0 and p.id == math.floor(p.id), key .. " id is filled")
+		truthy(seen[p.id] == nil, key .. " id collides with " .. tostring(seen[p.id]))
+		seen[p.id] = key
+	end
+	for key, p in pairs(Monetization.Products) do
+		n += 1
+		truthy(p.id > 0 and p.id == math.floor(p.id), key .. " id is filled")
+		truthy(seen[p.id] == nil, key .. " id collides with " .. tostring(seen[p.id]))
+		seen[p.id] = key
+	end
+	eq(n, 44)
+	eq(Monetization.Products.SmokeGrape.name, "Purple Cloud Smoke")
 end)
 test("IDs are placeholders or real and never pasted twice; subscription is empty or EXP-", function()
 	local seen = {}
@@ -1821,6 +1846,211 @@ test("hub from spawn: name tags and the Dinner Bell label don't cover the Cook-O
 			truthy(not overlap, string.format("%s label covers the leaderboard from spawn (%dx%d)", who, W, H))
 		end
 	end
+end)
+
+print("HUD menu")
+local PANELS_SRC = fs_read("src/client/Panels.luau")
+local UI_SRC = fs_read("src/client/UI.luau")
+local HUD_SRC = fs_read("src/client/Hud.luau")
+
+test("every left-menu button names a real panel, except Invite", function()
+	local seen: { [string]: boolean } = {}
+	eq(#HudMenu.entries, 9)
+	for _, entry in ipairs(HudMenu.entries) do
+		truthy(not seen[entry.id], "duplicate " .. entry.id)
+		seen[entry.id] = true
+		truthy(string.find(HUD_SRC, "HudMenu.entries", 1, true) ~= nil, "HUD builds from the menu table")
+		if entry.panel == "invite" then
+			local stay, invite = HudMenu.press("shop", "invite")
+			eq(stay, "shop", "invite leaves the open panel alone")
+			truthy(invite)
+			truthy(string.find(PANELS_SRC, 'name == "invite"', 1, true) ~= nil)
+		else
+			truthy(string.find(PANELS_SRC, 'current == "' .. entry.panel .. '"', 1, true) ~= nil, entry.panel .. " is rendered")
+			eq(HudMenu.press(nil, entry.panel), entry.panel)
+			eq(HudMenu.press(entry.panel, entry.panel), nil)
+		end
+	end
+	for _, id in ipairs({ "shop", "season", "sauce", "index", "path", "upgrades", "daily", "settings", "invite" }) do
+		truthy(seen[id], "missing " .. id)
+	end
+end)
+
+test("a second activation in the same click cannot close the panel it just opened", function()
+	local gate = HudMenu.guard()
+	local open: string? = nil
+	local function click(panel: string)
+		if not gate:allow() then
+			return
+		end
+		local nextName, invite = HudMenu.press(open, panel)
+		if not invite then
+			open = nextName
+		end
+	end
+	click("shop")
+	click("shop") -- the scroll frame's second Activated
+	eq(open, "shop")
+	gate:release()
+	click("shop") -- a real second press, after the guard drops
+	eq(open, nil)
+	gate:release()
+	click("sauce")
+	eq(open, "sauce")
+	gate:release()
+	click("invite")
+	eq(open, "sauce", "invite does not close Sauce")
+end)
+
+test("menu art does not keep the click, and the hit target sits above the scroller", function()
+	local roblox = require("@lune/roblox")
+	local holder = roblox.Instance.new("Frame")
+	holder.ZIndex = 2
+	local icon = roblox.Instance.new("TextLabel")
+	icon.Name = "Icon"
+	icon.ZIndex = 3
+	icon.Parent = holder
+	local caption = roblox.Instance.new("TextLabel")
+	caption.Name = "Caption"
+	caption.ZIndex = 3
+	caption.Parent = holder
+	local dot = roblox.Instance.new("Frame")
+	dot.Name = "Dot"
+	dot.ZIndex = 4
+	dot.Parent = holder
+	local hit = roblox.Instance.new("TextButton")
+	hit.Name = "Hit"
+	hit.ZIndex = HudMenu.HIT_Z
+	hit.Parent = holder
+	HudMenu.releaseDecorations(holder)
+	eq(icon.Active, false)
+	eq(icon.Interactable, false)
+	eq(caption.Interactable, false)
+	eq(dot.Active, false)
+	eq(dot.Interactable, false)
+	eq(hit.Active, true)
+	eq(hit.Interactable, true)
+	truthy(hit.ZIndex > icon.ZIndex and hit.ZIndex > caption.ZIndex and hit.ZIndex > dot.ZIndex)
+	truthy(hit.ZIndex > HudMenu.SCROLL_Z)
+	truthy(not hit:IsA("TextLabel"))
+	-- the button callback stays synchronous and holds the guard until the next defer
+	truthy(string.find(UI_SRC, "gate:allow()", 1, true) ~= nil)
+	truthy(string.find(UI_SRC, "gate:release()", 1, true) ~= nil)
+	truthy(string.find(UI_SRC, "task.defer", 1, true) ~= nil)
+	truthy(string.find(UI_SRC, "task.spawn", 1, true) == nil, "spawn cleared the guard before the second Activated")
+end)
+
+print("Shops, howdy, signs, models")
+test("every Robux item stays listed when its id is 0, and a real id buys", function()
+	local offers = ShopCatalog.robuxKeys(Monetization)
+	eq(#offers, 44)
+	for _, offer in ipairs(offers) do
+		local item = if offer.kind == "pass" then Monetization.Passes[offer.key] else Monetization.Products[offer.key]
+		truthy(item.name and item.icon and item.desc and item.price, offer.key .. " has name, icon, price, description")
+		local soon, soonOn = ShopCatalog.saleState(0, false, false)
+		eq(soon, "soon")
+		eq(soonOn, false)
+		eq(ShopCatalog.robuxLabel(soon, item.price), "Coming soon")
+		local buy, buyOn = ShopCatalog.saleState(item.id, false, false)
+		eq(buy, "buy", offer.key)
+		eq(buyOn, true)
+		truthy(string.find(ShopCatalog.robuxLabel(buy, item.price), "R$", 1, true) ~= nil)
+		local studio, studioOn = ShopCatalog.saleState(0, true, false)
+		eq(studio, "studio")
+		eq(studioOn, true)
+	end
+	eq(ShopCatalog.saleState(123, false, true), "owned")
+end)
+test("an empty sauce shelf still lists every sauce", function()
+	local rows = ShopCatalog.sauceRows(nil, Config.SauceOrder)
+	eq(#rows, #Config.SauceOrder)
+	local stocked = ShopCatalog.sauceRows({ { id = Config.SauceOrder[1], qty = 3 } }, Config.SauceOrder)
+	eq(#stocked, 1)
+	eq(stocked[1].qty, 3)
+end)
+test("howdy is a greeting word, and the King's sauce is only after dark in a cowboy hat", function()
+	truthy(Howdy.isGreeting("howdy"))
+	truthy(Howdy.isGreeting("Howdy to everyone!"))
+	truthy(Howdy.isGreeting("  HOWDY  "))
+	truthy(not Howdy.isGreeting("showdown"))
+	truthy(not Howdy.isGreeting("how"))
+	truthy(not Howdy.isGreeting(""))
+	truthy(Howdy.rewardDue(true, true, false))
+	truthy(not Howdy.rewardDue(false, true, false))
+	truthy(not Howdy.rewardDue(true, false, false))
+	truthy(not Howdy.rewardDue(true, true, true))
+	local egg = fs_read("src/server/Services/EggService.luau")
+	truthy(string.find(egg, "TextChatService", 1, true) ~= nil, "live chat is TextChatService")
+	truthy(string.find(egg, "MessageReceived", 1, true) ~= nil)
+	truthy(string.find(egg, "Chatted", 1, true) ~= nil, "Studio still hears the older chat event")
+	truthy(string.find(egg, 'kind = "howdy"', 1, true) ~= nil, "the greeting is broadcast")
+end)
+test("every plot sign faces the approach path, and the other face is readable too", function()
+	local roblox = require("@lune/roblox")
+	local WorldBuilder = require("../src/shared/WorldBuilder")
+	local V3, CF = roblox.Vector3, roblox.CFrame
+	local dm = roblox.Instance.new("DataModel")
+	local ws = dm:GetService("Workspace")
+	local env = { Instance = roblox.Instance, Vector3 = V3, CFrame = CF, Color3 = roblox.Color3, Enum = roblox.Enum, UDim2 = roblox.UDim2, NumberSequence = roblox.NumberSequence, NumberRange = roblox.NumberRange, ColorSequence = roblox.ColorSequence, Vector2 = roblox.Vector2 }
+	local map = WorldBuilder.build(env, ws, Config, Content)
+	local function frontNormal(part)
+		return part.CFrame.LookVector
+	end
+	for i = 1, Config.MAX_PLOTS do
+		local plot = map.Plots:FindFirstChild("Plot" .. i)
+		local board = plot.Sign.Board
+		local outward = frontNormal(board)
+		local pos = board.CFrame.Position
+		local toHub = (V3.new(0, pos.Y, 0) - pos).Unit
+		truthy(outward:Dot(toHub) > 0.5, "plot " .. i .. " ranch sign faces the path")
+		local faces = 0
+		for _, d in ipairs(board:GetChildren()) do
+			if d:IsA("SurfaceGui") and d:FindFirstChild("OwnerText") then
+				faces += 1
+			end
+		end
+		eq(faces, 2, "plot " .. i .. " reads from both sides")
+		local pw = plot.PassWindow.Sign
+		local pwPos = pw.CFrame.Position
+		truthy(frontNormal(pw):Dot((V3.new(0, pwPos.Y, 0) - pwPos).Unit) > 0.5, "plot " .. i .. " pass window faces out")
+		local vip = plot.VIPLights.VIPSign
+		local vipPos = vip.CFrame.Position
+		truthy(frontNormal(vip):Dot((V3.new(0, vipPos.Y, 0) - vipPos).Unit) > 0.5, "plot " .. i .. " VIP sign faces out")
+	end
+end)
+test("birds are built from a beak, feathers and toes, and stay a small part count", function()
+	local roblox = require("@lune/roblox")
+	local WorldBuilder = require("../src/shared/WorldBuilder")
+	local env = { Instance = roblox.Instance, Vector3 = roblox.Vector3, CFrame = roblox.CFrame, Color3 = roblox.Color3, Enum = roblox.Enum, UDim2 = roblox.UDim2, NumberSequence = roblox.NumberSequence, NumberRange = roblox.NumberRange, ColorSequence = roblox.ColorSequence, Vector2 = roblox.Vector2 }
+	local ws = roblox.Instance.new("Folder")
+	local function parts(def)
+		local m = WorldBuilder.critter(env, ws, def, roblox.CFrame.new())
+		local n, beak, feather, toe, bodyQuery = 0, false, false, false, false
+		for _, d in ipairs(m:GetDescendants()) do
+			if d:IsA("BasePart") then
+				n += 1
+				if d.Name == "Beak" then
+					beak = d:IsA("WedgePart")
+				elseif d.Name == "Feather" then
+					feather = true
+				elseif d.Name == "Toe" then
+					toe = true
+				elseif d.Name == "Body" then
+					bodyQuery = d.CanQuery
+				end
+			end
+		end
+		return n, beak, feather, toe, bodyQuery
+	end
+	for _, id in ipairs({ "hummingbird", "roadrunner" }) do
+		local n, beak, feather, toe, bodyQuery = parts(Config.Critters[id == "hummingbird" and 7 or 2])
+		truthy(beak and feather and toe, id .. " has a wedge beak, feathers and toes")
+		truthy(bodyQuery, id .. " body can take a prompt")
+		truthy(n >= 20 and n <= 60, id .. " part count " .. n)
+	end
+	local burger = WorldBuilder.meat(env, ws, Config.Meats.burger, nil, roblox.CFrame.new(), 1, false, 1)
+	truthy(burger:FindFirstChild("BunTop") ~= nil, "burger keeps a bun")
+	truthy(burger.BunTop:FindFirstChild("EyeL") ~= nil or burger:FindFirstChild("EyeL", true) ~= nil, "cute face stays")
 end)
 
 print(string.format("\n%d passed, %d failed", passed, failed))

@@ -1,4 +1,4 @@
-# Publishing Backyard Smokeout (no coding needed)
+# Publishing Backyard Cookout (no coding needed)
 
 This guide takes you from "I have a file" to "my game is live on Roblox". Plan on about an hour the first time.
 
@@ -14,7 +14,7 @@ This guide takes you from "I have a file" to "my game is live on Roblox". Plan o
 
 ## Already live? Read this first
 
-If purchases already work in your Studio place, the Robux IDs are probably only in that place. Do not replace it with a fresh `BackyardSmokeout.rbxlx` until you have read **[STUDIO-UPDATE.md](STUDIO-UPDATE.md)**. The file in this repo still has every shop id at `0`. Publishing that over the live game hides the shop.
+If purchases already work in your Studio place, the Robux IDs are probably only in that place. Do not replace it with a fresh `BackyardSmokeout.rbxlx` until you have read **[STUDIO-UPDATE.md](STUDIO-UPDATE.md)**. The file in this repo has the live shop IDs. Do not set them back to `0`. Publishing zeros over the live game hides the shop.
 
 ## 2. Open the game file
 
@@ -26,15 +26,15 @@ If purchases already work in your Studio place, the Robux IDs are probably only 
 **About Studio test mode:**
 - Saving doesn't work in Studio until you finish step 5. A yellow note will say "progress is NOT saved". That's normal.
 - Shop items show a **"Studio test (free)"** button so you can try every apron and smoker skin without spending anything.
-- **Turkey Day Smokeout** (Thanksgiving week, Nov 23–29 in 2026) turns on by itself on the right dates. To test it any day in Studio: in the **Explorer** click **Workspace**, then in **Properties** scroll to **Attributes**, click **+**, name it `ForceTurkeyDay`, pick **boolean**, tick it, and press Play. The potluck table in the hub gets the turkey, pies, pumpkins and banner. It only works in Studio; the live game always uses the real dates.
-- **Holiday Smokeout** (Christmas, Dec 19 – Jan 1) works the same way. To test it any day, add a boolean attribute named `ForceHolidaySmokeout` to **Workspace** and tick it. The potluck table gets the glazed ham, tamales, a little Christmas tree, presents and a "Merry Christmas" banner, and the Holiday Glazed Ham shows up in the smoker menu.
+- **Turkey Day Cookout** (Thanksgiving week, Nov 23–29 in 2026) turns on by itself on the right dates. To test it any day in Studio: in the **Explorer** click **Workspace**, then in **Properties** scroll to **Attributes**, click **+**, name it `ForceTurkeyDay`, pick **boolean**, tick it, and press Play. The potluck table in the hub gets the turkey, pies, pumpkins and banner. It only works in Studio; the live game always uses the real dates.
+- **Holiday Cookout** (Christmas, Dec 19 – Jan 1) works the same way. To test it any day, add a boolean attribute named `ForceHolidaySmokeout` to **Workspace** and tick it. The potluck table gets the glazed ham, tamales, a little Christmas tree, presents and a "Merry Christmas" banner, and the Holiday Glazed Ham shows up in the smoker menu.
 - Want to test with a friend? Open the **Test** tab, set **Clients** to 2 and press **Start**.
 
 ## 3. Publish it
 
 1. Choose **File > Publish to Roblox**.
 2. Pick **Create new experience**.
-3. Name it **Backyard Smokeout**.
+3. Name it **Backyard Cookout**.
 4. Description idea: *"Fire up the smoker, Pitmaster! Smoke Texas brisket for real (it keeps cooking while you're offline), flip burgers in 30 seconds, serve a yard full of critter regulars, win the Saturday Cook-Off, and earn your Unc Status. 🔥🥩"*
 5. Genre: **Simulation**. Devices: turn on **Computer, Phone, Tablet** (and Console if you want).
 6. Click **Create**.
@@ -64,7 +64,7 @@ The game reads every price ID from one file: **`src/shared/Monetization.luau`**.
 Instead of creating every pass and product by hand, one script makes them all on Roblox with the right name, description, price and icon, then pastes every ID into Monetization for you.
 
 1. On the Creator Dashboard go to **Open Cloud > API Keys > Create API Key**. Name it `Smokeout shop setup`.
-2. Under **Access Permissions** add **game-passes** and **developer-products**, pick **Backyard Smokeout** as the experience, and tick **read** and **write** for both. Leave **Accepted IP Addresses** as `0.0.0.0/0` and set an expiration of a day or so. Click **Save & Generate Key** and copy it.
+2. Under **Access Permissions** add **game-passes** and **developer-products**, pick **Backyard Cookout** as the experience, and tick **read** and **write** for both. Leave **Accepted IP Addresses** as `0.0.0.0/0` and set an expiration of a day or so. Click **Save & Generate Key** and copy it.
 3. Copy the **Universe ID** from the game's dashboard page (Overview). It's a different number from the place ID in the game's web address.
 4. From the project folder, run a dry run first. It only reads, and it lists exactly what it will create:
    ```bash
@@ -137,10 +137,10 @@ Go to **Monetization > Developer Products > Create a Developer Product**. For ea
 | `TD_TrailLeaves` | Falling Leaves Trail (Turkey Day week) | R$ 79 |
 | `TD_SkinPecan` | Pecan Pie Smoker (Turkey Day week) | R$ 99 |
 | `TD_BundleFeast` | Turkey Day Look Set (all four) | R$ 229 |
-| `HD_HatTwinkle` | Twinkle Lights Cowboy Hat (Holiday Smokeout) | R$ 79 |
-| `HD_SmokeEvergreen` | Evergreen Smoke (Holiday Smokeout) | R$ 49 |
-| `HD_TrailTinsel` | Tinsel Trail (Holiday Smokeout) | R$ 79 |
-| `HD_SkinOrnament` | Ornament Smoker (Holiday Smokeout) | R$ 99 |
+| `HD_HatTwinkle` | Twinkle Lights Cowboy Hat (Holiday Cookout) | R$ 79 |
+| `HD_SmokeEvergreen` | Evergreen Smoke (Holiday Cookout) | R$ 49 |
+| `HD_TrailTinsel` | Tinsel Trail (Holiday Cookout) | R$ 79 |
+| `HD_SkinOrnament` | Ornament Smoker (Holiday Cookout) | R$ 99 |
 | `HD_BundleHoliday` | Holiday Look Set (all four) | R$ 229 |
 | `SeasonPass` | Smokehouse Pass (this season's paid track) | R$ 399 |
 | `TierSkip1` | Skip 1 Tier | R$ 49 |
@@ -153,7 +153,7 @@ Go to **Monetization > Developer Products > Create a Developer Product**. For ea
 
 - **Smokehouse Pass and tier skips:** make each one a Developer Product, not a Game Pass. The game tracks which season you bought it for, so one product works for every season. Create the product once.
 - **Turkey Day items** are only for sale from Monday to Sunday of Thanksgiving week (Nov 23–29 in 2026). The free Thankful & Full Apron stays free. You can create these products at any time.
-- **Holiday items** (`HD_...`) are only for sale during the Holiday Smokeout, Dec 19 – Jan 1. The free Merry & Smoky Apron stays free. You can create these products at any time too.
+- **Holiday items** (`HD_...`) are only for sale during the Holiday Cookout, Dec 19 – Jan 1. The free Merry & Smoky Apron stays free. You can create these products at any time too.
 - **First-Time Pit Pack** is a Developer Product. The game makes sure each account can buy it only once.
 
 ### 6b. Pit Crew Club (Roblox subscription, $4.99 a month)
@@ -182,7 +182,7 @@ When you're done, choose **File > Publish to Roblox** again so the live game get
 
 On the Creator Dashboard, open your game, then **Publish settings > Content rating** (older dashboards call it **Audience > Maturity & Compliance**). Click **Start**, and answer every page (not just the first question), so the game can reach younger players. Base each answer on the most intense thing a player can see. These are the honest answers for this build (checked against Roblox's guide, Nov 2026):
 
-| Category | Question | Answer for Backyard Smokeout | Why |
+| Category | Question | Answer for Backyard Cookout | Why |
 |---|---|---|---|
 | Violence | Depicts violence? | **Yes** | Players swat cartoon mosquitoes at dusk. |
 | Violence | How intense? | **Mild** | Unrealistic: swatted mosquitoes just pop and vanish. No violence against players or NPC people. |
