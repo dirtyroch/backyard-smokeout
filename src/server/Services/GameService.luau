@@ -70,6 +70,8 @@ local function weekday(): number
 	return TimeUtil.weekday(os.time(), Config.TIMEZONE_OFFSET_HOURS)
 end
 
+GameService.weekday = weekday
+
 function GameService.currentSeason(): any
 	return CookOff.seasonFor(Config.Seasons, TimeUtil.month(os.time(), Config.TIMEZONE_OFFSET_HOURS))
 end

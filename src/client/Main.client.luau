@@ -100,6 +100,9 @@ Net.on("fx", function(p)
 	elseif p.kind == "gift" then
 		Sfx.play("fanfare")
 		Fx.pop("🎁 A gift from " .. tostring(d.from) .. "!", Color3.fromHex("#FF8FAB"), 40)
+	elseif p.kind == "champ" then
+		Sfx.play("fanfare")
+		Fx.pop(tostring(d.medal) .. " Cook-Off Champ!", UI.Theme.gold, 40)
 	end
 end)
 

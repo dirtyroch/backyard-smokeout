@@ -377,6 +377,94 @@ test("Texas day boundary is midnight Central, not UTC", function()
 	eq(TimeUtil.dayNumber(justBeforeMidnightCst, -6), days - 1)
 	eq(TimeUtil.dayNumber(justBeforeMidnightCst + 1, -6), days)
 end)
+test("Cook-Off board: live Saturday, yesterday's results Sunday, last Saturday's champs Mon-Fri", function()
+	eq(CookOff.boardMode(7), "live")
+	eq(CookOff.boardMode(1), "results")
+	for wd = 2, 6 do
+		eq(CookOff.boardMode(wd), "last")
+		eq(CookOff.finalWeekOffset(wd), -1)
+	end
+	eq(CookOff.finalWeekOffset(7), nil)
+	eq(CookOff.finalWeekOffset(1), 0)
+	-- Monday-start weeks: Sunday is the same week as the Saturday before it, Monday is the next one
+	local sat = Holiday.daysFromCivil(2026, 11, 21)
+	eq(Holiday.weekdayOf(sat), 7)
+	eq(TimeUtil.weekOfDay(sat + 1), TimeUtil.weekOfDay(sat), "Sunday shows this week's (final) board")
+	eq(TimeUtil.weekOfDay(sat + 2), TimeUtil.weekOfDay(sat) + 1, "Monday's 'last week' is that Saturday")
+	-- next Saturday, every day of a week (today if it's Saturday)
+	local mon = Holiday.daysFromCivil(2026, 11, 16)
+	for k = 0, 5 do
+		eq(Holiday.longLabel(CookOff.nextSaturday(mon + k)), "Sat, Nov 21")
+	end
+	eq(CookOff.nextSaturday(sat), sat)
+	eq(Holiday.longLabel(CookOff.nextSaturday(sat + 1)), "Sat, Nov 28")
+end)
+test("Cook-Off board: ties share a place, the podium is places 1-3, names stay short", function()
+	local P = CookOff.placings({ { key = "11", value = 100 }, { key = "22", value = 100 }, { key = "33", value = 97 }, { key = "44", value = 97 }, { key = "55", value = 90 }, { key = "bad", value = 80 } })
+	eq(#P, 5, "a malformed key is skipped")
+	eq(P[1].place, 1)
+	eq(P[2].place, 1)
+	eq(P[3].place, 3)
+	eq(P[4].place, 3)
+	eq(P[5].place, 5)
+	eq(CookOff.podiumPlace(P, 44), 3, "a tie for 3rd is still on the podium")
+	eq(CookOff.podiumPlace(P, 55), nil)
+	eq(CookOff.podiumPlace(P, 99), nil)
+	eq(CookOff.medal(1), "🥇")
+	eq(CookOff.medal(3), "🥉")
+	eq(CookOff.medal(4), "4.")
+	eq(CookOff.shortName("ShortName", 14), "ShortName")
+	eq(CookOff.shortName("AVeryLongUsername2026", 14), "AVeryLongUser…")
+	eq(utf8.len(CookOff.shortName("AVeryLongUsername2026", 14)), 14)
+end)
+test("Cook-Off board text: champs, the next date, never a timer; Champ title is free", function()
+	local B = Content.CookOffBoard
+	local names = { [11] = "MikeRoch", [22] = "Sis", [33] = "BrisketQueen2014" }
+	local function nm(id)
+		return names[id] or ("Pitmaster " .. id)
+	end
+	local P = CookOff.placings({ { key = "11", value = 100 }, { key = "22", value = 97 }, { key = "33", value = 91 } })
+	local last = CookOff.boardText("last", "Harvest Smoke-Off", P, nm, "Sat, Nov 21", B)
+	truthy(string.find(last, "Last Saturday's champs", 1, true), last)
+	truthy(string.find(last, "🥇 MikeRoch  100", 1, true), last)
+	truthy(string.find(last, "🥉 BrisketQuee…  91", 1, true), last)
+	truthy(string.find(last, "Next Cook-Off:\nSat, Nov 21", 1, true), last)
+	local empty = CookOff.boardText("last", "Harvest Smoke-Off", {}, nm, "Sat, Nov 21", B)
+	truthy(string.find(empty, B.title, 1, true), "empty board says what the podium earns")
+	truthy(not string.find(empty, "Opens Saturday", 1, true))
+	local live = CookOff.boardText("live", "Harvest Smoke-Off", {}, nm, "Sat, Nov 21", B)
+	truthy(string.find(live, "TODAY", 1, true) and string.find(live, "Be the first", 1, true), live)
+	truthy(not string.find(live, "Next Cook-Off", 1, true), "no 'next' line on the day itself")
+	local many = {}
+	for i = 1, 10 do
+		table.insert(many, { key = tostring(i), value = 101 - i })
+	end
+	local _, rows = string.gsub(CookOff.boardText("live", "S", CookOff.placings(many), nm, "x", B), "Pitmaster", "")
+	eq(rows, B.liveRows, "live board shows liveRows rows")
+	local _, rows2 = string.gsub(CookOff.boardText("results", "S", CookOff.placings(many), nm, "x", B), "Pitmaster", "")
+	eq(rows2, B.finalRows, "final board shows finalRows rows")
+	for _, k in ipairs({ "liveHead", "resultsHead", "lastHead", "liveEmpty", "finalEmpty", "next", "practice", "champNote", "champAgain" }) do
+		local t = string.lower(B[k])
+		for _, bad in ipairs({ "hurry", "ends in", "left!", "timer", "buy", "robux", "r$" }) do
+			truthy(not string.find(t, bad, 1, true), k .. " has '" .. bad .. "'")
+		end
+	end
+	-- the title is earned only (no product grants it) and the save has a champWeek field
+	for _, list in ipairs({ Monetization.Products or {}, Monetization.Passes or {} }) do
+		for key, item in pairs(list) do
+			truthy(not string.find(tostring(item.title or ""), B.title, 1, true), key .. " sells the Champ title")
+		end
+	end
+	truthy(string.find(fs_read("src/shared/DefaultData.luau"), "cookoff = { week = -1, best = 0, champWeek = -1 }", 1, true), "saves gain cookoff.champWeek")
+end)
+test("Cook-Off wiring: the board reads last week's store Mon-Fri and champs are told once a week", function()
+	local src = fs_read("src/server/Services/EventService.luau")
+	truthy(string.find(src, "CookOff.finalWeekOffset", 1, true), "final week offset used")
+	truthy(string.find(src, "\"CookOff_W\" .. wk", 1, true), "reads the finished week's store")
+	truthy(string.find(src, "data.cookoff.champWeek == wk", 1, true), "once per week")
+	truthy(string.find(src, "task.spawn(EventService.champCheck, player)", 1, true), "checked on join")
+	truthy(string.find(fs_read("src/client/Main.client.luau"), "p.kind == \"champ\"", 1, true), "client shows the champ pop")
+end)
 test("seasons cover every month", function()
 	for m = 1, 12 do
 		truthy(CookOff.seasonFor(Config.Seasons, m) ~= nil)

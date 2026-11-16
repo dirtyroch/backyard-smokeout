@@ -190,4 +190,23 @@ Content.Signs = {
 	bertha = "BIG BERTHA\nThe King of the Pit's 1,000-gallon smoker · Ring the bell when supper's on",
 }
 
+-- The hub's Cook-Off leaderboard. Saturday: today's standings. Sunday: yesterday's results.
+-- Monday-Friday: last Saturday's champs and the next date. Top 3 (ties included) earn the free
+-- Cook-Off Champ title. Dates only, never a countdown.
+Content.CookOffBoard = {
+	liveHead = "TODAY! 3x prizes",
+	resultsHead = "Yesterday's champs",
+	lastHead = "Last Saturday's champs",
+	liveEmpty = "No plates judged yet.\nBe the first!",
+	finalEmpty = "No champs yet.\nTop 3 earn the\nCook-Off Champ title!",
+	next = "Next Cook-Off:\n%s",
+	practice = "Practice any day!",
+	liveRows = 8,
+	finalRows = 5,
+	nameMax = 12,
+	title = "Cook-Off Champ",
+	champNote = "🏆 You placed %s at Saturday's Cook-Off! You earned the Cook-Off Champ title (Settings > Titles).",
+	champAgain = "🏆 You placed %s at Saturday's Cook-Off again! Your name's on the board by the stage.",
+}
+
 return Content
