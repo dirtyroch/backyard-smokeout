@@ -222,7 +222,7 @@ Config.Cosmetics = {
 	skin_golden = { name = "Solid Gold Smoker", slot = "skin", source = "robux", color = "#FFD700", gold = true },
 	skin_pathgold = { name = "Pitmaster Bronze Smoker", slot = "skin", source = "path", color = "#CD7F32" },
 	skin_snowy = { name = "Snowy Smoker", slot = "skin", source = "rotation", color = "#E8F4FF" },
-	smoke_grape = { name = "Grape Soda Smoke", slot = "smoke", source = "robux", color = "#8E44AD" },
+	smoke_grape = { name = "Purple Cloud Smoke", slot = "smoke", source = "robux", color = "#8E44AD" },
 	smoke_bluebonnet = { name = "Bluebonnet Smoke", slot = "smoke", source = "robux", color = "#3B6FD8" },
 	smoke_sherbet = { name = "Rainbow Sherbet Smoke", slot = "smoke", source = "robux", color = "#FF8FAB", rainbow = true },
 	smoke_hickory = { name = "Hickory Gold Smoke", slot = "smoke", source = "path", color = "#D4A35A" },
