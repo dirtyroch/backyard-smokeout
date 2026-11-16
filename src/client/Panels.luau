@@ -11,6 +11,8 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Content = require(Shared.Content)
 local Monetization = require(Shared.Monetization)
+local MusicTrack = require(Shared.Music)
+local MusicPrefs = require(Shared.Logic.MusicPrefs)
 local Rarity = require(Shared.Logic.Rarity)
 local Restock = require(Shared.Logic.Restock)
 local Economy = require(Shared.Logic.Economy)
@@ -56,19 +58,32 @@ end
 -- ===== window chrome =====
 function Panels.mount(sg: GuiObject)
 	screen = sg
-	window = UI.frame({ Name = "Window", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 760, 0, 500), BackgroundColor3 = T.bg, Visible = false, ZIndex = 20, Parent = screen })
+	window = UI.frame({ Name = "Window", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 840, 0, 560), BackgroundColor3 = T.bg, Visible = false, ZIndex = 20, Parent = screen })
 	UI.corner(window, 18)
 	UI.stroke(window, T.accent, 3)
-	titleLabel = UI.label("", { Position = UDim2.new(0, 20, 0, 10), Size = UDim2.new(1, -80, 0, 36), TextSize = 28, ZIndex = 21, Parent = window })
-	UI.button("✕", T.red, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 10), Size = UDim2.new(0, 40, 0, 40), TextSize = 22, ZIndex = 22, Parent = window }, function()
+	titleLabel = UI.label("", { Position = UDim2.new(0, 20, 0, 12), Size = UDim2.new(1, -84, 0, 40), TextSize = 30, ZIndex = 21, Parent = window })
+	UI.button("✕", T.red, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), Size = UDim2.new(0, 48, 0, 48), TextSize = 24, ZIndex = 22, Parent = window }, function()
 		Panels.close()
 	end)
-	body = UI.frame({ Name = "Body", BackgroundTransparency = 1, Position = UDim2.new(0, 16, 0, 54), Size = UDim2.new(1, -32, 1, -68), ZIndex = 21, Parent = window })
+	body = UI.frame({ Name = "Body", BackgroundTransparency = 1, Position = UDim2.new(0, 16, 0, 68), Size = UDim2.new(1, -32, 1, -84), ZIndex = 21, Parent = window })
+	Panels.applyLayout()
 	Net.changed.Event:Connect(function()
 		if current and current ~= "dialog" and current ~= "welcome" and os.clock() - lastRender > 0.75 then
 			Panels.render()
 		end
 	end)
+end
+
+function Panels.applyLayout()
+	if not window then
+		return
+	end
+	local v = UI.viewport
+	local margin = if UI.compact then 10 else 36
+	local w = math.clamp(v.X - margin * 2, 320, 980)
+	local h = math.clamp(v.Y - margin * 2, 300, 680)
+	window.Size = UDim2.fromOffset(w, h)
+	titleLabel.TextSize = if UI.compact then 22 else 30
 end
 
 function Panels.close()
@@ -149,15 +164,25 @@ end
 
 local function tabs(parent: Instance, key: string, names: { string }, default: string): (string, Frame)
 	local sel = tabState[key] or default
-	local row = UI.frame({ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 36), ZIndex = 21, Parent = parent })
-	UI.list(row, Enum.FillDirection.Horizontal, 6)
+	local row = UI.new("ScrollingFrame", {
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, 0, 0, 52),
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.X,
+		ScrollingDirection = Enum.ScrollingDirection.X,
+		ScrollBarThickness = 6,
+		ZIndex = 21,
+		Parent = parent,
+	})
+	UI.list(row, Enum.FillDirection.Horizontal, 8)
 	for i, n in ipairs(names) do
-		UI.button(n, n == sel and T.accent or T.card, { Size = UDim2.new(0, math.max(70, #n * 9 + 20), 0, 32), TextSize = 15, LayoutOrder = i, ZIndex = 22, Parent = row }, function()
+		UI.button(n, n == sel and T.accent or T.card, { Size = UDim2.new(0, math.max(96, #n * 12 + 36), 0, 44), TextSize = 18, LayoutOrder = i, ZIndex = 22, Parent = row }, function()
 			tabState[key] = n
 			Panels.render()
 		end)
 	end
-	local content = UI.frame({ BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 44), Size = UDim2.new(1, 0, 1, -44), ZIndex = 21, Parent = parent })
+	local content = UI.frame({ BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 60), Size = UDim2.new(1, 0, 1, -60), ZIndex = 21, Parent = parent })
 	return sel, content
 end
 
@@ -196,6 +221,18 @@ local function ownsAll(s: any, grants: { string }?): boolean
 	return true
 end
 
+local function shopCell(): Vector2
+	local width = window.AbsoluteSize.X
+	if width < 8 then
+		width = window.Size.X.Offset
+	end
+	local inner = math.max(280, width - 48)
+	if inner < 520 then
+		return Vector2.new(inner - 16, 300)
+	end
+	return Vector2.new(220, 312)
+end
+
 local function shopCard(parent: Instance, order: number, kind: string, key: string, item: any, s: any)
 	local available = kind == "pass" and s.productIds.passes[key] or s.productIds.products[key]
 	if not available then
@@ -203,12 +240,15 @@ local function shopCard(parent: Instance, order: number, kind: string, key: stri
 	end
 	local f = UI.frame({ BackgroundColor3 = T.card, LayoutOrder = order, ZIndex = 22, Parent = parent })
 	UI.corner(f, 14)
-	UI.pad(f, 8)
-	lbl(f, item.icon, { Size = UDim2.new(1, 0, 0, 44), TextSize = 38, TextXAlignment = Enum.TextXAlignment.Center })
-	lbl(f, item.name, { Position = UDim2.new(0, 0, 0, 46), Size = UDim2.new(1, 0, 0, 40), TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center })
-	lbl(f, item.desc, { Position = UDim2.new(0, 0, 0, 86), Size = UDim2.new(1, 0, 0, 64), TextSize = 12, Font = T.body, TextColor3 = T.dim, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top })
+	UI.pad(f, 10)
+	local col = UI.frame({ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 23, Parent = f })
+	local lay = UI.list(col, Enum.FillDirection.Vertical, 6, Enum.HorizontalAlignment.Center)
+	lay.VerticalAlignment = Enum.VerticalAlignment.Top
+	lbl(col, item.icon, { Size = UDim2.new(1, 0, 0, 40), TextSize = 34, TextXAlignment = Enum.TextXAlignment.Center, LayoutOrder = 1 })
+	lbl(col, item.name, { Size = UDim2.new(1, 0, 0, 48), TextSize = 18, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top, LayoutOrder = 2 })
+	lbl(col, item.desc, { Size = UDim2.new(1, 0, 0, 72), TextSize = 16, Font = T.body, TextColor3 = T.dim, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top, LayoutOrder = 3 })
 	if item.valueNote then
-		lbl(f, item.valueNote, { Position = UDim2.new(0, 0, 0, 150), Size = UDim2.new(1, 0, 0, 28), TextSize = 11, Font = T.body, TextColor3 = T.gold, TextXAlignment = Enum.TextXAlignment.Center })
+		lbl(col, item.valueNote, { Size = UDim2.new(1, 0, 0, 36), TextSize = 15, Font = T.body, TextColor3 = T.gold, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top, LayoutOrder = 4 })
 	end
 	local owned = false
 	if kind == "pass" then
@@ -218,43 +258,43 @@ local function shopCard(parent: Instance, order: number, kind: string, key: stri
 		local have = Storefront.ownedCount(s.owned, item.grants)
 		if item.kind == "bundle" and not owned and have > 0 then
 			-- honest heads-up: the bundle price doesn't change if you already own some of it
-			lbl(f, string.format("Own %d/%d", have, #(item.grants :: any)), { Size = UDim2.new(0.5, 0, 0, 18), TextSize = 11, Font = T.body, TextColor3 = T.dim })
+			lbl(col, string.format("Own %d/%d", have, #(item.grants :: any)), { Size = UDim2.new(1, 0, 0, 22), TextSize = 15, Font = T.body, TextColor3 = T.dim, TextXAlignment = Enum.TextXAlignment.Center, LayoutOrder = 5 })
 		end
 	elseif item.once then
 		owned = s.onceBought ~= nil and s.onceBought[key] == true
 	end
 	local idIsZero = item.id == 0
-	local text = owned and "Owned ✓" or (idIsZero and "Studio test (free)" or ("Buy for R$ " .. item.price))
+	local text = owned and "Owned" or (idIsZero and "Studio test (free)" or ("Buy  R$ " .. item.price))
 	local canGift = kind == "product" and Gifting.giftable(item)
+	local row = UI.frame({ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 48), LayoutOrder = 8, ZIndex = 23, Parent = col })
 	if canGift then
 		-- Gift it to someone in the server (looks only). Shows held gifts that can go out free.
 		local held = s.giftsHeld and s.giftsHeld[key] or 0
-		btn(f, held > 0 and ("🎁" .. held) or "🎁", T.gift, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, 0, 1, 0), Size = UDim2.new(0, 44, 0, 36), TextSize = held > 0 and 15 or 20 }, function()
+		btn(row, held > 0 and ("🎁 " .. held) or "🎁", T.gift, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0, 56, 0, 44), TextSize = 18 }, function()
 			Panels.open("gift", key)
 		end)
 	end
-	btn(f, text, owned and T.cardHi or T.green, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, canGift and -50 or 0, 0, 36), TextSize = 15, AutoButtonColor = not owned }, function()
+	btn(row, text, owned and T.cardHi or T.green, { Position = UDim2.new(0, 0, 0, 0), Size = UDim2.new(1, canGift and -64 or 0, 0, 44), TextSize = 16, AutoButtonColor = not owned }, function()
 		if not owned then
 			Net.act("Prompt", kind, key)
 		end
 	end)
-	if not idIsZero and not owned then
-		lbl(f, "R$ " .. item.price, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0, 60, 0, 18), TextSize = 13, TextColor3 = T.gold, TextXAlignment = Enum.TextXAlignment.Right })
-	end
 	return true
 end
 
 local function infoCard(parent: Instance, order: number, icon: string, name: string, desc: string, note: string?, label: string, color: Color3, fn: (() -> ())?)
 	local f = UI.frame({ BackgroundColor3 = T.card, LayoutOrder = order, ZIndex = 22, Parent = parent })
 	UI.corner(f, 14)
-	UI.pad(f, 8)
-	lbl(f, icon, { Size = UDim2.new(1, 0, 0, 44), TextSize = 38, TextXAlignment = Enum.TextXAlignment.Center })
-	lbl(f, name, { Position = UDim2.new(0, 0, 0, 46), Size = UDim2.new(1, 0, 0, 40), TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center })
-	lbl(f, desc, { Position = UDim2.new(0, 0, 0, 86), Size = UDim2.new(1, 0, 0, 64), TextSize = 12, Font = T.body, TextColor3 = T.dim, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top })
+	UI.pad(f, 10)
+	local col = UI.frame({ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, 0), ZIndex = 23, Parent = f })
+	UI.list(col, Enum.FillDirection.Vertical, 6, Enum.HorizontalAlignment.Center)
+	lbl(col, icon, { Size = UDim2.new(1, 0, 0, 40), TextSize = 34, TextXAlignment = Enum.TextXAlignment.Center, LayoutOrder = 1 })
+	lbl(col, name, { Size = UDim2.new(1, 0, 0, 48), TextSize = 18, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top, LayoutOrder = 2 })
+	lbl(col, desc, { Size = UDim2.new(1, 0, 0, 72), TextSize = 16, Font = T.body, TextColor3 = T.dim, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top, LayoutOrder = 3 })
 	if note then
-		lbl(f, note, { Position = UDim2.new(0, 0, 0, 150), Size = UDim2.new(1, 0, 0, 40), TextSize = 11, Font = T.body, TextColor3 = T.gold, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top })
+		lbl(col, note, { Size = UDim2.new(1, 0, 0, 40), TextSize = 15, Font = T.body, TextColor3 = T.gold, TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top, LayoutOrder = 4 })
 	end
-	btn(f, label, color, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 36), TextSize = 15, AutoButtonColor = fn ~= nil }, fn)
+	btn(col, label, color, { Size = UDim2.new(1, 0, 0, 44), TextSize = 16, LayoutOrder = 8, AutoButtonColor = fn ~= nil }, fn)
 	return f
 end
 
@@ -280,7 +320,7 @@ local function renderShop(s: any)
 		loggedTab = sel
 		task.spawn(Net.act, "ShopView", sel)
 	end
-	local sf = scroller(content, true, Vector2.new(166, 236))
+	local sf = scroller(content, true, shopCell())
 	local n = 0
 	-- the event look set that's on sale right now (Turkey Day or Holiday), if any
 	local event, eventEnds, eventName, eventFree = nil, "", "", ""
@@ -363,7 +403,8 @@ local function renderShop(s: any)
 	elseif sel == "Passes" then
 		foot = "Passes are yours forever. The Pit Crew Club and Premium are monthly and give looks and friendly perks, never coins."
 	end
-	lbl(body, foot, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 14), Size = UDim2.new(1, 0, 0, 18), TextSize = 12, Font = T.body, TextColor3 = T.dim })
+	content.Size = UDim2.new(1, 0, 1, -116)
+	lbl(body, foot, { Position = UDim2.new(0, 0, 1, -48), Size = UDim2.new(1, 0, 0, 44), TextSize = 16, Font = T.body, TextColor3 = T.dim, TextYAlignment = Enum.TextYAlignment.Center })
 end
 
 -- ===== Smokehouse Pass (season) =====
@@ -410,26 +451,30 @@ local function renderSeason(s: any)
 	if not def then
 		return
 	end
-	lbl(body, string.format("%s Season %d: %s", sp.icon, sp.number, sp.name), { Size = UDim2.new(1, -240, 0, 28), TextSize = 22, TextColor3 = T.gold })
-	local sub = sp.need > 0 and string.format("%s to %s  •  Tier %d of %d  •  %d / %d XP to the next tier", sp.starts, sp.ends, sp.tier, sp.max, sp.into, sp.need) or string.format("%s to %s  •  Top tier reached! Nice smokin'.", sp.starts, sp.ends)
-	lbl(body, sub, { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -240, 0, 20), TextSize = 13, Font = T.body, TextColor3 = T.dim })
-	local _, fill = UI.bar(body, T.gold, { Position = UDim2.new(0, 0, 0, 50), Size = UDim2.new(1, -240, 0, 10), ZIndex = 22 })
+	local side = if UI.compact then 0 else -248
+	local headY = if UI.compact then 56 else 0
+	lbl(body, string.format("%s Season %d: %s", sp.icon, sp.number, sp.name), { Position = UDim2.new(0, 0, 0, headY), Size = UDim2.new(1, side, 0, 32), TextSize = 22, TextColor3 = T.gold })
+	local sub = sp.need > 0 and string.format("%s to %s  •  Tier %d of %d  •  %d / %d XP to the next tier", sp.starts, sp.ends, sp.tier, sp.max, sp.into, sp.need) or string.format("%s to %s  •  Top tier reached. Nice smokin'.", sp.starts, sp.ends)
+	lbl(body, sub, { Position = UDim2.new(0, 0, 0, headY + 32), Size = UDim2.new(1, side, 0, 36), TextSize = 16, Font = T.body, TextColor3 = T.dim })
+	local barY = headY + 72
+	local _, fill = UI.bar(body, T.gold, { Position = UDim2.new(0, 0, 0, barY), Size = UDim2.new(1, side, 0, 12), ZIndex = 22 })
 	fill.ZIndex = 23
 	fill.Size = UDim2.fromScale(sp.need > 0 and math.clamp(sp.into / sp.need, 0, 1) or 1, 1)
 	local pass = Monetization.Products.SeasonPass
 	local avail = s.productIds.products.SeasonPass
 	if sp.paid then
-		btn(body, "🎟️ Pass ✓", T.cardHi, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 4), Size = UDim2.new(0, 226, 0, 52), TextSize = 18, AutoButtonColor = false })
+		btn(body, "Pass owned", T.cardHi, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(if UI.compact then 1 else 0, if UI.compact then 0 else 240, 0, 48), TextSize = 18, AutoButtonColor = false })
 	elseif avail then
-		btn(body, pass.id == 0 and "🎟️ Get the pass (Studio test)" or ("🎟️ Get the pass  R$ " .. pass.price), T.green, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 4), Size = UDim2.new(0, 226, 0, 52), TextSize = 16 }, function()
+		btn(body, pass.id == 0 and "Get the pass (Studio test)" or ("Get the pass  R$ " .. pass.price), T.green, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(if UI.compact then 1 else 0, if UI.compact then 0 else 240, 0, 48), TextSize = 16 }, function()
 			Net.act("Prompt", "product", "SeasonPass")
 		end)
 	end
 	-- the two tracks
-	local rows = UI.frame({ BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 70), Size = UDim2.new(0, 58, 0, 230), ZIndex = 22, Parent = body })
+	local trackTop = (if UI.compact then 56 else 0) + 96
+	local rows = UI.frame({ BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, trackTop), Size = UDim2.new(0, 64, 1, -(trackTop + 116)), ZIndex = 22, Parent = body })
 	lbl(rows, "FREE", { Position = UDim2.new(0, 0, 0, 24), Size = UDim2.new(1, 0, 0, 96), TextSize = 15, TextColor3 = T.text })
 	lbl(rows, "PASS", { Position = UDim2.new(0, 0, 0, 126), Size = UDim2.new(1, 0, 0, 96), TextSize = 15, TextColor3 = T.gold })
-	local track = UI.new("ScrollingFrame", { BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 60, 0, 70), Size = UDim2.new(1, -60, 0, 236), AutomaticCanvasSize = Enum.AutomaticSize.X, CanvasSize = UDim2.new(), ScrollingDirection = Enum.ScrollingDirection.X, ScrollBarThickness = 6, ZIndex = 22, Parent = body })
+	local track = UI.new("ScrollingFrame", { BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 68, 0, trackTop), Size = UDim2.new(1, -68, 1, -(trackTop + 116)), AutomaticCanvasSize = Enum.AutomaticSize.XY, CanvasSize = UDim2.new(), ScrollingDirection = Enum.ScrollingDirection.XY, ScrollBarThickness = 8, ZIndex = 22, Parent = body })
 	UI.list(track, Enum.FillDirection.Horizontal, 6)
 	for i = 1, sp.max do
 		local reached = i <= sp.tier
@@ -444,7 +489,7 @@ local function renderSeason(s: any)
 		end)
 	end
 	-- tier skips (looks and titles only)
-	local skipRow = UI.frame({ BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 316), Size = UDim2.new(1, 0, 0, 44), ZIndex = 22, Parent = body })
+	local skipRow = UI.frame({ BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -56), Size = UDim2.new(1, 0, 0, 48), ZIndex = 22, Parent = body })
 	UI.list(skipRow, Enum.FillDirection.Horizontal, 8)
 	for i, key in ipairs({ "TierSkip1", "TierSkip5" }) do
 		local p = Monetization.Products[key]
@@ -459,7 +504,7 @@ local function renderSeason(s: any)
 	if skip5.valueNote then
 		lbl(skipRow, skip5.valueNote, { Size = UDim2.new(0, 200, 0, 40), TextSize = 12, Font = T.body, TextColor3 = T.gold, LayoutOrder = 3 })
 	end
-	lbl(body, "Looks and titles only. Season XP comes from things you already do: serving, cooking, perfect flips, Cook-Offs, the dinner bell and a daily visit. Tiers you reach are yours to keep.", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 14), Size = UDim2.new(1, 0, 0, 34), TextSize = 12, Font = T.body, TextColor3 = T.dim, TextWrapped = true })
+	lbl(body, "Looks and titles only. Season XP comes from things you already do: serving, cooking, perfect flips, Cook-Offs, the dinner bell and a daily visit. Tiers you reach are yours to keep.", { Position = UDim2.new(0, 0, 1, -48), Size = UDim2.new(1, 0, 0, 44), TextSize = 16, Font = T.body, TextColor3 = T.dim, TextWrapped = true })
 end
 
 -- ===== Gift picker (looks only, to someone in this server) =====
@@ -503,7 +548,7 @@ local function renderGift(s: any)
 			Panels.invite()
 		end)
 	end
-	btn(body, "← Back to shop", T.card, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 14), Size = UDim2.new(0, 160, 0, 30), TextSize = 14 }, function()
+	btn(body, "Back to shop", T.card, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(0, 180, 0, 44), TextSize = 18 }, function()
 		Panels.open("shop")
 	end)
 end
@@ -611,7 +656,7 @@ local function renderCook(s: any)
 				end
 			end)
 			if why then
-				lbl(f, why, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -170, 1, 4), Size = UDim2.new(0, 260, 0, 18), TextSize = 12, Font = T.body, TextColor3 = T.gold, TextXAlignment = Enum.TextXAlignment.Right })
+				lbl(f, why, { Position = UDim2.new(0, 56, 0, 48), Size = UDim2.new(1, -230, 0, 22), TextSize = 15, Font = T.body, TextColor3 = T.gold })
 			end
 		end
 	end
@@ -629,7 +674,7 @@ local function renderIndex(s: any)
 	titleLabel.Text = "📖 Index"
 	local sel, content = tabs(body, "index", { "Regulars", "Cuts", "Secrets" }, "Regulars")
 	if sel == "Regulars" then
-		local sf = scroller(content, true, Vector2.new(166, 120))
+		local sf = scroller(content, true, Vector2.new(210, 156))
 		local odds = Rarity.weightedOdds(Config.Critters)
 		for i, c in ipairs(Config.Critters) do
 			local met = (s.critters[c.id] or 0) > 0
@@ -638,8 +683,8 @@ local function renderIndex(s: any)
 			UI.pad(f, 8)
 			local sw = UI.frame({ BackgroundColor3 = met and Color3.fromHex(c.body) or Color3.fromHex("#222222"), Size = UDim2.new(0, 30, 0, 30), ZIndex = 23, Parent = f })
 			UI.corner(sw, 15)
-			lbl(f, met and c.name or "???", { Position = UDim2.new(0, 38, 0, 0), Size = UDim2.new(1, -38, 0, 34), TextSize = 15 })
-			lbl(f, string.format("%s\nAppears %.1f%%  •  tips x%.1f", met and ("Served " .. s.critters[c.id] .. "x") or "Not met yet", odds[c.id] or 0, c.tip), { Position = UDim2.new(0, 0, 0, 40), Size = UDim2.new(1, 0, 0, 50), TextSize = 12, Font = T.body, TextColor3 = T.dim })
+			lbl(f, met and c.name or "???", { Position = UDim2.new(0, 40, 0, 0), Size = UDim2.new(1, -44, 0, 40), TextSize = 18 })
+			lbl(f, string.format("%s\nAppears %.1f%%  •  tips x%.1f", met and ("Served " .. s.critters[c.id] .. "x") or "Not met yet", odds[c.id] or 0, c.tip), { Position = UDim2.new(0, 0, 0, 48), Size = UDim2.new(1, 0, 0, 64), TextSize = 16, Font = T.body, TextColor3 = T.dim })
 		end
 	elseif sel == "Cuts" then
 		local sf = scroller(content)
@@ -893,13 +938,13 @@ local function renderSettings(s: any)
 			table.insert(list, t)
 		end
 		table.sort(list)
-		local f0 = card(sf, 0, 44)
-		btn(f0, "Show rank (" .. Config.Ranks[s.rank].name .. ")", s.title == "" and T.accent or T.cardHi, { Size = UDim2.new(0, 300, 1, 0), TextSize = 15 }, function()
+		local f0 = card(sf, 0, 64)
+		btn(f0, "Show rank (" .. Config.Ranks[s.rank].name .. ")", s.title == "" and T.accent or T.cardHi, { Size = UDim2.new(1, 0, 0, 44), TextSize = 18 }, function()
 			Net.act("SetTitle", "")
 		end)
 		for i, t in ipairs(list) do
-			local f = card(sf, i, 44)
-			btn(f, t, s.title == t and T.accent or T.cardHi, { Size = UDim2.new(0, 300, 1, 0), TextSize = 15 }, function()
+			local f = card(sf, i, 64)
+			btn(f, t, s.title == t and T.accent or T.cardHi, { Size = UDim2.new(1, 0, 0, 44), TextSize = 18 }, function()
 				Net.act("SetTitle", t)
 			end)
 		end
@@ -908,23 +953,63 @@ local function renderSettings(s: any)
 			lbl(f, "Earn titles from the Path, secrets and Unc Status.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 14, Font = T.body })
 		end
 	else
-		local f = card(sf, 1, 90)
-		lbl(f, "🕊️ Peace Mode: " .. (s.settings.peace and "ON" or "OFF"), { Size = UDim2.new(1, -180, 0, 26), TextSize = 20 })
-		lbl(f, "When on, nobody can snag plates from your pass window, and you can't snag theirs. You can switch once a minute.", { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -180, 0, 40), TextSize = 13, Font = T.body, TextColor3 = T.dim })
-		btn(f, s.settings.peace and "Turn off" or "Turn on", s.settings.peace and T.cardHi or T.green, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 44) }, function()
+		local function settingCard(order: number, height: number, title: string, detail: string, buttonText: string?, buttonColor: Color3?, onPress: (() -> ())?)
+			local beside = buttonText ~= nil and not UI.compact
+			local stacked = buttonText ~= nil and UI.compact
+			local h = if stacked then height + 52 else height
+			local f = card(sf, order, h)
+			local inset = if beside then -176 else 0
+			lbl(f, title, { Size = UDim2.new(1, inset, 0, 28), TextSize = 20 })
+			lbl(f, detail, { Position = UDim2.new(0, 0, 0, 32), Size = UDim2.new(1, inset, 0, h - (if stacked then 96 else 48)), TextSize = 16, Font = T.body, TextColor3 = T.dim, TextYAlignment = Enum.TextYAlignment.Top })
+			if buttonText and onPress then
+				if beside then
+					btn(f, buttonText, buttonColor or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 44), TextSize = 18 }, onPress)
+				else
+					btn(f, buttonText, buttonColor or T.cardHi, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 44), TextSize = 18 }, onPress)
+				end
+			end
+			return f
+		end
+		settingCard(1, 108, "Peace Mode: " .. (s.settings.peace and "ON" or "OFF"), "When on, nobody can snag plates from your pass window, and you can't snag theirs. You can switch once a minute.", s.settings.peace and "Turn off" or "Turn on", s.settings.peace and T.cardHi or T.green, function()
 			Net.act("SetPeace", not s.settings.peace)
 		end)
-		local fs = card(sf, 3, 70) -- sound effects toggle (saved)
 		local sfxOn = s.settings.sfx ~= false
-		lbl(fs, "🔊 Sound effects: " .. (sfxOn and "ON" or "OFF"), { Size = UDim2.new(1, -180, 0, 26), TextSize = 20 })
-		lbl(fs, "Sizzles, spatula clanks, the cash register and Big Bertha's bell.", { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -180, 0, 20), TextSize = 13, Font = T.body, TextColor3 = T.dim })
-		btn(fs, sfxOn and "Turn off" or "Turn on", sfxOn and T.cardHi or T.green, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 44) }, function()
+		settingCard(3, 100, "Sound effects: " .. (sfxOn and "ON" or "OFF"), "Sizzles, spatula clanks, the cash register and Big Bertha's bell. Music has its own switch.", sfxOn and "Turn off" or "Turn on", sfxOn and T.cardHi or T.green, function()
 			Net.act("SetSfx", not sfxOn)
 		end)
-		local f2 = card(sf, 2, 70)
-		lbl(f2, string.format("🤝 Crew bonus: +%d%% (%d friend%s here)", math.floor(s.crew * Config.Crew.perFriend * 100 + 0.5), s.crew, s.crew == 1 and "" or "s"), { Size = UDim2.new(1, -180, 0, 26), TextSize = 18 })
-		lbl(f2, "Each friend in your server gives +10% coins (up to 3).", { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -180, 0, 20), TextSize = 13, Font = T.body, TextColor3 = T.dim })
-		btn(f2, "👋 Invite friends", T.blue, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 44) }, function()
+		local musicOn, musicVolume = MusicPrefs.read(s.settings)
+		local uploaded = MusicPrefs.audible(MusicTrack.id)
+		local musicDetail = if uploaded
+			then "Porch Light, a quiet original loop. Mute and volume are saved on their own, separate from sound effects."
+			else "Porch Light is written and saved with the game, but it is not on Roblox yet, so the ranch stays quiet. Mute and volume still save for when the tune is uploaded."
+		local musicCard = card(sf, 5, if UI.compact then 220 else 176)
+		local textInset = if UI.compact then 0 else -176
+		lbl(musicCard, "Music: " .. (musicOn and "ON" or "OFF") .. string.format("  ·  %d%%", math.floor(musicVolume * 100 + 0.5)), { Size = UDim2.new(1, textInset, 0, 28), TextSize = 20 })
+		lbl(musicCard, musicDetail, { Position = UDim2.new(0, 0, 0, 32), Size = UDim2.new(1, textInset, 0, if UI.compact then 72 else 64), TextSize = 16, Font = T.body, TextColor3 = T.dim, TextYAlignment = Enum.TextYAlignment.Top })
+		if not UI.compact then
+			btn(musicCard, musicOn and "Mute" or "Unmute", musicOn and T.cardHi or T.green, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0, 160, 0, 44), TextSize = 18 }, function()
+				Net.act("SetMusic", not musicOn)
+			end)
+		end
+		local volRow = UI.frame({ BackgroundTransparency = 1, Position = UDim2.new(0, 0, 1, -48), Size = UDim2.new(1, 0, 0, 44), ZIndex = 23, Parent = musicCard })
+		UI.list(volRow, Enum.FillDirection.Horizontal, 8)
+		local muteOrder = 0
+		if UI.compact then
+			btn(volRow, musicOn and "Mute" or "Unmute", musicOn and T.cardHi or T.green, { Size = UDim2.new(0.25, -6, 0, 44), TextSize = 16, LayoutOrder = muteOrder }, function()
+				Net.act("SetMusic", not musicOn)
+			end)
+		end
+		for i, step in ipairs(MusicPrefs.STEPS) do
+			local picked = math.abs(musicVolume - step.volume) < 0.021
+			local width = if UI.compact then UDim2.new(0.25, -6, 0, 44) else UDim2.new(0, 108, 0, 44)
+			btn(volRow, step.label, picked and T.accent or T.cardHi, { Size = width, TextSize = 18, LayoutOrder = i }, function()
+				Net.act("SetMusicVolume", step.volume)
+				if not musicOn then
+					Net.act("SetMusic", true)
+				end
+			end)
+		end
+		settingCard(2, 100, string.format("Crew bonus: +%d%% (%d friend%s here)", math.floor(s.crew * Config.Crew.perFriend * 100 + 0.5), s.crew, s.crew == 1 and "" or "s"), "Each friend in your server gives +10% coins (up to 3).", "Invite friends", T.blue, function()
 			Panels.invite()
 		end)
 		-- Unc's Rookie List: bring it back after a skip (and still earn the finish reward)
@@ -933,25 +1018,21 @@ local function renderSettings(s: any)
 			local fin = Config.RookieFinish
 			local cdef = fin.cosmetic and Config.Cosmetics[fin.cosmetic]
 			local finText = Rookie.rewardText(fin, cdef and cdef.name or nil)
-			local fr = card(sf, 0, 84)
-			local head, desc
+			local head, desc, action
 			if rk.done then
-				head, desc = "📋 Unc's Rookie List: done ✓", "You earned " .. finText .. "."
+				head, desc = "Unc's Rookie List: done", "You earned " .. finText .. "."
 			elseif rk.skipped then
-				head, desc = "📋 Unc's Rookie List: skipped", "Bring it back to finish it. Goals you already did count right away. Finish all 5 to earn " .. finText .. "."
+				head, desc = "Unc's Rookie List: skipped", "Bring it back to finish it. Goals you already did count right away. Finish all 5 to earn " .. finText .. "."
+				action = "Bring it back"
 			else
-				head, desc = "📋 Unc's Rookie List: on", "It's on your screen (top right). Finish all 5 to earn " .. finText .. "."
+				head, desc = "Unc's Rookie List: on", "It's on your screen. Finish all 5 to earn " .. finText .. "."
 			end
-			lbl(fr, head, { Size = UDim2.new(1, -180, 0, 26), TextSize = 20 })
-			lbl(fr, desc, { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -180, 0, 52), TextSize = 13, Font = T.body, TextColor3 = T.dim, TextYAlignment = Enum.TextYAlignment.Top })
-			if rk.skipped then
-				btn(fr, "Bring it back", T.green, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 44) }, function()
-					Net.act("RookieResume")
-				end)
-			end
+			settingCard(0, 112, head, desc, action, T.green, action and function()
+				Net.act("RookieResume")
+			end or nil)
 		end
-		local f3 = card(sf, 4, 60)
-		lbl(f3, s.memoryOnly and "⚠️ Studio test mode: progress is NOT saved." or "💾 Your ranch saves automatically. Smokers keep cooking while you're away.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 14, Font = T.body })
+		local f3 = card(sf, 4, 72)
+		lbl(f3, s.memoryOnly and "Studio test mode: progress is NOT saved." or "Your ranch saves automatically. Smokers keep cooking while you're away.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 16, Font = T.body })
 	end
 end
 
@@ -962,17 +1043,18 @@ function Panels.dialog(payload: any)
 	if dialogFrame then
 		dialogFrame:Destroy()
 	end
-	local f = UI.frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -180), Size = UDim2.new(0, 620, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = T.bg, ZIndex = 30, Parent = screen })
+	local dialogW = math.clamp(UI.viewport.X - 24, 280, 680)
+	local f = UI.frame({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -(UI.stationReserve + 8)), Size = UDim2.new(0, dialogW, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = T.bg, ZIndex = 30, Parent = screen })
 	dialogFrame = f
 	UI.corner(f, 16)
 	UI.stroke(f, T.gold, 3)
 	UI.pad(f, 14)
 	UI.list(f, nil, 8)
-	UI.label(payload.npc or "", { TextSize = 22, TextColor3 = T.gold, ZIndex = 31, LayoutOrder = 1, Parent = f })
-	local text = UI.label(payload.text or "", { TextSize = 17, Font = T.body, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0), ZIndex = 31, LayoutOrder = 2, Parent = f })
+	UI.label(payload.npc or "", { TextSize = 24, TextColor3 = T.gold, ZIndex = 31, LayoutOrder = 1, Parent = f })
+	local text = UI.label(payload.text or "", { TextSize = 18, Font = T.body, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0), ZIndex = 31, LayoutOrder = 2, Parent = f })
 	local yap: TextLabel? = nil
 	if payload.yap then
-		yap = UI.label("", { TextSize = 14, Font = T.body, TextColor3 = T.dim, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0), ZIndex = 31, LayoutOrder = 3, Parent = f })
+		yap = UI.label("", { TextSize = 16, Font = T.body, TextColor3 = T.dim, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0), ZIndex = 31, LayoutOrder = 3, Parent = f })
 	end
 	if (payload.reward or 0) > 0 then
 		UI.label("+" .. UI.fmt(payload.reward) .. " 🪙", { TextSize = 20, TextColor3 = T.gold, ZIndex = 31, LayoutOrder = 4, Parent = f })
@@ -982,7 +1064,7 @@ function Panels.dialog(payload: any)
 	local skipped = false
 	if yap then
 		local yl = yap :: TextLabel
-		local skip = UI.button(Content.Slang.skipYap .. " ⏭", T.cardHi, { Size = UDim2.new(0, 160, 0, 40), ZIndex = 32, LayoutOrder = 1, Parent = row })
+		local skip = UI.button(Content.Slang.skipYap, T.cardHi, { Size = UDim2.new(0, 180, 0, 44), TextSize = 18, ZIndex = 32, LayoutOrder = 1, Parent = row })
 		skip.Activated:Connect(function()
 			skipped = true
 			yl.Text = "(Yap skipped. Unc is a little hurt.)"
@@ -999,7 +1081,7 @@ function Panels.dialog(payload: any)
 			end
 		end)
 	end
-	UI.button("OK", T.green, { Size = UDim2.new(0, 100, 0, 40), ZIndex = 32, LayoutOrder = 2, Parent = row }, function()
+	UI.button("OK", T.green, { Size = UDim2.new(0, 120, 0, 44), TextSize = 20, ZIndex = 32, LayoutOrder = 2, Parent = row }, function()
 		f:Destroy()
 		if dialogFrame == f then
 			dialogFrame = nil

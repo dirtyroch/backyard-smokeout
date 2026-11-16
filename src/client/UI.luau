@@ -3,30 +3,69 @@
 local UI = {}
 
 UI.Theme = {
-	-- "Smoked Sunset" palette (see the plan page's Color & Look section). Warm, saturated
-	-- action colors on deep smoked-chocolate panels; every button color keeps >= 3:1 with its
-	-- label (WCAG large-text / UI-component minimum) and body text stays above 7:1.
-	bg = Color3.fromHex("#24150E"),
-	panel = Color3.fromHex("#3A2418"),
-	card = Color3.fromHex("#4D301F"),
-	cardHi = Color3.fromHex("#643F28"),
-	accent = Color3.fromHex("#E8590C"), -- ember orange (white label 3.6:1)
-	gold = Color3.fromHex("#FFC83C"), -- Robux/premium (dark label 11.8:1)
-	green = Color3.fromHex("#1E9E4A"), -- go / collect (white label 3.5:1)
-	red = Color3.fromHex("#D93636"), -- danger (white label 4.6:1)
-	blue = Color3.fromHex("#2F7BD8"), -- info / social (white label 4.3:1)
-	gift = Color3.fromHex("#C2378A"), -- gifting (white label 5.0:1)
-	text = Color3.fromHex("#FFF6E6"), -- 13.5:1 on panel
-	dim = Color3.fromHex("#D9C4A8"), -- 8.6:1 on panel
+	-- "Porch Light" palette. Warm BBQ browns, cream type, ember actions.
+	-- Contrast vs #FFF8F0 (cream), checked as WCAG ratios:
+	--   bg #3A2418 13.8:1, panel #4A2E1E 11.7:1, card #543524 10.4:1, cardHi #5C3A24 9.6:1
+	--   dim #F3D2B4 on card 7.7:1
+	--   accent #C2410C 4.9:1, green #146B34 6.3:1, red #B42318 6.2:1, blue #1D4E89 8.0:1, gift #9D174D 7.5:1
+	-- Gold #FFD15A is a light fill: dark ink #2A140C on it is 12.1:1. Buttons pick ink or cream from the fill.
+	bg = Color3.fromHex("#3A2418"),
+	panel = Color3.fromHex("#4A2E1E"),
+	card = Color3.fromHex("#543524"),
+	cardHi = Color3.fromHex("#5C3A24"),
+	accent = Color3.fromHex("#C2410C"),
+	gold = Color3.fromHex("#FFD15A"),
+	green = Color3.fromHex("#146B34"),
+	red = Color3.fromHex("#B42318"),
+	blue = Color3.fromHex("#1D4E89"),
+	gift = Color3.fromHex("#9D174D"),
+	text = Color3.fromHex("#FFF8F0"),
+	dim = Color3.fromHex("#F3D2B4"),
+	ink = Color3.fromHex("#2A140C"),
+	paper = Color3.fromHex("#F6E2C4"),
 	font = Enum.Font.FredokaOne,
 	body = Enum.Font.GothamMedium,
 	bold = Enum.Font.GothamBold,
 }
 local T = UI.Theme
--- Set by Main.client to give every button a soft click (Sfx). Kept as a hook so UI has no dependencies.
+
+-- Touch targets stay at least 44px. Compact is a short or narrow viewport (phones).
+UI.TOUCH = 44
+UI.viewport = Vector2.new(1280, 720)
+UI.compact = false
+UI.stationReserve = 188
+UI.topChrome = 68
+
 UI.onClick = nil :: (() -> ())?
 
 type Props = { [string]: any }
+
+local function channel(u: number): number
+	return if u <= 0.04045 then u / 12.92 else ((u + 0.055) / 1.055) ^ 2.4
+end
+
+function UI.luminance(c: Color3): number
+	return 0.2126 * channel(c.R) + 0.7152 * channel(c.G) + 0.0722 * channel(c.B)
+end
+
+function UI.contrast(a: Color3, b: Color3): number
+	local l1 = UI.luminance(a)
+	local l2 = UI.luminance(b)
+	local hi, lo = math.max(l1, l2), math.min(l1, l2)
+	return (hi + 0.05) / (lo + 0.05)
+end
+
+-- Cream on dark fills, ink on light fills (gold, paper).
+function UI.labelOn(bg: Color3): Color3
+	local cream = UI.contrast(T.text, bg)
+	local ink = UI.contrast(T.ink, bg)
+	return if cream >= ink then T.text else T.ink
+end
+
+function UI.setViewport(v: Vector2)
+	UI.viewport = v
+	UI.compact = v.X < 1000 or v.Y < 620
+end
 
 function UI.new(className: string, props: Props?, children: { Instance }?): any
 	local inst = Instance.new(className)
@@ -53,7 +92,7 @@ function UI.corner(parent: Instance, r: number?): UICorner
 end
 
 function UI.stroke(parent: Instance, color: Color3?, thickness: number?): UIStroke
-	return UI.new("UIStroke", { Color = color or Color3.fromHex("#1A0F0A"), Thickness = thickness or 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = parent })
+	return UI.new("UIStroke", { Color = color or Color3.fromHex("#2A160E"), Thickness = thickness or 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = parent })
 end
 
 function UI.pad(parent: Instance, px: number)
@@ -81,6 +120,13 @@ function UI.frame(props: Props): Frame
 	return f
 end
 
+function UI.fitText(label: TextLabel | TextButton, maxSize: number, minSize: number?)
+	local g = label :: any
+	g.TextScaled = true
+	g.TextWrapped = true
+	UI.new("UITextSizeConstraint", { MaxTextSize = maxSize, MinTextSize = minSize or 14, Parent = label })
+end
+
 function UI.label(text: string, props: Props?): TextLabel
 	local l = UI.new("TextLabel", {
 		BackgroundTransparency = 1,
@@ -88,38 +134,53 @@ function UI.label(text: string, props: Props?): TextLabel
 		TextColor3 = T.text,
 		Font = T.font,
 		TextScaled = false,
-		TextSize = 18,
+		TextSize = 20,
 		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		Size = UDim2.new(1, 0, 0, 24),
+		Size = UDim2.new(1, 0, 0, 28),
 	})
 	if props then
 		for k, v in pairs(props) do
 			(l :: any)[k] = v
 		end
 	end
+	if l.TextSize < 15 and not l.TextScaled then
+		l.TextSize = 15
+	end
 	return l
 end
 
 function UI.button(text: string, color: Color3?, props: Props?, onClick: (() -> ())?): TextButton
+	local fill = color or T.accent
 	local b = UI.new("TextButton", {
 		Text = text,
-		BackgroundColor3 = color or T.accent,
-		TextColor3 = Color3.new(1, 1, 1),
+		BackgroundColor3 = fill,
+		TextColor3 = UI.labelOn(fill),
 		Font = T.font,
-		TextSize = 18,
+		TextSize = 20,
+		TextWrapped = true,
 		AutoButtonColor = true,
 		BorderSizePixel = 0,
-		Size = UDim2.new(0, 140, 0, 40),
+		Size = UDim2.new(0, 160, 0, UI.TOUCH),
 	})
+	local explicitColor = props ~= nil and props.TextColor3 ~= nil
 	if props then
 		for k, v in pairs(props) do
 			(b :: any)[k] = v
 		end
 	end
+	if not explicitColor then
+		b.TextColor3 = UI.labelOn(b.BackgroundColor3)
+	end
+	if b.Size.Y.Scale == 0 and b.Size.Y.Offset > 0 and b.Size.Y.Offset < UI.TOUCH then
+		b.Size = UDim2.new(b.Size.X.Scale, b.Size.X.Offset, 0, UI.TOUCH)
+	end
+	if b.Size.X.Scale == 0 and b.Size.X.Offset > 0 and b.Size.X.Offset < UI.TOUCH then
+		b.Size = UDim2.new(0, UI.TOUCH, b.Size.Y.Scale, b.Size.Y.Offset)
+	end
 	UI.corner(b, 10)
-	UI.stroke(b, Color3.fromHex("#1A0F0A"), 2)
-	UI.new("UITextSizeConstraint", { MaxTextSize = b.TextSize, Parent = b })
+	UI.stroke(b, Color3.fromHex("#2A160E"), 2)
+	UI.fitText(b, math.max(b.TextSize, 16), 14)
 	if onClick then
 		local busy = false
 		b.Activated:Connect(function()
@@ -146,15 +207,15 @@ function UI.button(text: string, color: Color3?, props: Props?, onClick: (() -> 
 end
 
 function UI.bar(parent: Instance, color: Color3, props: Props?): (Frame, Frame)
-	local back = UI.frame({ BackgroundColor3 = Color3.fromHex("#1A0F0A"), Size = UDim2.new(1, 0, 0, 10), Parent = parent })
+	local back = UI.frame({ BackgroundColor3 = Color3.fromHex("#2A160E"), Size = UDim2.new(1, 0, 0, 12), Parent = parent })
 	if props then
 		for k, v in pairs(props) do
 			(back :: any)[k] = v
 		end
 	end
-	UI.corner(back, 5)
+	UI.corner(back, 6)
 	local fill = UI.frame({ BackgroundColor3 = color, Size = UDim2.new(0, 0, 1, 0), Parent = back })
-	UI.corner(fill, 5)
+	UI.corner(fill, 6)
 	return back, fill
 end
 

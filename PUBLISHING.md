@@ -12,6 +12,10 @@ This guide takes you from "I have a file" to "my game is live on Roblox". Plan o
 
 > If your account is under 13, some publishing and selling features are limited. Use an account that meets Roblox's age requirements for selling items.
 
+## Already live? Read this first
+
+If purchases already work in your Studio place, the Robux IDs are probably only in that place. Do not replace it with a fresh `BackyardSmokeout.rbxlx` until you have read **[STUDIO-UPDATE.md](STUDIO-UPDATE.md)**. The file in this repo still has every shop id at `0`. Publishing that over the live game hides the shop.
+
 ## 2. Open the game file
 
 1. Download **`BackyardSmokeout.rbxlx`** from the GitHub repo. Click the file, then the **Download raw file** button.
