@@ -111,9 +111,12 @@ Content.TurkeyDay = {
 	already = "You already brought a dish today. Thank you, sugar! Come back tomorrow, and bring your crew: when 3 pitmasters share, the table's full for everybody.",
 	firstShare = "You set your %s on the table. Granny Pecan gives you a hug and a brand-new apron.\n\n+%d coins, the Thankful & Full Apron, and a new title: Thankful.",
 	share = "You set your %s on the table. \"Now THAT's a potluck!\"\n\n+%d coins. Come back tomorrow with another dish.",
-	progress = "🥧 Potluck table: %d/%d dishes. %d more pitmasters sharing in the next few minutes fills the table, and everybody gets bonus tips!",
+	progress = "🥧 %s set a dish on the Turkey Day potluck table: %d/%d. %d more pitmasters sharing in the next few minutes fills it, and everybody gets bonus tips!",
+	bannerTop = "TURKEY DAY SMOKEOUT",
+	bannerIdle = "Bring a dish!",
 	full = "🦃 THE POTLUCK'S FULL! %d pitmasters shared a dish. Everyone gets +%d%% tips for %d min!",
 	over = "The Turkey Day potluck is packed up for the year. See y'all next Thanksgiving!",
+	soon = "🦃 Coming up: the Turkey Day Smokeout opens %s. Granny Pecan's potluck table runs all week, and your first dish earns a free Thankful & Full Apron.",
 	thanks = {
 		"Granny Pecan: \"I'm thankful for good smoke and better company.\"",
 		"Unc Hank: \"I'm thankful for elastic waistbands. That's it. That's the joke.\"",
@@ -132,9 +135,12 @@ Content.HolidaySmokeout = {
 	already = "You already brought a dish today, sugar. Merry Christmas! Come back tomorrow, and bring your crew: when 3 pitmasters share, the table's full for everybody.",
 	firstShare = "You set your %s on the table. Granny Pecan tucks a wrapped box under your arm: it's an apron!\n\n+%d coins, the Merry & Smoky Apron, and a new title: Merry & Smoky.",
 	share = "You set your %s on the table. \"Now THAT's a Christmas spread!\"\n\n+%d coins. Come back tomorrow with another dish.",
-	progress = "🎄 Christmas potluck: %d/%d dishes. %d more pitmasters sharing in the next few minutes fills the table, and everybody gets bonus tips!",
+	progress = "🎄 %s set a dish on the Christmas potluck table: %d/%d. %d more pitmasters sharing in the next few minutes fills it, and everybody gets bonus tips!",
+	bannerTop = "HOLIDAY SMOKEOUT",
+	bannerIdle = "Merry Christmas, y'all!",
 	full = "🎄 THE CHRISTMAS POTLUCK'S FULL! %d pitmasters shared a dish. Everyone gets +%d%% tips for %d min!",
 	over = "The Christmas potluck is packed up till next December. Happy New Year, y'all!",
+	soon = "🎄 Coming up: the Holiday Smokeout opens %s and runs through New Year's Day. Your first Holiday Glazed Ham at the potluck table earns a free Merry & Smoky Apron.",
 	thanks = {
 		"Granny Pecan: \"Merry Christmas, sugar. Grab a tamale before Unc finds 'em.\"",
 		"Unc Hank: \"I asked for a new grill brush. Got socks again. Unc things.\"",
@@ -190,6 +196,14 @@ Content.YardNotes = {
 	pup = "The pup flops over for a belly wash. He is our dog, not a famous one.",
 }
 
+-- Second line of the potluck banner while an event is on, so the whole server can see how full
+-- the table is (a count, never a timer). Also used when nothing's on and the prompt is stale.
+Content.PotluckTable = {
+	count = "Dishes on the table: %d/%d",
+	full = "Table's full! +%d%% tips for all",
+	closed = "The potluck table is packed up for now. Granny Pecan sets it out again for Turkey Day week and at Christmas.",
+}
+
 Content.Signs = {
 	hub = "ROCHIN' RANCH RD.",
 	shop = "ROCH & ROLL SAUCE SHACK",
@@ -198,10 +212,31 @@ Content.Signs = {
 	turkeyPotluck = "TURKEY DAY POTLUCK",
 	turkeyBanner = "TURKEY DAY SMOKEOUT\nBring a dish!",
 	holidayPotluck = "CHRISTMAS POTLUCK",
+	turkeySoon = "TURKEY DAY POTLUCK: %s",
+	holidaySoon = "CHRISTMAS POTLUCK: %s",
 	holidayBanner = "HOLIDAY SMOKEOUT\nMerry Christmas, y'all!",
 	creek = "(nothing to see here)",
 	welcome = "BACKYARD SMOKEOUT",
 	bertha = "BIG BERTHA\nThe King of the Pit's 1,000-gallon smoker · Ring the bell when supper's on",
+}
+
+-- The hub's Cook-Off leaderboard. Saturday: today's standings. Sunday: yesterday's results.
+-- Monday-Friday: last Saturday's champs and the next date. Top 3 (ties included) earn the free
+-- Cook-Off Champ title. Dates only, never a countdown.
+Content.CookOffBoard = {
+	liveHead = "TODAY! 3x prizes",
+	resultsHead = "Yesterday's champs",
+	lastHead = "Last Saturday's champs",
+	liveEmpty = "No plates judged yet.\nBe the first!",
+	finalEmpty = "No champs yet.\nTop 3 earn the\nCook-Off Champ title!",
+	next = "Next Cook-Off:\n%s",
+	practice = "Practice any day!",
+	liveRows = 8,
+	finalRows = 5,
+	nameMax = 12,
+	title = "Cook-Off Champ",
+	champNote = "🏆 You placed %s at Saturday's Cook-Off! You earned the Cook-Off Champ title (Settings > Titles).",
+	champAgain = "🏆 You placed %s at Saturday's Cook-Off again! Your name's on the board by the stage.",
 }
 
 return Content

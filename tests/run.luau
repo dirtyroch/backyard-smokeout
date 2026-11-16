@@ -30,6 +30,7 @@ end
 local SeasonPass = require("../src/shared/Logic/SeasonPass")
 local Storefront = require("../src/shared/Logic/Storefront")
 local Funnels = require("../src/shared/Logic/Funnels")
+local ShopSync = require("../scripts/lib/ShopSync")
 
 local passed, failed = 0, 0
 local current = ""
@@ -379,6 +380,94 @@ test("Texas day boundary is midnight Central, not UTC", function()
 	eq(TimeUtil.dayNumber(justBeforeMidnightCst, -6), days - 1)
 	eq(TimeUtil.dayNumber(justBeforeMidnightCst + 1, -6), days)
 end)
+test("Cook-Off board: live Saturday, yesterday's results Sunday, last Saturday's champs Mon-Fri", function()
+	eq(CookOff.boardMode(7), "live")
+	eq(CookOff.boardMode(1), "results")
+	for wd = 2, 6 do
+		eq(CookOff.boardMode(wd), "last")
+		eq(CookOff.finalWeekOffset(wd), -1)
+	end
+	eq(CookOff.finalWeekOffset(7), nil)
+	eq(CookOff.finalWeekOffset(1), 0)
+	-- Monday-start weeks: Sunday is the same week as the Saturday before it, Monday is the next one
+	local sat = Holiday.daysFromCivil(2026, 11, 21)
+	eq(Holiday.weekdayOf(sat), 7)
+	eq(TimeUtil.weekOfDay(sat + 1), TimeUtil.weekOfDay(sat), "Sunday shows this week's (final) board")
+	eq(TimeUtil.weekOfDay(sat + 2), TimeUtil.weekOfDay(sat) + 1, "Monday's 'last week' is that Saturday")
+	-- next Saturday, every day of a week (today if it's Saturday)
+	local mon = Holiday.daysFromCivil(2026, 11, 16)
+	for k = 0, 5 do
+		eq(Holiday.longLabel(CookOff.nextSaturday(mon + k)), "Sat, Nov 21")
+	end
+	eq(CookOff.nextSaturday(sat), sat)
+	eq(Holiday.longLabel(CookOff.nextSaturday(sat + 1)), "Sat, Nov 28")
+end)
+test("Cook-Off board: ties share a place, the podium is places 1-3, names stay short", function()
+	local P = CookOff.placings({ { key = "11", value = 100 }, { key = "22", value = 100 }, { key = "33", value = 97 }, { key = "44", value = 97 }, { key = "55", value = 90 }, { key = "bad", value = 80 } })
+	eq(#P, 5, "a malformed key is skipped")
+	eq(P[1].place, 1)
+	eq(P[2].place, 1)
+	eq(P[3].place, 3)
+	eq(P[4].place, 3)
+	eq(P[5].place, 5)
+	eq(CookOff.podiumPlace(P, 44), 3, "a tie for 3rd is still on the podium")
+	eq(CookOff.podiumPlace(P, 55), nil)
+	eq(CookOff.podiumPlace(P, 99), nil)
+	eq(CookOff.medal(1), "🥇")
+	eq(CookOff.medal(3), "🥉")
+	eq(CookOff.medal(4), "4.")
+	eq(CookOff.shortName("ShortName", 14), "ShortName")
+	eq(CookOff.shortName("AVeryLongUsername2026", 14), "AVeryLongUser…")
+	eq(utf8.len(CookOff.shortName("AVeryLongUsername2026", 14)), 14)
+end)
+test("Cook-Off board text: champs, the next date, never a timer; Champ title is free", function()
+	local B = Content.CookOffBoard
+	local names = { [11] = "MikeRoch", [22] = "Sis", [33] = "BrisketQueen2014" }
+	local function nm(id)
+		return names[id] or ("Pitmaster " .. id)
+	end
+	local P = CookOff.placings({ { key = "11", value = 100 }, { key = "22", value = 97 }, { key = "33", value = 91 } })
+	local last = CookOff.boardText("last", "Harvest Smoke-Off", P, nm, "Sat, Nov 21", B)
+	truthy(string.find(last, "Last Saturday's champs", 1, true), last)
+	truthy(string.find(last, "🥇 MikeRoch  100", 1, true), last)
+	truthy(string.find(last, "🥉 BrisketQuee…  91", 1, true), last)
+	truthy(string.find(last, "Next Cook-Off:\nSat, Nov 21", 1, true), last)
+	local empty = CookOff.boardText("last", "Harvest Smoke-Off", {}, nm, "Sat, Nov 21", B)
+	truthy(string.find(empty, B.title, 1, true), "empty board says what the podium earns")
+	truthy(not string.find(empty, "Opens Saturday", 1, true))
+	local live = CookOff.boardText("live", "Harvest Smoke-Off", {}, nm, "Sat, Nov 21", B)
+	truthy(string.find(live, "TODAY", 1, true) and string.find(live, "Be the first", 1, true), live)
+	truthy(not string.find(live, "Next Cook-Off", 1, true), "no 'next' line on the day itself")
+	local many = {}
+	for i = 1, 10 do
+		table.insert(many, { key = tostring(i), value = 101 - i })
+	end
+	local _, rows = string.gsub(CookOff.boardText("live", "S", CookOff.placings(many), nm, "x", B), "Pitmaster", "")
+	eq(rows, B.liveRows, "live board shows liveRows rows")
+	local _, rows2 = string.gsub(CookOff.boardText("results", "S", CookOff.placings(many), nm, "x", B), "Pitmaster", "")
+	eq(rows2, B.finalRows, "final board shows finalRows rows")
+	for _, k in ipairs({ "liveHead", "resultsHead", "lastHead", "liveEmpty", "finalEmpty", "next", "practice", "champNote", "champAgain" }) do
+		local t = string.lower(B[k])
+		for _, bad in ipairs({ "hurry", "ends in", "left!", "timer", "buy", "robux", "r$" }) do
+			truthy(not string.find(t, bad, 1, true), k .. " has '" .. bad .. "'")
+		end
+	end
+	-- the title is earned only (no product grants it) and the save has a champWeek field
+	for _, list in ipairs({ Monetization.Products or {}, Monetization.Passes or {} }) do
+		for key, item in pairs(list) do
+			truthy(not string.find(tostring(item.title or ""), B.title, 1, true), key .. " sells the Champ title")
+		end
+	end
+	truthy(string.find(fs_read("src/shared/DefaultData.luau"), "cookoff = { week = -1, best = 0, champWeek = -1 }", 1, true), "saves gain cookoff.champWeek")
+end)
+test("Cook-Off wiring: the board reads last week's store Mon-Fri and champs are told once a week", function()
+	local src = fs_read("src/server/Services/EventService.luau")
+	truthy(string.find(src, "CookOff.finalWeekOffset", 1, true), "final week offset used")
+	truthy(string.find(src, "\"CookOff_W\" .. wk", 1, true), "reads the finished week's store")
+	truthy(string.find(src, "data.cookoff.champWeek == wk", 1, true), "once per week")
+	truthy(string.find(src, "task.spawn(EventService.champCheck, player)", 1, true), "checked on join")
+	truthy(string.find(fs_read("src/client/Main.client.luau"), "p.kind == \"champ\"", 1, true), "client shows the champ pop")
+end)
 test("seasons cover every month", function()
 	for m = 1, 12 do
 		truthy(CookOff.seasonFor(Config.Seasons, m) ~= nil)
@@ -447,10 +536,38 @@ test("session lock: only the holder can save; release clears lock", function()
 	truthy(again ~= nil, "released record can be locked by the next server")
 end)
 
+test("session lock: a late save after release is refused (no overwrite, no phantom lock)", function()
+	local rec = SessionLock.acquire(nil, "A", 0, 300)
+	local released = SessionLock.save(rec, "A", 10, { coins = 5 }, true)
+	local late, st = SessionLock.save(released, "A", 12, { coins = 1 }, false)
+	eq(late, nil, "late autosave after leaving can't write")
+	eq(st, "lost-lock")
+	-- another server loaded, played and released: our stale copy must not win
+	local b = SessionLock.acquire(released, "B", 20, 300)
+	local bRel = SessionLock.save(b, "B", 30, { coins = 99 }, true)
+	eq(SessionLock.save(bRel, "A", 31, { coins = 1 }, false), nil, "old server can't overwrite newer progress")
+	truthy(SessionLock.save(nil, "A", 0, { coins = 1 }, false) ~= nil, "brand-new record can be written")
+end)
+test("launch audit guards: receipts, saves and leaving mid-load", function()
+	local fs = require("@lune/fs")
+	local ds = fs.readFile("src/server/Services/DataService.luau")
+	truthy(string.find(ds, "if profile.released then", 1, true) ~= nil, "no saves after the final release")
+	local ps = fs.readFile("src/server/Services/PurchaseService.luau")
+	truthy(string.find(ps, "profile.memoryOnly and not IS_STUDIO", 1, true) ~= nil, "no receipts granted when saving is down")
+	truthy(string.find(ps, "profile.released or not player.Parent", 1, true) ~= nil, "no receipts for a player who is leaving")
+	local hit = string.find(ps, "ReceiptLedger.has(data.receipts, purchaseId)", 1, true)
+	truthy(hit ~= nil and string.find(string.sub(ps, hit, hit + 400), "ctx.Data.save(profile, false)", 1, true) ~= nil, "a repeat receipt is only confirmed once saved")
+	truthy(string.find(ps, "Gifting.landing(", 1, true) ~= nil, "gift receipts use Gifting.landing")
+	local gs = fs.readFile("src/server/Services/GameService.luau")
+	truthy(string.find(gs, "ctx.Data.get(player) ~= profile", 1, true) ~= nil, "onLoaded skips players who already left")
+	truthy(string.find(gs, "GameService.runtime[player] ~= r", 1, true) ~= nil, "no plot for a player who left during the pass check")
+	truthy(string.find(gs, "actionLimiter:forget(", 1, true) ~= nil, "per-action rate buckets are freed on leave")
+end)
+
 print("Content & monetization config")
-test("every cosmetic product grants real cosmetics; ids default to 0", function()
+test("every cosmetic product grants real cosmetics; ids are 0 (hidden) or a real ID", function()
 	for key, p in pairs(Monetization.Products) do
-		eq(p.id, 0, key .. " id placeholder")
+		truthy(p.id == 0 or (p.id > 0 and p.id == math.floor(p.id)), key .. " id is 0 or a whole number")
 		if p.grants then
 			for _, c in ipairs(p.grants) do
 				truthy(Config.Cosmetics[c], key .. " grants unknown cosmetic " .. c)
@@ -459,7 +576,7 @@ test("every cosmetic product grants real cosmetics; ids default to 0", function(
 		truthy(p.price > 0)
 	end
 	for key, p in pairs(Monetization.Passes) do
-		eq(p.id, 0, key .. " id placeholder")
+		truthy(p.id == 0 or (p.id > 0 and p.id == math.floor(p.id)), key .. " id is 0 or a whole number")
 	end
 end)
 test("rotation pool entries are rotation products", function()
@@ -631,13 +748,104 @@ test("Turkey Day reward is a free event cosmetic with copy in place", function()
 	local C = Content.TurkeyDay
 	truthy(#C.thanks >= 3)
 	truthy(string.format(C.firstShare, "Juicy Harvest Turkey Leg", 520) ~= "")
-	truthy(string.format(C.progress, 1, TD.need, TD.need - 1) ~= "")
+	truthy(string.find(string.format(C.progress, "Mike", 1, TD.need, TD.need - 1), "Mike set a dish", 1, true) ~= nil, "progress names the sharer")
 	truthy(string.format(C.full, 3, 25, 5) ~= "")
 	truthy(Content.Signs.turkeyPotluck and Content.Signs.turkeyBanner)
 	for _, line in ipairs({ C.login, C.needDish, C.already, C.firstShare, C.share, C.over, Content.Signs.turkeyBanner }) do
 		local low = string.lower(line)
 		truthy(not string.find(low, "pilgrim", 1, true) and not string.find(low, "buy", 1, true) and not string.find(low, "robux", 1, true), "no pressure or loaded copy: " .. line)
 	end
+end)
+
+-- ===== Turkey Day audit (Nov 13, 2026): Texas-midnight edges, teaser, live table count =====
+test("Turkey Day opens and closes at Texas midnight (06:00 UTC), teaser starts Mon Nov 16", function()
+	local TD = Config.TurkeyDay
+	local off = Config.TIMEZONE_OFFSET_HOURS
+	eq(off, -6, "Texas is UTC-6 all of November and December (CST)")
+	local function utc(y, mo, d, h, m, sec)
+		return Holiday.daysFromCivil(y, mo, d) * 86400 + h * 3600 + (m or 0) * 60 + (sec or 0)
+	end
+	local function at(t)
+		local day = TimeUtil.dayNumber(t, off)
+		local w = Holiday.turkeyWeek(day, TD.daysBefore, TD.daysAfter)
+		return w, Holiday.soon(day, w, Config.EventTeaserDays), day
+	end
+	-- opens: Sun Nov 22 11:59:59 PM CST = Nov 23 05:59:59 UTC
+	eq((at(utc(2026, 11, 23, 5, 59, 59))).active, false, "still Sunday night in Texas")
+	eq((at(utc(2026, 11, 23, 6, 0, 0))).active, true, "Texas midnight Monday: open")
+	-- closes: Sun Nov 29 11:59:59 PM CST open, Mon midnight closed
+	eq((at(utc(2026, 11, 30, 5, 59, 59))).active, true, "last minute of Sunday")
+	eq((at(utc(2026, 11, 30, 6, 0, 0))).active, false, "Monday in Texas: packed up")
+	-- UTC midnight is NOT the boundary
+	eq((at(utc(2026, 11, 23, 0, 0, 0))).active, false, "UTC midnight Nov 23 is still Nov 22 in Texas")
+	-- teaser: 7 days ahead, from Texas midnight Mon Nov 16 through Sun Nov 22
+	local _, s1 = at(utc(2026, 11, 16, 5, 59, 59))
+	eq(s1, nil, "Sun Nov 15 night: no teaser yet")
+	local _, s2, d2 = at(utc(2026, 11, 16, 6, 0, 0))
+	eq(s2, 7, "Mon Nov 16: teaser on, 7 days out")
+	eq(Holiday.longLabel(d2 + s2), "Mon, Nov 23", "note says the opening date")
+	eq(string.upper(Holiday.label(d2 + s2)), "NOV 23", "sign says the opening date")
+	local _, s3 = at(utc(2026, 11, 23, 5, 59, 59))
+	eq(s3, 1, "last teaser day")
+	local _, s4 = at(utc(2026, 11, 23, 6, 0, 0))
+	eq(s4, nil, "no teaser once it's open")
+	-- once-a-day share: a share at 11:59 PM and another at 12:01 AM Texas time are different days
+	eq(TimeUtil.dayNumber(utc(2026, 11, 24, 5, 59), off) + 1, TimeUtil.dayNumber(utc(2026, 11, 24, 6, 1), off), "share resets at Texas midnight")
+	eq(TimeUtil.dayNumber(utc(2026, 11, 24, 1, 0), off), TimeUtil.dayNumber(utc(2026, 11, 23, 7, 0), off), "7 PM Mon and 1 AM UTC Tue are both Monday in Texas")
+end)
+test("potluck windows, 2026-2060: exact dates, never overlap, teasers never run during the other event", function()
+	local TD, H = Config.TurkeyDay, Config.HolidaySmokeout
+	for day = Holiday.daysFromCivil(2026, 1, 1), Holiday.daysFromCivil(2060, 12, 31) do
+		local tw = Holiday.turkeyWeek(day, TD.daysBefore, TD.daysAfter)
+		local hw = Holiday.dateWindow(day, H.start, H.finish, H.peak)
+		local _, m, d = Holiday.civilFromDays(day)
+		eq(hw.active, (m == 12 and d >= 19) or (m == 1 and d == 1), "Holiday Smokeout is exactly Dec 19 - Jan 1")
+		truthy(not (tw.active and hw.active), "events never overlap")
+		local ts = Holiday.soon(day, tw, Config.EventTeaserDays)
+		local hs = Holiday.soon(day, hw, Config.EventTeaserDays)
+		truthy(not (ts and hw.active) and not (hs and tw.active), "a teaser never shows during the other event")
+		truthy(not (ts and hs), "one teaser at a time")
+		if tw.active then
+			truthy(tw.endDay - tw.startDay == 6 and Holiday.weekdayOf(tw.startDay) == 2, "Mon-Sun week")
+		end
+	end
+end)
+test("potluck banner: live dish count for the whole server, then 'full' while the bonus runs", function()
+	local TD = Config.TurkeyDay
+	local L = { idle = Content.TurkeyDay.bannerIdle, count = Content.PotluckTable.count, full = Content.PotluckTable.full }
+	eq(Holiday.tableLine(0, TD.need, false, 25, L), "Bring a dish!")
+	eq(Holiday.tableLine(1, TD.need, false, 25, L), "Dishes on the table: 1/3")
+	eq(Holiday.tableLine(2, TD.need, false, 25, L), "Dishes on the table: 2/3")
+	eq(Holiday.tableLine(5, TD.need, false, 25, L), "Dishes on the table: 3/3", "never shows more than need")
+	eq(Holiday.tableLine(0, TD.need, true, 25, L), "Table's full! +25% tips for all")
+	-- shares older than the window drop off the count, and counting doesn't prune
+	local shares = { [1] = 1000, [2] = 1000 + TD.window - 1, [3] = 1000 + TD.window + 5 }
+	eq(Holiday.recentShares(shares, 1000 + TD.window, TD.window), 3, "all inside the window (edge counts)")
+	eq(Holiday.recentShares(shares, 1000 + TD.window + 1, TD.window), 2, "first share expired")
+	eq(Holiday.recentShares({}, 0, TD.window), 0)
+	truthy(shares[1] ~= nil, "read-only")
+	-- the built banner and the live banner agree (no flicker when the first refresh runs)
+	for _, C in ipairs({ Content.TurkeyDay, Content.HolidaySmokeout }) do
+		truthy(C.bannerTop and C.bannerIdle, "banner lines")
+	end
+	eq(Content.Signs.turkeyBanner, Content.TurkeyDay.bannerTop .. "\n" .. Content.TurkeyDay.bannerIdle)
+	eq(Content.Signs.holidayBanner, Content.HolidaySmokeout.bannerTop .. "\n" .. Content.HolidaySmokeout.bannerIdle)
+	for _, line in ipairs({ Content.PotluckTable.count, Content.PotluckTable.full, Content.PotluckTable.closed, Content.HolidaySmokeout.progress, Content.TurkeyDay.progress }) do
+		local low = string.lower(line)
+		truthy(not string.find(low, "buy", 1, true) and not string.find(low, "robux", 1, true) and not string.find(low, "hurry", 1, true) and not string.find(low, "last chance", 1, true), "calm copy: " .. line)
+	end
+	truthy(string.find(string.format(Content.HolidaySmokeout.progress, "Ana", 2, 3, 1), "Ana set a dish", 1, true) ~= nil)
+end)
+test("potluck wiring: progress is announced to the server, banner refreshes, midnight note for players already in", function()
+	local fs = require("@lune/fs")
+	local egg = fs.readFile("src/server/Services/EggService.luau")
+	local ev = fs.readFile("src/server/Services/EventService.luau")
+	local gs = fs.readFile("src/server/Services/GameService.luau")
+	truthy(string.find(egg, "ctx.Game.announce(string.format(EC.progress, player.DisplayName", 1, true), "progress goes to everyone")
+	truthy(string.find(egg, "ctx.Event.refreshTable()", 1, true), "a share updates the banner right away")
+	truthy(not string.find(egg, "Content.TurkeyDay.over", 1, true), "a stale prompt after Christmas doesn't talk about Thanksgiving")
+	truthy(string.find(ev, "function EventService.eventNote", 1, true) and string.find(ev, "EventService.eventNote(player)", 1, true), "join note")
+	truthy(string.find(gs, "ctx.Event.eventNote(player)", 1, true), "day rollover note")
 end)
 
 test("Rookie List: five quick, free goals that each point somewhere real", function()
@@ -894,6 +1102,28 @@ test("held gifts (recipient left) are kept and sent later, one at a time", funct
 	truthy(Config.Gifting and Config.Gifting.ttlSeconds > 0 and Config.Gifting.firstGiftTitle ~= "", "gifting config")
 end)
 
+test("gift receipts: deliver, or hold if they left or already own it (Robux never wasted)", function()
+	eq(Gifting.landing(true, false), "deliver")
+	eq(Gifting.landing(false, false), "hold-left")
+	eq(Gifting.landing(true, true), "hold-owned", "recipient bought it meanwhile: giver keeps the gift")
+end)
+
+test("dinner bell: mashing the prompt doesn't farm bells / Season XP", function()
+	local last = {}
+	local cd = Config.DinnerBell.ringCooldown
+	truthy(type(cd) == "number" and cd > 0 and cd >= Config.DinnerBell.window, "ring cooldown set")
+	truthy(Hype.ringCounts(last, 1, 100, cd), "first ring counts")
+	local counted = 0
+	for i = 1, 50 do
+		if Hype.ringCounts(last, 1, 100 + i * 0.1, cd) then
+			counted += 1
+		end
+	end
+	eq(counted, 0, "50 quick rings add nothing")
+	truthy(Hype.ringCounts(last, 2, 101, cd), "other players are independent (pile-on still works)")
+	truthy(Hype.ringCounts(last, 1, 100 + cd, cd), "counts again after the cooldown")
+end)
+
 print("Profitability: season pass, offers, club, analytics")
 local SP = Config.SeasonPass
 local function stats0()
@@ -1066,12 +1296,19 @@ test("value notes add up: Whole Hog R$499 vs R$730, Turkey and Holiday sets, sta
 	end
 	truthy(low < 80 and top == 499, "ladder from under R$80 to R$499")
 end)
-test("all new IDs are placeholders: products/passes 0, subscription empty string", function()
-	for key, p in pairs(Monetization.Products) do
-		eq(p.id, 0, key)
+test("IDs are placeholders or real and never pasted twice; subscription is empty or EXP-", function()
+	local seen = {}
+	for _, group in ipairs({ Monetization.Products, Monetization.Passes }) do
+		for key, p in pairs(group) do
+			truthy(p.id == 0 or (p.id > 0 and p.id == math.floor(p.id)), key)
+			if p.id ~= 0 then
+				truthy(seen[p.id] == nil, key .. " reuses the ID of " .. tostring(seen[p.id]))
+				seen[p.id] = key
+			end
+		end
 	end
 	for key, sub in pairs(Monetization.Subscriptions) do
-		eq(sub.id, "", key)
+		truthy(sub.id == "" or string.sub(sub.id, 1, 4) == "EXP-", key)
 		truthy(sub.priceText ~= "" and string.find(sub.priceText, "month", 1, true), "price and length shown")
 	end
 	truthy(Monetization.PrivateServer.price > 0)
@@ -1184,7 +1421,7 @@ test("Holiday Smokeout: the ham is a winter cut, the reward is free, the copy is
 	for _, C in ipairs({ Content.TurkeyDay, Content.HolidaySmokeout }) do
 		truthy(C.dialog and C.host and C.hud and #C.thanks >= 3, "potluck copy has a title, host and HUD line")
 		truthy(string.format(C.firstShare, "Juicy Holiday Glazed Ham", 680) ~= "")
-		truthy(string.format(C.progress, 1, 3, 2) ~= "" and string.format(C.full, 3, 25, 5) ~= "")
+		truthy(string.format(C.progress, "Mike", 1, 3, 2) ~= "" and string.format(C.full, 3, 25, 5) ~= "")
 	end
 	local C = Content.HolidaySmokeout
 	truthy(Content.Signs.holidayPotluck and Content.Signs.holidayBanner)
@@ -1410,6 +1647,180 @@ test("a burnt burger or steak drops the sparkle and frowns, and the body color s
 	truthy(string.find(world, "Color3.fromRGB(20, 20, 20)", 1, true) ~= nil, "burn feedback still paints the body")
 	truthy(string.find(world, "m.Size = m.Size * 0.45", 1, true) == nil, "plates scale before the face is built")
 	truthy(string.find(world, "0.45", 1, true) ~= nil)
+end)
+
+test("event teaser: the week before Turkey Day and the Holiday Smokeout, with a date (no timer copy)", function()
+	local TD, HS = Config.TurkeyDay, Config.HolidaySmokeout
+	local N = Config.EventTeaserDays
+	eq(N, 7)
+	-- 2026: Turkey Day runs Nov 23-29; the teaser covers Nov 16-22
+	local function tw(y, m, d)
+		local day = Holiday.daysFromCivil(y, m, d)
+		return day, Holiday.turkeyWeek(day, TD.daysBefore, TD.daysAfter)
+	end
+	local day, w = tw(2026, 11, 15)
+	eq(Holiday.soon(day, w, N), nil, "8 days out is quiet")
+	day, w = tw(2026, 11, 16)
+	eq(Holiday.soon(day, w, N), 7)
+	day, w = tw(2026, 11, 22)
+	eq(Holiday.soon(day, w, N), 1)
+	day, w = tw(2026, 11, 23)
+	eq(Holiday.soon(day, w, N), nil, "no teaser once it's on")
+	day, w = tw(2026, 11, 30)
+	eq(Holiday.soon(day, w, N), nil, "no teaser after it ends")
+	eq(Holiday.longLabel(w.startDay), "Mon, Nov 23")
+	-- Holiday Smokeout: Dec 12-18 teases Dec 19; Jan 1 (still on) and Jan 2 (just ended) don't
+	local function hw(y, m, d)
+		local dd = Holiday.daysFromCivil(y, m, d)
+		return dd, Holiday.dateWindow(dd, HS.start, HS.finish, HS.peak)
+	end
+	day, w = hw(2026, 12, 11)
+	eq(Holiday.soon(day, w, N), nil)
+	day, w = hw(2026, 12, 12)
+	eq(Holiday.soon(day, w, N), 7)
+	eq(Holiday.label(w.startDay), "Dec 19")
+	day, w = hw(2027, 1, 1)
+	eq(Holiday.soon(day, w, N), nil)
+	day, w = hw(2027, 1, 2)
+	eq(Holiday.soon(day, w, N), nil)
+	-- every day of 2026-2035: at most one teaser, never while an event is on
+	for y = 2026, 2035 do
+		for dd = Holiday.daysFromCivil(y, 1, 1), Holiday.daysFromCivil(y, 12, 31) do
+			local t = Holiday.turkeyWeek(dd, TD.daysBefore, TD.daysAfter)
+			local h = Holiday.dateWindow(dd, HS.start, HS.finish, HS.peak)
+			local a, b = Holiday.soon(dd, t, N), Holiday.soon(dd, h, N)
+			truthy(not (a and b), "one teaser at a time")
+			if t.active or h.active then
+				truthy(a == nil and b == nil, "no teaser during an event")
+			end
+		end
+	end
+	-- calm copy: a date, no countdown or pressure words
+	for _, s in ipairs({ Content.TurkeyDay.soon, Content.HolidaySmokeout.soon, Content.Signs.turkeySoon, Content.Signs.holidaySoon }) do
+		local low = string.lower(s)
+		for _, bad in ipairs({ "hurry", "only", "left", "ends", "last chance", "don't miss", "countdown", "hours" }) do
+			truthy(string.find(low, bad, 1, true) == nil, "pressure word '" .. bad .. "' in: " .. s)
+		end
+	end
+end)
+
+print("ShopSync (one-run shop setup)")
+test("every pass and product is planned once, with a valid name, price and its own icon file", function()
+	local items = ShopSync.items(Monetization)
+	local n = 0
+	for _ in pairs(Monetization.Passes) do
+		n += 1
+	end
+	for _ in pairs(Monetization.Products) do
+		n += 1
+	end
+	eq(#items, n)
+	local plan = ShopSync.plan(items, { pass = {}, product = {} })
+	eq(#plan.problems, 0, "problems: " .. table.concat(plan.problems, "; "))
+	eq(#plan.create + #plan.done, n)
+	local fs = require("@lune/fs")
+	for _, it in ipairs(items) do
+		truthy(fs.isFile("marketing/shop-icons/" .. it.key .. ".png"), "missing icon for " .. it.key)
+	end
+end)
+test("re-runs link existing items by exact name (oldest ID) and never touch filled IDs", function()
+	local items = {
+		{ key = "A", kind = "product", id = 0, name = "Gobble Hat", price = 59, desc = "" },
+		{ key = "B", kind = "product", id = 777, name = "Done Already", price = 49, desc = "" },
+		{ key = "C", kind = "pass", id = 0, name = "Gobble Hat", price = 99, desc = "" }, -- same name, other kind
+		{ key = "D", kind = "product", id = 0, name = "Brand New", price = 79, desc = "" },
+	}
+	local plan = ShopSync.plan(items, {
+		product = { { id = 900, name = "Gobble Hat" }, { id = 500, name = "Gobble Hat" }, { id = 12, name = "Done Already" } },
+		pass = {},
+	})
+	eq(#plan.link, 1)
+	eq(plan.link[1].key, "A")
+	eq(plan.link[1].id, 500)
+	eq(#plan.done, 1)
+	eq(plan.done[1].key, "B")
+	eq(#plan.create, 2) -- the pass "Gobble Hat" is a different kind, so it's still created
+	local bad = ShopSync.plan({
+		{ key = "X", kind = "product", id = 0, name = string.rep("a", 51), price = 10, desc = "" },
+		{ key = "Y", kind = "product", id = 0, name = "Twin", price = 0, desc = "" },
+		{ key = "Z", kind = "product", id = 0, name = "Twin", price = 10.5, desc = "" },
+	}, {})
+	eq(#bad.problems, 4) -- too long, free, fractional price, duplicate name
+end)
+test("IDs are written over id = 0 only, for the exact key, and the module still loads", function()
+	local fs = require("@lune/fs")
+	-- start from the real file with every ID reset to 0, so this holds after launch too
+	local src = string.gsub(fs.readFile("src/shared/Monetization.luau"), "= { id = %d+,", "= { id = 0,")
+	local out, written = ShopSync.applyIds(src, { Boost30 = 3301234567, Rot_HatTurkey = 42, ExtraSmokers = 99, NotAKey = 5 })
+	eq(#written, 3)
+	truthy(string.find(out, "\n\tBoost30 = { id = 3301234567, name", 1, true), "Boost30 written")
+	truthy(string.find(out, "\n\tBoost120 = { id = 0, name", 1, true), "Boost120 untouched (prefix key)")
+	truthy(string.find(out, "\n\tRot_HatTurkey = { id = 42, name", 1, true), "underscore key written")
+	truthy(string.find(out, "\n\tExtraSmokers = { id = 99, name", 1, true), "pass written")
+	-- a second run can't overwrite a real ID
+	local again, w2 = ShopSync.applyIds(out, { Boost30 = 1 })
+	eq(#w2, 0)
+	eq(again, out)
+	local fn = assert((loadstring :: any)(out), "rewritten module parses")
+	truthy(type(fn) == "function")
+end)
+test("multipart form: text fields, PNG file part and closing boundary", function()
+	local it = { key = "K", kind = "product", id = 0, name = "Sparkler Trail", price = 79, desc = "Zap" }
+	local body = ShopSync.multipart(ShopSync.formFields(it, "PNGDATA"), "bnd")
+	truthy(string.find(body, 'name="name"\r\n\r\nSparkler Trail\r\n', 1, true))
+	truthy(string.find(body, 'name="price"\r\n\r\n79\r\n', 1, true))
+	truthy(string.find(body, 'name="isForSale"\r\n\r\ntrue\r\n', 1, true))
+	truthy(string.find(body, 'filename="K.png"\r\nContent-Type: image/png\r\n\r\nPNGDATA\r\n', 1, true))
+	eq(string.sub(body, -9), "--bnd--\r\n")
+	local noIcon = ShopSync.multipart(ShopSync.formFields(it, nil), "bnd")
+	truthy(string.find(noIcon, "imageFile", 1, true) == nil)
+end)
+
+test("hub from spawn: name tags and the Dinner Bell label don't cover the Cook-Off leaderboard", function()
+	local roblox = require("@lune/roblox")
+	local WorldBuilder = require("../src/shared/WorldBuilder")
+	local V3, CF = roblox.Vector3, roblox.CFrame
+	local dm = roblox.Instance.new("DataModel")
+	local ws = dm:GetService("Workspace")
+	local env = { Instance = roblox.Instance, Vector3 = V3, CFrame = CF, Color3 = roblox.Color3, Enum = roblox.Enum, UDim2 = roblox.UDim2, NumberSequence = roblox.NumberSequence, NumberRange = roblox.NumberRange, ColorSequence = roblox.ColorSequence, Vector2 = roblox.Vector2 }
+	local map = WorldBuilder.build(env, ws, Config, Content)
+	-- a player standing on the hub spawn, looking at Big Bertha (Roblox default FOV 70), on a
+	-- desktop window and on a phone in landscape (pixel floors are relatively bigger on phones)
+	local eye = map.Hub.HubSpawn.CFrame.Position + V3.new(0, 5, 2)
+	local cam = CF.lookAt(eye, V3.new(0, 7, 10))
+	local lb = map.Hub.CookOff.Leaderboard
+	local tags = {
+		map.Hub.KingOfThePit.Head.NameTag,
+		map.Hub.UncHank.Head.NameTag,
+		map.Hub.Temp.Stem.NameTag,
+		map.Scenery.HubDecor.BigBertha.DinnerBell.Bell.Label,
+	}
+	for _, screen in { { 1280, 720 }, { 844, 390 } } do
+		local W, H = screen[1], screen[2]
+		local f = H / (2 * math.tan(math.rad(35)))
+		local function project(p)
+			local l = cam:PointToObjectSpace(p)
+			assert(l.Z < 0, "point is in front of the camera")
+			return W / 2 + f * l.X / -l.Z, H / 2 - f * l.Y / -l.Z, -l.Z
+		end
+		local r = { math.huge, math.huge, -math.huge, -math.huge }
+		for _, sx in { -1, 1 } do
+			for _, sy in { -1, 1 } do
+				local x, y = project((lb.CFrame * CF.new(sx * lb.Size.X / 2, sy * lb.Size.Y / 2 + 1, 0)).Position)
+				r = { math.min(r[1], x), math.min(r[2], y), math.max(r[3], x), math.max(r[4], y) }
+			end
+		end
+		truthy(r[3] > 0 and r[1] < W, "leaderboard is on screen from spawn")
+		for _, gui in tags do
+			local who = gui.Parent.Parent.Name
+			truthy(gui.Size.X.Scale > 0 and gui.Size.Y.Scale > 0, who .. " label shrinks with distance")
+			local x, y, d = project(gui.Parent.CFrame.Position + gui.StudsOffset)
+			local w = gui.Size.X.Scale * f / d + gui.Size.X.Offset
+			local h = gui.Size.Y.Scale * f / d + gui.Size.Y.Offset
+			local overlap = x - w / 2 < r[3] and x + w / 2 > r[1] and y - h / 2 < r[4] and y + h / 2 > r[2]
+			truthy(not overlap, string.format("%s label covers the leaderboard from spawn (%dx%d)", who, W, H))
+		end
+	end
 end)
 
 print(string.format("\n%d passed, %d failed", passed, failed))

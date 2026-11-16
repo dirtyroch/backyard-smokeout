@@ -22,6 +22,7 @@ local Rarity = require(Shared.Logic.Rarity)
 local Economy = require(Shared.Logic.Economy)
 local CookOff = require(Shared.Logic.CookOff)
 local TimeUtil = require(Shared.Logic.TimeUtil)
+local Holiday = require(Shared.Logic.Holiday)
 local WorldBuilder = require(Shared.WorldBuilder)
 
 local EventService = {}
@@ -278,32 +279,95 @@ local function nameOf(userId: number): string
 	return nameCache[userId]
 end
 
+-- Final results of a finished week (Sunday: this week, Monday-Friday: last week), cached per week:
+-- a finished board never changes, so it's read once (and retried every few minutes if that failed).
+local finalCache: { week: number, placings: { CookOff.Placing }?, at: number } = { week = -1, placings = nil, at = -math.huge }
+
+local function readBoard(store: any, count: number): { CookOff.Placing }?
+	if not store then
+		return nil
+	end
+	local ok, pages = pcall(function()
+		return store:GetSortedAsync(false, count)
+	end)
+	if not ok or not pages then
+		return nil
+	end
+	local okP, page = pcall(function()
+		return pages:GetCurrentPage()
+	end)
+	return okP and CookOff.placings(page) or nil
+end
+
+local function finalPlacings(): ({ CookOff.Placing }?, number?)
+	local offset = CookOff.finalWeekOffset(ctx.Game.weekday())
+	if not offset then
+		return nil, nil
+	end
+	local wk = TimeUtil.weekNumber(os.time(), Config.TIMEZONE_OFFSET_HOURS) + offset
+	local stale = finalCache.week ~= wk or (finalCache.placings == nil and os.clock() - finalCache.at > 300)
+	if stale then
+		local store = nil
+		local ok, st = pcall(function()
+			return DataStoreService:GetOrderedDataStore("CookOff_W" .. wk)
+		end)
+		if ok then
+			store = st
+		end
+		finalCache = { week = wk, placings = readBoard(store, 10), at = os.clock() }
+	end
+	return finalCache.placings, wk
+end
+
+-- Top 3 of a finished Cook-Off (ties included) earn the free Cook-Off Champ title. Told once per
+-- week, when they join or are already in the server once the results are final.
+function EventService.champCheck(player: Player)
+	local data = ctx.Game.dataOf(player)
+	if not data or not player.Parent then
+		return
+	end
+	local placings, wk = finalPlacings()
+	if not placings or not wk or data.cookoff.champWeek == wk then
+		return
+	end
+	local place = CookOff.podiumPlace(placings, player.UserId)
+	if not place then
+		return
+	end
+	data.cookoff.champWeek = wk
+	local B = Content.CookOffBoard
+	local had = data.titles[B.title] == true
+	data.titles[B.title] = true
+	ctx.Game.toast(player, string.format(had and B.champAgain or B.champNote, CookOff.medal(place)), "good")
+	ctx.Game.fx(player, "champ", { medal = CookOff.medal(place) })
+	ctx.Game.markDirty(player)
+end
+
 local function refreshBoard()
 	local map = ctx.World.map()
 	local lb = map.Hub.CookOff:FindFirstChild("Leaderboard") :: BasePart
 	local label = (lb:FindFirstChild("SignGui") :: SurfaceGui):FindFirstChild("BoardText") :: TextLabel
 	local season = ctx.Game.currentSeason()
-	local lines = { season.name .. " - this week", "(Saturdays, Texas time)", "" }
-	if boardStore then
-		local ok, pages = pcall(function()
-			return boardStore:GetSortedAsync(false, 10)
-		end)
-		if ok and pages then
-			local page = pages:GetCurrentPage()
-			for rank, entry in ipairs(page) do
-				table.insert(lines, string.format("%d. %s - %d", rank, nameOf(tonumber(entry.key) or 0), entry.value))
-			end
-		end
+	local B = Content.CookOffBoard
+	local mode = CookOff.boardMode(ctx.Game.weekday())
+	local placings: { CookOff.Placing }
+	if mode == "live" then
+		placings = readBoard(boardStore, B.liveRows) or {}
+	else
+		placings = finalPlacings() or {}
 	end
-	if #lines == 3 then
-		table.insert(lines, ctx.Game.isSaturday() and "No entries yet. Be first!" or "Opens Saturday.\nPractice any day!")
-	end
-	label.Text = table.concat(lines, "\n")
+	local nextSat = CookOff.nextSaturday(TimeUtil.dayNumber(os.time(), Config.TIMEZONE_OFFSET_HOURS))
+	label.Text = CookOff.boardText(mode, season.name, placings, nameOf, Holiday.longLabel(nextSat), B)
 	-- banner reskin by season
 	local banner = map.Hub.CookOff:FindFirstChild("Banner") :: BasePart
 	banner.Color = Color3.fromHex(season.color)
 	local bt = (banner:FindFirstChild("SignGui") :: SurfaceGui):FindFirstChild("BannerText") :: TextLabel
 	bt.Text = "🏆 " .. string.upper(season.name) .. (ctx.Game.isSaturday() and " - TODAY! 3x PRIZES" or " - SATURDAY") .. " 🏆"
+	if mode ~= "live" then
+		for _, player in ipairs(Players:GetPlayers()) do
+			EventService.champCheck(player)
+		end
+	end
 end
 
 -- ===== Potluck events: Turkey Day Smokeout and Holiday Smokeout =====
@@ -314,6 +378,14 @@ local potluckOn: string? = nil -- "turkeyday" | "holiday" | "" (none); nil = not
 local function refreshTurkey()
 	local EV = ctx.Game.potluckEvent()
 	local id = EV and EV.id or ""
+	local SOON, _, sw = ctx.Game.upcomingPotluck()
+	local soonText: string? = nil
+	if not EV and SOON and sw then
+		local fmt = SOON.id == "turkeyday" and Content.Signs.turkeySoon or Content.Signs.holidaySoon
+		local st = string.format(fmt, string.upper(Holiday.label(sw.startDay)))
+		soonText = st
+		id = "soon:" .. st
+	end
 	if id == potluckOn then
 		return
 	end
@@ -331,7 +403,7 @@ local function refreshTurkey()
 			decor:Destroy()
 		end
 	end
-	local text = Content.Signs.potluck
+	local text = soonText or Content.Signs.potluck
 	if id == "turkeyday" then
 		WorldBuilder.turkeyDay(pot, Content)
 		text = Content.Signs.turkeyPotluck
@@ -344,6 +416,50 @@ local function refreshTurkey()
 	end
 end
 EventService.refreshTurkey = refreshTurkey
+
+-- The banner's second line shows how full the table is, live, for the whole server:
+-- "Bring a dish!" -> "Dishes on the table: 2/3" -> "Table's full! +25% tips for everyone".
+local function refreshTable()
+	local EV, EC = ctx.Game.potluckEvent()
+	if not EV or not EC then
+		return
+	end
+	local pot = ctx.World.map().Hub:FindFirstChild("Potluck")
+	local decor = pot and pot:FindFirstChild(EV.id == "holiday" and "HolidaySmokeout" or "TurkeyDay")
+	local banner = decor and decor:FindFirstChild("Banner")
+	local gui = banner and banner:FindFirstChild("SignGui")
+	local label = gui and gui:FindFirstChild("BannerText") :: TextLabel?
+	if not label then
+		return
+	end
+	local now = workspace:GetServerTimeNow()
+	local n = ctx.Egg.potluckCount(now, EV.window)
+	local line = Holiday.tableLine(n, EV.need, now < ctx.Game.potluckUntil, math.floor(EV.tipBonus * 100 + 0.5), {
+		idle = EC.bannerIdle,
+		count = Content.PotluckTable.count,
+		full = Content.PotluckTable.full,
+	})
+	local text = EC.bannerTop .. "\n" .. line
+	if label.Text ~= text then
+		label.Text = text
+	end
+end
+EventService.refreshTable = refreshTable
+
+-- The event's one-line note: "It's Turkey Day Smokeout week!" while it's on, or the calm
+-- "Coming up: ... opens Mon, Nov 23" the week before. Sent when a player joins and again at
+-- Texas midnight to players already in the server (so nobody misses the day it opens).
+function EventService.eventNote(player: Player)
+	local _, EC = ctx.Game.potluckEvent()
+	if EC then
+		ctx.Game.toast(player, EC.login, "good")
+		return
+	end
+	local _, SC, sw = ctx.Game.upcomingPotluck()
+	if SC and sw then
+		ctx.Game.toast(player, string.format(SC.soon, Holiday.longLabel(sw.startDay)), "info")
+	end
+end
 
 function EventService.init(c: any)
 	ctx = c
@@ -364,6 +480,13 @@ function EventService.start()
 			if not okT then
 				warn("[EventService] turkey day: " .. tostring(errT))
 			end
+			local okL, errL = pcall(function(): any
+				refreshTable()
+				return nil
+			end)
+			if not okL then
+				warn("[EventService] potluck banner: " .. tostring(errL))
+			end
 			local okB, err = pcall(function(): any
 				refreshBoard()
 				return nil
@@ -381,6 +504,12 @@ function EventService.start()
 			end
 		end
 	end)
+	task.spawn(function()
+		while true do
+			task.wait(5)
+			pcall(refreshTable)
+		end
+	end)
 	ctx.Data.onLoaded.Event:Connect(function(player: Player)
 		task.delay(4, function()
 			if not player.Parent then
@@ -389,10 +518,8 @@ function EventService.start()
 			if ctx.Game.isSudsWeekend() then
 				ctx.Game.toast(player, "🫧 Suds Saturday & Sunday! Muddy pups need a bath. Wash one for a free bandana.", "good")
 			end
-			local _, EC = ctx.Game.potluckEvent()
-			if EC then
-				ctx.Game.toast(player, EC.login, "good")
-			end
+			EventService.eventNote(player)
+			task.spawn(EventService.champCheck, player)
 			if ctx.Game.isSaturday() then
 				ctx.Game.toast(player, "🏆 It's Cook-Off Saturday! Bring your best plate to Granny Pecan for 3x prizes.", "good")
 			end

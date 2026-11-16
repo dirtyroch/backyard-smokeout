@@ -21,12 +21,15 @@ function SessionLock.acquire(old: Record?, jobId: string, now: number, staleAfte
 	return rec, stolen and "stale-taken" or "acquired"
 end
 
+-- Only the server that holds the lock may write. A record with no lock was released (the
+-- player left, or another server already loaded, played and released it), so a late write from
+-- us would overwrite newer progress and leave a phantom lock behind: refuse it.
 function SessionLock.canWrite(old: Record?, jobId: string): boolean
 	if old == nil then
 		return true
 	end
 	local lock = (old :: Record).lock
-	return lock == nil or lock.jobId == jobId
+	return lock ~= nil and lock.jobId == jobId
 end
 
 -- Transform for saves. `release` clears the lock (player left / server closing).

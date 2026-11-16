@@ -71,6 +71,8 @@ local function weekday(): number
 	return TimeUtil.weekday(os.time(), Config.TIMEZONE_OFFSET_HOURS)
 end
 
+GameService.weekday = weekday
+
 function GameService.currentSeason(): any
 	return CookOff.seasonFor(Config.Seasons, TimeUtil.month(os.time(), Config.TIMEZONE_OFFSET_HOURS))
 end
@@ -122,6 +124,24 @@ function GameService.potluckEvent(): (any?, any?, Holiday.Week?)
 	end
 	local hw = GameService.holidayWeek()
 	if hw.active then
+		return Config.HolidaySmokeout, Content.HolidaySmokeout, hw
+	end
+	return nil, nil, nil
+end
+
+-- The potluck event opening within the next `Config.EventTeaserDays` days (config, copy, window),
+-- or nil. Nothing is on yet; this only drives a "coming up" sign and a one-line login note.
+function GameService.upcomingPotluck(): (any?, any?, Holiday.Week?)
+	if GameService.potluckEvent() then
+		return nil, nil, nil
+	end
+	local d = today()
+	local tw = GameService.turkeyWeek()
+	if Holiday.soon(d, tw, Config.EventTeaserDays) then
+		return Config.TurkeyDay, Content.TurkeyDay, tw
+	end
+	local hw = GameService.holidayWeek()
+	if Holiday.soon(d, hw, Config.EventTeaserDays) then
 		return Config.HolidaySmokeout, Content.HolidaySmokeout, hw
 	end
 	return nil, nil, nil
@@ -1215,6 +1235,10 @@ end
 
 -- ===== Lifecycle =====
 local function onLoaded(player: Player, profile: any, isNew: boolean)
+	-- onLoaded is a (deferred) event: the player may already have left and been released.
+	if not player.Parent or ctx.Data.get(player) ~= profile then
+		return
+	end
 	local data = profile.data
 	local lastSeen = data.lastSeen or 0
 	local r: Runtime = {
@@ -1240,6 +1264,14 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 	}
 	GameService.runtime[player] = r
 	r.passes = ctx.Purchase.loadPasses(player)
+	-- loadPasses yields (game pass checks). If they left meanwhile, onRemoving already cleaned up;
+	-- stop here so we don't hand a plot (and a runtime) to someone who's gone.
+	if not player.Parent or GameService.runtime[player] ~= r then
+		if GameService.runtime[player] == r then
+			GameService.runtime[player] = nil
+		end
+		return
+	end
 	if Rookie.shouldSkip(data.rookie, data.tutorial.done, data.stats, Config.ROOKIE_VETERAN_SERVES) then
 		data.rookie.skipped = true
 	end
@@ -1295,6 +1327,10 @@ local function onRemoving(player: Player)
 	ctx.Social.onLeave(player)
 	ctx.World.releasePlot(player)
 	globalLimiter:forget(player)
+	local uid = tostring(player.UserId)
+	for name in pairs(Actions) do
+		actionLimiter:forget(uid .. name)
+	end
 	GameService.runtime[player] = nil
 	ctx.Data.release(player)
 end
@@ -1407,6 +1443,9 @@ function GameService.start()
 						ctx.Season.sync(player, data)
 						ctx.Membership.onNewDay(player, data)
 						GameService.toast(player, "A new day at the ranch! Daily reward and a new Path step are ready.", "good")
+						if ctx.Event and ctx.Event.eventNote then
+							ctx.Event.eventNote(player) -- an event (or its teaser week) may start today
+						end
 						r.dirty = true
 					end
 					-- customers

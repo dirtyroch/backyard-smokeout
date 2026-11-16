@@ -38,6 +38,7 @@ local tempPokes: { [Player]: number } = {}
 EggService.EGGS = { "blessed", "roof", "creek", "apron", "king", "temp", "rex", "meteorite", "cooked", "sixseven", "dinnerbell" }
 
 local bellRings: { [number]: number } = {}
+local lastRing: { [number]: number } = {} -- userId -> os.clock() of the last ring that counted
 local lastDinner = -1e9
 local potluckShares: { [number]: number } = {}
 local lastPotluck = -1e9
@@ -264,14 +265,24 @@ local function checkPotluck(player: Player, EV: any, EC: any)
 			ctx.Game.markDirty(p)
 		end
 	elseif now - lastPotluck >= EV.cooldown then
-		ctx.Game.toast(player, string.format(EC.progress, n, EV.need, EV.need - n), "info")
+		-- Everyone hears it (not just the sharer), so the rest of the server knows the table is
+		-- filling up. Each player can share once a day, so this can't be spammed.
+		ctx.Game.announce(string.format(EC.progress, player.DisplayName, n, EV.need, EV.need - n), EV.id == "holiday" and "#3FA35B" or "#E8761E")
 	end
+	if ctx.Event and ctx.Event.refreshTable then
+		ctx.Event.refreshTable()
+	end
+end
+
+-- Dishes on the potluck table right now (for the banner's live count).
+function EggService.potluckCount(now: number, window: number): number
+	return Holiday.recentShares(potluckShares, now, window)
 end
 
 handlers["event:potluck"] = function(player, data)
 	local EV, EC = ctx.Game.potluckEvent()
 	if not EV or not EC then
-		dialog(player, "Granny Pecan", Content.TurkeyDay.over)
+		dialog(player, "Granny Pecan", Content.PotluckTable.closed)
 		return
 	end
 	local d = today()
@@ -305,10 +316,14 @@ end
 
 handlers["landmark:bell"] = function(player, data)
 	local d = today()
-	data.stats.bells += 1
 	ctx.Game.fx(player, "bell", {})
-	ctx.Game.checkRookie(player, data)
-	checkDinnerBell(player)
+	-- Every ring is worth Season XP, so a ring only counts once per ringCooldown per player
+	-- (otherwise mashing the prompt farms the whole Smokehouse Pass). Ringing itself stays free.
+	if Hype.ringCounts(lastRing, player.UserId, os.clock(), Config.DinnerBell.ringCooldown) then
+		data.stats.bells += 1
+		ctx.Game.checkRookie(player, data)
+		checkDinnerBell(player)
+	end
 	local line = BELL_LINES[rng:NextInteger(1, #BELL_LINES)]
 	if data.daily.bellDay ~= d then
 		data.daily.bellDay = d
@@ -374,6 +389,7 @@ function EggService.start()
 	end)
 	game:GetService("Players").PlayerRemoving:Connect(function(p)
 		tempPokes[p] = nil
+		lastRing[p.UserId] = nil
 	end)
 end
 

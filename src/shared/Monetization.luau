@@ -2,7 +2,10 @@
 --[[
 	Monetization.luau — THE ONE PLACE FOR ROBUX IDS.
 
-	HOW TO FILL THIS IN (no coding needed, see PUBLISHING.md for screenshots-level steps):
+	FASTEST: `lune run scripts/create-shop <universeId> --apply` with an Open Cloud key creates every
+	pass and product below (with its icon from marketing/shop-icons/) and fills in the IDs for you.
+
+	HOW TO FILL THIS IN BY HAND (no coding needed, see PUBLISHING.md for screenshots-level steps):
 	  1. Publish the game once (File > Publish to Roblox).
 	  2. Go to https://create.roblox.com/dashboard/creations, click the game.
 	  3. Monetization > Passes > "Create a Pass" for every entry in `Passes` below.

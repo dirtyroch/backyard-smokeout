@@ -326,12 +326,21 @@ local function processReceipt(info: any): Enum.ProductPurchaseDecision
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	local profile = ctx.Data.waitFor(player, 10)
-	if not profile or not ctx.Game.runtime[player] then
+	if not profile or not ctx.Game.runtime[player] or profile.released or not player.Parent then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if profile.memoryOnly and not IS_STUDIO then
+		-- Saving is down on this live server: nothing we grant would stick. Roblox retries later.
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 	local data = profile.data
 	local purchaseId = tostring(info.PurchaseId)
 	if ReceiptLedger.has(data.receipts, purchaseId) then
+		-- Already granted in this session. Only confirm once that grant is actually saved
+		-- (an earlier save may have failed); never grant it a second time.
+		if not ctx.Data.save(profile, false) then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
 	local key = productById[info.ProductId]
@@ -345,9 +354,14 @@ local function processReceipt(info: any): Enum.ProductPurchaseDecision
 		local recipient = Players:GetPlayerByUserId(giftTo)
 		local rprofile = recipient and ctx.Data.get(recipient) or nil
 		local gok, gerr = pcall(function()
-			if recipient and rprofile and ctx.Game.runtime[recipient] then
-				deliverGift(player, data, recipient, rprofile.data, key)
+			local present = recipient ~= nil and rprofile ~= nil and not rprofile.released and ctx.Game.runtime[recipient] ~= nil
+			local landing = Gifting.landing(present, present and cosmeticsOwned(rprofile.data, Monetization.Products[key].grants))
+			if landing == "deliver" then
+				deliverGift(player, data, recipient :: Player, rprofile.data, key)
 				ctx.Data.save(rprofile, false)
+			elseif landing == "hold-owned" then
+				Gifting.hold(data.giftsHeld, key)
+				ctx.Game.toast(player, "They already got " .. Monetization.Products[key].name .. " while you were checking out, so your gift is saved for you. Open the shop and tap Gift on it to send it to anyone, free.", "info")
 			else
 				Gifting.hold(data.giftsHeld, key)
 				ctx.Game.toast(player, "They left before the gift landed, so it's saved for you. Open the shop and tap Gift on " .. Monetization.Products[key].name .. " to send it to anyone, free.", "info")
@@ -385,8 +399,35 @@ function PurchaseService.init(c: any)
 	ctx = c
 end
 
+-- Studio-only launch check in the Output window: how many shop items still need a Roblox ID.
+local function launchCheck()
+	local missing, total = 0, 0
+	for _, p in pairs(Monetization.Passes) do
+		total += 1
+		missing += if p.id == 0 then 1 else 0
+	end
+	for _, p in pairs(Monetization.Products) do
+		total += 1
+		missing += if p.id == 0 then 1 else 0
+	end
+	if missing > 0 then
+		print(
+			string.format(
+				"[Launch check] %d of %d shop items still have id = 0, so the live game hides them. One command creates them all: scripts/create-shop.luau (PUBLISHING.md step 6).",
+				missing,
+				total
+			)
+		)
+	else
+		print(string.format("[Launch check] All %d shop items have Roblox IDs.", total))
+	end
+end
+
 function PurchaseService.start()
 	MarketplaceService.ProcessReceipt = processReceipt
+	if IS_STUDIO then
+		launchCheck()
+	end
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, passId: number, purchased: boolean)
 		local key = passById[passId]
 		if purchased and key then

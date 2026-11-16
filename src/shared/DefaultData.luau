@@ -52,7 +52,7 @@ return {
 	path = { claimed = 0, playDays = 0, lastPlayDay = -1 },
 	daily = { jokeDay = -1, creekDay = -1, kingDone = false, bellDay = -1, turkeyDay = -1, holidayDay = -1 },
 	restock = { window = -1, bought = {} },
-	cookoff = { week = -1, best = 0 },
+	cookoff = { week = -1, best = 0, champWeek = -1 }, -- champWeek: last week whose podium was announced to this player
 	settings = { peace = true, sfx = true, music = true, musicVolume = 0.22 }, -- snagging is opt-in; music is its own quiet loop
 	tutorial = { firstBrisket = false, done = false },
 	rookie = { claimed = 0, skipped = false, resumed = false }, -- Unc Hank's Rookie List (Logic/Rookie)

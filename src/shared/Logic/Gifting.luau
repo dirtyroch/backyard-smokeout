@@ -61,6 +61,18 @@ function Gifting.claim(pending: { [string]: Pending }, key: string, now: number,
 	return p.to
 end
 
+-- When a gift receipt arrives: hand it over, or hold it on the giver's save so the Robux isn't
+-- wasted ("hold-left": the recipient left; "hold-owned": they got every look in it meanwhile).
+function Gifting.landing(recipientPresent: boolean, recipientOwnsAll: boolean): string
+	if not recipientPresent then
+		return "hold-left"
+	end
+	if recipientOwnsAll then
+		return "hold-owned"
+	end
+	return "deliver"
+end
+
 -- Held gifts live on the giver's save: { [productKey] = count }.
 function Gifting.hold(held: { [string]: number }, key: string)
 	held[key] = (held[key] or 0) + 1
