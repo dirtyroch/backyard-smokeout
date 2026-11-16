@@ -19,6 +19,7 @@ local Economy = require(Shared.Logic.Economy)
 local TimeUtil = require(Shared.Logic.TimeUtil)
 local Holiday = require(Shared.Logic.Holiday)
 local Gifting = require(Shared.Logic.Gifting)
+local HudMenu = require(Shared.Logic.HudMenu)
 local Storefront = require(Shared.Logic.Storefront)
 local Rookie = require(Shared.Logic.Rookie)
 local T = UI.Theme
@@ -58,7 +59,7 @@ end
 -- ===== window chrome =====
 function Panels.mount(sg: GuiObject)
 	screen = sg
-	window = UI.frame({ Name = "Window", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 840, 0, 560), BackgroundColor3 = T.bg, Visible = false, ZIndex = 20, Parent = screen })
+	window = UI.frame({ Name = "Window", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 840, 0, 560), BackgroundColor3 = T.bg, Visible = false, ZIndex = 40, Parent = screen })
 	UI.corner(window, 18)
 	UI.stroke(window, T.accent, 3)
 	titleLabel = UI.label("", { Position = UDim2.new(0, 20, 0, 12), Size = UDim2.new(1, -84, 0, 40), TextSize = 30, ZIndex = 21, Parent = window })
@@ -104,11 +105,16 @@ function Panels.open(name: string, arg: any?)
 end
 
 function Panels.toggle(name: string)
-	if current == name then
-		Panels.close()
-	else
-		Panels.open(name)
+	local nextName, invite = HudMenu.press(current, name)
+	if invite then
+		Panels.invite()
+		return
 	end
+	if nextName == nil then
+		Panels.close()
+		return
+	end
+	Panels.open(nextName)
 end
 
 function Panels.goHome()
@@ -1109,6 +1115,9 @@ function Panels.render()
 	end
 	local s = S()
 	if not s then
+		titleLabel.Text = "Loading"
+		UI.clear(body)
+		lbl(body, "Your ranch is still loading. Try that again in a second.", { Size = UDim2.new(1, 0, 0, 48), TextSize = 18 })
 		return
 	end
 	lastRender = os.clock()

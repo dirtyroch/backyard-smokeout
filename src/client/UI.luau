@@ -1,5 +1,10 @@
 --!strict
 -- Tiny UI kit: everything is built in code, so no uploaded images are needed.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local HudMenu = require(Shared:WaitForChild("Logic"):WaitForChild("HudMenu"))
+
 local UI = {}
 
 UI.Theme = {
@@ -182,24 +187,29 @@ function UI.button(text: string, color: Color3?, props: Props?, onClick: (() -> 
 	UI.stroke(b, Color3.fromHex("#2A160E"), 2)
 	UI.fitText(b, math.max(b.TextSize, 16), 14)
 	if onClick then
-		local busy = false
+		-- One press must run the handler once. A ScrollingFrame can fire
+		-- Activated twice for that press. Deferring the handler used to
+		-- finish it and clear the guard before the second event, so a toggle
+		-- opened a panel and closed it again in the same click.
+		local gate = HudMenu.guard()
 		b.Activated:Connect(function()
-			if UI.onClick then
-				(UI.onClick :: any)()
-			end
-			if busy then
+			if not gate:allow() then
 				return
 			end
-			busy = true
-			task.spawn(function()
-				local ok, err = pcall(function(): any
-					(onClick :: any)()
-					return nil
+			if UI.onClick then
+				pcall(function()
+					(UI.onClick :: any)()
 				end)
-				if not ok then
-					warn(err)
-				end
-				busy = false
+			end
+			local ok, err = pcall(function(): any
+				(onClick :: any)()
+				return nil
+			end)
+			if not ok then
+				warn(err)
+			end
+			task.defer(function()
+				gate:release()
 			end)
 		end)
 	end

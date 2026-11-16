@@ -24,6 +24,7 @@ local Music = require("../src/shared/Music")
 local MusicPrefs = require("../src/shared/Logic/MusicPrefs")
 local CuteFace = require("../src/shared/Logic/CuteFace")
 local Gifting = require("../src/shared/Logic/Gifting")
+local HudMenu = require("../src/shared/Logic/HudMenu")
 local function fs_read(path: string): string
 	return require("@lune/fs").readFile(path)
 end
@@ -1821,6 +1822,98 @@ test("hub from spawn: name tags and the Dinner Bell label don't cover the Cook-O
 			truthy(not overlap, string.format("%s label covers the leaderboard from spawn (%dx%d)", who, W, H))
 		end
 	end
+end)
+
+print("HUD menu")
+local PANELS_SRC = fs_read("src/client/Panels.luau")
+local UI_SRC = fs_read("src/client/UI.luau")
+local HUD_SRC = fs_read("src/client/Hud.luau")
+
+test("every left-menu button names a real panel, except Invite", function()
+	local seen: { [string]: boolean } = {}
+	eq(#HudMenu.entries, 9)
+	for _, entry in ipairs(HudMenu.entries) do
+		truthy(not seen[entry.id], "duplicate " .. entry.id)
+		seen[entry.id] = true
+		truthy(string.find(HUD_SRC, "HudMenu.entries", 1, true) ~= nil, "HUD builds from the menu table")
+		if entry.panel == "invite" then
+			local stay, invite = HudMenu.press("shop", "invite")
+			eq(stay, "shop", "invite leaves the open panel alone")
+			truthy(invite)
+			truthy(string.find(PANELS_SRC, 'name == "invite"', 1, true) ~= nil)
+		else
+			truthy(string.find(PANELS_SRC, 'current == "' .. entry.panel .. '"', 1, true) ~= nil, entry.panel .. " is rendered")
+			eq(HudMenu.press(nil, entry.panel), entry.panel)
+			eq(HudMenu.press(entry.panel, entry.panel), nil)
+		end
+	end
+	for _, id in ipairs({ "shop", "season", "sauce", "index", "path", "upgrades", "daily", "settings", "invite" }) do
+		truthy(seen[id], "missing " .. id)
+	end
+end)
+
+test("a second activation in the same click cannot close the panel it just opened", function()
+	local gate = HudMenu.guard()
+	local open: string? = nil
+	local function click(panel: string)
+		if not gate:allow() then
+			return
+		end
+		local nextName, invite = HudMenu.press(open, panel)
+		if not invite then
+			open = nextName
+		end
+	end
+	click("shop")
+	click("shop") -- the scroll frame's second Activated
+	eq(open, "shop")
+	gate:release()
+	click("shop") -- a real second press, after the guard drops
+	eq(open, nil)
+	gate:release()
+	click("sauce")
+	eq(open, "sauce")
+	gate:release()
+	click("invite")
+	eq(open, "sauce", "invite does not close Sauce")
+end)
+
+test("menu art does not keep the click, and the hit target sits above the scroller", function()
+	local roblox = require("@lune/roblox")
+	local holder = roblox.Instance.new("Frame")
+	holder.ZIndex = 2
+	local icon = roblox.Instance.new("TextLabel")
+	icon.Name = "Icon"
+	icon.ZIndex = 3
+	icon.Parent = holder
+	local caption = roblox.Instance.new("TextLabel")
+	caption.Name = "Caption"
+	caption.ZIndex = 3
+	caption.Parent = holder
+	local dot = roblox.Instance.new("Frame")
+	dot.Name = "Dot"
+	dot.ZIndex = 4
+	dot.Parent = holder
+	local hit = roblox.Instance.new("TextButton")
+	hit.Name = "Hit"
+	hit.ZIndex = HudMenu.HIT_Z
+	hit.Parent = holder
+	HudMenu.releaseDecorations(holder)
+	eq(icon.Active, false)
+	eq(icon.Interactable, false)
+	eq(caption.Interactable, false)
+	eq(dot.Active, false)
+	eq(dot.Interactable, false)
+	eq(hit.Active, true)
+	eq(hit.Interactable, true)
+	truthy(hit.ZIndex > icon.ZIndex and hit.ZIndex > caption.ZIndex and hit.ZIndex > dot.ZIndex)
+	truthy(hit.ZIndex > HudMenu.SCROLL_Z)
+	truthy(not hit:IsA("TextLabel"))
+	-- the button callback stays synchronous and holds the guard until the next defer
+	truthy(string.find(UI_SRC, "gate:allow()", 1, true) ~= nil)
+	truthy(string.find(UI_SRC, "gate:release()", 1, true) ~= nil)
+	truthy(string.find(UI_SRC, "task.defer", 1, true) ~= nil)
+	truthy(string.find(UI_SRC, "task.spawn", 1, true) == nil, "spawn cleared the guard before the second Activated")
 end)
 
 print(string.format("\n%d passed, %d failed", passed, failed))
