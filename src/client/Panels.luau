@@ -413,7 +413,7 @@ local function renderShop(s: any)
 end
 
 -- ===== Smokehouse Pass (season) =====
-local SLOT_ICON = { hat = "🤠", apron = "🦺", tool = "🥄", neck = "🧣", trail = "✨", skin = "🔥", smoke = "💨", feet = "🧦", patio = "💡" }
+local SLOT_ICON = { hat = "🤠", apron = "🦺", tool = "🥄", neck = "🧣", buddy = "🦝", trail = "✨", skin = "🔥", smoke = "💨", feet = "🧦", patio = "💡" }
 
 local function seasonCell(parent: Instance, y: number, reward: any?, reached: boolean, locked: boolean, paidRow: boolean)
 	local f = UI.frame({ BackgroundColor3 = reward and (reached and (locked and T.panel or T.cardHi) or T.card) or T.panel, BackgroundTransparency = reward and 0 or 0.6, Position = UDim2.new(0, 0, 0, y), Size = UDim2.new(1, 0, 0, 96), ZIndex = 23, Parent = parent })
@@ -747,6 +747,11 @@ local function renderIndex(s: any)
 		local h = card(sf, 0, 36)
 		h.BackgroundTransparency = 1
 		lbl(h, string.format("Secrets found: %d / %d", n, #EGGS), { Size = UDim2.new(1, 0, 1, 0), TextSize = 18, TextColor3 = T.gold })
+		local j = s.jimothy
+		local jn = if type(j) == "table" then (j.n or 0) else 0
+		local jt = if type(j) == "table" and type(j.total) == "number" then j.total else 10
+		local jf = card(sf, 80, 52)
+		lbl(jf, string.format("🦝 Jimothy sightings: %d / %d\nHe's hiding around the ranch. Walk up and say hi.", jn, jt), { Size = UDim2.new(1, 0, 1, 0), TextSize = 14, Font = T.body })
 	end
 end
 
@@ -919,7 +924,7 @@ local function renderDaily(s: any)
 end
 
 -- ===== Settings / Fits / Titles =====
-local SLOT_LABEL = { hat = "Hat", apron = "Apron", tool = "Tool", neck = "Bandana", feet = "Feet", trail = "Trail", skin = "Smoker skin", smoke = "Smoke color", patio = "Patio" }
+local SLOT_LABEL = { hat = "Hat", apron = "Apron", tool = "Tool", neck = "Bandana", feet = "Feet", buddy = "Back-buddy", trail = "Trail", skin = "Smoker skin", smoke = "Smoke color", patio = "Patio" }
 
 local function renderSettings(s: any)
 	titleLabel.Text = "⚙️ Settings & Fits"

@@ -21,6 +21,7 @@ local Config = require(Shared.Config)
 local DefaultData = require(Shared.DefaultData)
 local SessionLock = require(Shared.Logic.SessionLock)
 local Reconcile = require(Shared.Logic.Reconcile)
+local Jimothy = require(Shared.Logic.Jimothy)
 
 local STORE_NAME = "BackyardSmokeout_Players_v1"
 local STALE_LOCK = 300 -- seconds
@@ -163,6 +164,7 @@ function DataService.load(player: Player): Profile?
 
 	local isNew = data == nil
 	data = Reconcile.fill(data or freshData(), DefaultData)
+	Jimothy.migrate(data)
 	local profile: Profile = {
 		player = player,
 		key = key,

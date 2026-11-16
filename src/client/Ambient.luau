@@ -6,7 +6,12 @@
 	Nothing here replicates or touches gameplay. Critters far from the camera are skipped.
 ]]
 local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Jimothy = require(Shared.Logic.Jimothy)
 
 local Ambient = {}
 
@@ -23,6 +28,19 @@ type Wanderer = {
 }
 
 local rng = Random.new()
+
+type Parade = {
+	model: Model,
+	points: { Vector3 },
+	index: number,
+	pos: Vector3,
+	t: number,
+	nextLine: number,
+	showUntil: number,
+	line: number,
+	gui: BillboardGui?,
+	label: TextLabel?,
+}
 
 local function isNight(): boolean
 	local h = Lighting.ClockTime
@@ -80,12 +98,88 @@ function Ambient.start()
 			end
 		end
 	end
-	if #wanderers == 0 then
+	-- Hub Jimothy: a fixed loop, a fast waddle, and a short speech bubble up close
+	-- (or a brief one every few seconds when nobody's next to him).
+	local parade: Parade? = nil
+	local hub = map:FindFirstChild("Hub")
+	local npc = hub and hub:FindFirstChild("JimothyWander")
+	local path = hub and hub:FindFirstChild("JimothyPath")
+	if npc and npc:IsA("Model") and path then
+		local pts: { Vector3 } = {}
+		local marks: { BasePart } = {}
+		for _, p in ipairs(path:GetChildren()) do
+			if p:IsA("BasePart") then
+				table.insert(marks, p)
+			end
+		end
+		table.sort(marks, function(a, b)
+			return a.Name < b.Name
+		end)
+		for _, p in ipairs(marks) do
+			table.insert(pts, p.Position)
+		end
+		if #pts >= 2 then
+			local guiInst = npc:FindFirstChild("Speech", true)
+			local gui = if guiInst and guiInst:IsA("BillboardGui") then guiInst else nil
+			local textInst = gui and gui:FindFirstChild("Text")
+			local label = if textInst and textInst:IsA("TextLabel") then textInst else nil
+			parade = {
+				model = npc,
+				points = pts,
+				index = 2,
+				pos = pts[1],
+				t = 0,
+				nextLine = os.clock() + 2.4,
+				showUntil = 0,
+				line = 1,
+				gui = gui,
+				label = label,
+			}
+			npc:PivotTo(CFrame.lookAt(pts[1], pts[2]))
+		end
+	end
+
+	if #wanderers == 0 and parade == nil then
 		return
 	end
+	local player = Players.LocalPlayer
 	RunService.Heartbeat:Connect(function(dt)
 		local cam = workspace.CurrentCamera
 		local camPos = cam and cam.CFrame.Position or Vector3.zero
+		if parade then
+			local w = parade
+			local target = w.points[w.index]
+			local delta = target - w.pos
+			local flat = Vector3.new(delta.X, 0, delta.Z)
+			w.t += dt
+			if flat.Magnitude < 0.45 then
+				w.index = w.index % #w.points + 1
+				target = w.points[w.index]
+				delta = target - w.pos
+				flat = Vector3.new(delta.X, 0, delta.Z)
+			end
+			if flat.Magnitude > 0.05 then
+				local step = math.min(flat.Magnitude, 11 * dt)
+				w.pos += flat.Unit * step
+				local hop = math.abs(math.sin(w.t * 16)) * 0.42
+				local at = Vector3.new(w.pos.X, target.Y + hop, w.pos.Z)
+				w.model:PivotTo(CFrame.lookAt(at, at + flat.Unit) * CFrame.Angles(0, 0, math.sin(w.t * 16) * 0.26))
+			end
+			local now = os.clock()
+			local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			local near = hrp ~= nil and (hrp.Position - w.pos).Magnitude < 18
+			if w.label and now >= w.nextLine then
+				w.line = w.line % #Jimothy.LINES + 1
+				w.label.Text = Jimothy.LINES[w.line]
+				w.nextLine = now + (if near then 2.6 else 8)
+				if not near then
+					w.showUntil = now + 2.2
+				end
+			end
+			if w.gui then
+				w.gui.Enabled = near or now < w.showUntil
+			end
+		end
 		for _, w in ipairs(wanderers) do
 			if (w.pos - camPos).Magnitude > 260 then
 				continue

@@ -442,6 +442,42 @@ function WorldBuilder.critter(env, parent, def, cf)
 			wedge(m, "Crest", V(0.12 * s, 0.7 * s, 0.45 * s), at(0, 2.85, -0.85, -30, 0, 0), "#24456B")
 			part(m, "CheekPatch", V(0.7 * s, 0.16 * s, 0.08 * s), at(0, 2.25, -1.35), "#E2572E")
 		end
+	elseif id == "jimothy" then
+		-- Volleyball body: the head sits in the top of the ball (no neck), the legs are stubs,
+		-- the ears are round, and the tail is a chunky stack of rings. Bandit stays on the
+		-- slimmer raccoon plan in the branch below.
+		local BELLY, MASK, MUZZLE, NOSE = "#E4D5C4", "#1A120E", "#F4EDE4", "#2A1C16"
+		body = e("Body", 2.5, 2.4, 2.5, BC, 0, 1.32, 0.08)
+		e("Belly", 1.45, 1.1, 1.1, BELLY, 0, 1.05, -0.82)
+		head = e("Head", 1.68, 1.36, 1.5, HC, 0, 2.36, -0.26)
+		e("Mask", 1.55, 0.44, 0.3, MASK, 0, 2.48, -0.92)
+		e("Muzzle", 0.8, 0.48, 0.55, MUZZLE, 0, 2.16, -1.02)
+		e("Nose", 0.26, 0.2, 0.18, NOSE, 0, 2.22, -1.28)
+		e("CheekL", 0.26, 0.15, 0.1, "#F7A1A9", -0.46, 2.1, -1.02)
+		e("CheekR", 0.26, 0.15, 0.1, "#F7A1A9", 0.46, 2.1, -1.02)
+		e("EarL", 0.52, 0.48, 0.26, BC, -0.6, 2.98, -0.18)
+		e("EarR", 0.52, 0.48, 0.26, BC, 0.6, 2.98, -0.18)
+		e("EarInL", 0.26, 0.24, 0.12, "#E8D8C4", -0.6, 2.96, -0.3)
+		e("EarInR", 0.26, 0.24, 0.12, "#E8D8C4", 0.6, 2.96, -0.3)
+		for _, lx in { -0.7, 0.7 } do
+			for _, lz in { -0.5, 0.58 } do
+				cyl(m, "Leg", 0.2 * s, 0.34 * s, at(lx, 0.14, lz) * E.CFrame.Angles(0, 0, math.pi / 2), BC)
+				part(m, "Paw", V(0.4 * s, 0.1 * s, 0.38 * s), at(lx, 0.05, lz - 0.05), BC)
+			end
+		end
+		local rings = { "#2A2420", "#E7D4B4", "#2A2420", "#E7D4B4" }
+		for k = 0, 3 do
+			local sz = 0.76 - k * 0.1
+			e("Tail", sz, sz, sz, rings[k + 1], 0.06 + k * 0.16, 1.02 + k * 0.28, 1.42 + k * 0.42)
+		end
+		if def.waiter then
+			e("BowL", 0.3, 0.2, 0.12, "#C0392B", -0.16, 1.82, -1.16, 0, 0, 22)
+			e("BowR", 0.3, 0.2, 0.12, "#C0392B", 0.16, 1.82, -1.16, 0, 0, -22)
+			e("BowKnot", 0.14, 0.14, 0.12, "#F4E1C1", 0, 1.82, -1.24)
+			local apron = part(m, "Apron", V(1.2 * s, 0.9 * s, 0.08 * s), at(0, 1.15, -1.12), "#F6E7D4", E.Enum.Material.Fabric)
+			surfaceText(apron, E.Enum.NormalId.Front, "JIMOTHY", "#5A2E1E", nil)
+		end
+		eyeY, eyeZ, eyeX, eyeSize = 2.5, -1.08, 0.4, 0.85
 	else
 		local flat = id == "hornedtoad"
 		local bodyH = flat and 1.0 or 1.6
@@ -451,13 +487,10 @@ function WorldBuilder.critter(env, parent, def, cf)
 		local hy = flat and 1.35 or 2.35
 		head = e("Head", flat and 1.7 or 1.75, flat and 1.1 or 1.6, flat and 1.4 or 1.6, HC, 0, hy, flat and -1.45 or -1.3)
 		-- muzzle and nose
-		local muzzleColor = (id == "possum" or id == "clapcat") and HC or lighten(HC, 0.35)
+		local muzzleColor = id == "clapcat" and HC or lighten(HC, 0.35)
 		if id == "armadillo" then
 			e("Muzzle", 0.75, 0.6, 1.2, lighten(HC, 0.2), 0, hy - 0.35, -2.25)
 			e("Nose", 0.35, 0.3, 0.25, DARK, 0, hy - 0.3, -2.85)
-		elseif id == "possum" then
-			e("Muzzle", 0.8, 0.6, 1.0, HC, 0, hy - 0.3, -2.15)
-			e("Nose", 0.32, 0.26, 0.24, "#F48FB1", 0, hy - 0.22, -2.65)
 		elseif def.bellyRub then
 			e("Muzzle", 1.15, 0.65, 0.45, lighten(HC, 0.15), 0, hy - 0.4, -2.0)
 			e("Nose", 0.45, 0.3, 0.25, DARK, 0, hy - 0.15, -2.18)
@@ -483,10 +516,7 @@ function WorldBuilder.critter(env, parent, def, cf)
 		end
 		-- ears
 		if def.ears then
-			if id == "possum" then
-				e("EarL", 0.7, 0.7, 0.18, "#F4B6C2", -0.62, hy + 0.7, -1.2)
-				e("EarR", 0.7, 0.7, 0.18, "#F4B6C2", 0.62, hy + 0.7, -1.2)
-			elseif def.bellyRub then
+			if def.bellyRub then
 				e("EarL", 0.6, 1.0, 0.25, HC, -0.55, hy + 0.85, -1.2, 0, 0, 18)
 				e("EarR", 0.6, 1.0, 0.25, HC, 0.55, hy + 0.85, -1.2, 0, 0, -18)
 				e("EarInL", 0.35, 0.7, 0.1, PINK, -0.55, hy + 0.82, -1.33, 0, 0, 18)
@@ -506,8 +536,6 @@ function WorldBuilder.critter(env, parent, def, cf)
 			for k = 0, 3 do
 				e("Tail", 0.65, 0.65, 0.6, k % 2 == 0 and "#3A3A3A" or "#9A9A9A", 0, 1.35 + k * 0.18, 1.35 + k * 0.45)
 			end
-		elseif id == "possum" then
-			e("Tail", 0.25, 0.25, 2.2, "#F4B6C2", 0, 0.9, 2.0, 15, 0, 0)
 		elseif id == "clapcat" then
 			e("Tail", 0.3, 2.0, 0.3, BC, 0, 2.2, 1.35, -15, 0, 0)
 		elseif id == "armadillo" then
@@ -564,6 +592,23 @@ function WorldBuilder.critter(env, parent, def, cf)
 		end
 	end
 	m.PrimaryPart = body
+	return m, head, body
+end
+
+-- A placed Jimothy. `opts.sighting` adds the hunt prompt; `opts.line` adds his speech bubble.
+local function placeJimothy(parent, name, cf, def, opts)
+	opts = opts or {}
+	local m, head, body = WorldBuilder.critter(E, parent, def, cf)
+	m.Name = name
+	m:SetAttribute("Jimothy", opts.sighting or name)
+	if opts.sighting then
+		local pp = prompt(body, "jimothy", "Spot Jimothy", opts.object or "Jimothy", 0, opts.dist or 8)
+		pp:SetAttribute("Sighting", opts.sighting)
+	end
+	if opts.line and head then
+		local bubble = billboard(head, "Speech", opts.line, 2.4, 22, "#FFE9A8", 220, 36, { 3.4, 0.7, 90, 16 })
+		bubble:SetAttribute("Jimothy", true)
+	end
 	return m, head, body
 end
 
@@ -2011,7 +2056,7 @@ local function buildScenery(map, cfg, content)
 		{ "armadillo", polar(45, 186), 16, 3 },
 		{ "roadrunner", polar(200, 192), 24, 9 },
 		{ "hornedtoad", V(30, 0, -244), 10, 2 },
-		{ "possum", polar(150, 200), 14, 3 },
+		{ "jimothy", polar(150, 200), 14, 3 },
 		{ "armadillo", polar(318, 195), 14, 3 },
 	}
 	local defs = {}
@@ -2054,6 +2099,131 @@ end
 WorldBuilder.buildScenery = buildScenery
 
 -- Build everything under `parent` (Workspace). Returns the Map model.
+local function jimothyDef(cfg, scale, waiter)
+	for _, d in ipairs(cfg.Critters or {}) do
+		if d.id == "jimothy" then
+			local copy = table.clone(d)
+			copy.scale = scale or d.scale or 1
+			copy.waiter = waiter == true
+			return copy
+		end
+	end
+	return nil
+end
+
+-- Mascot dressing: a scurrying hub Jimothy, a poster, a statue, and 10 hidden sightings.
+-- None of these sit on the spawn-to-leaderboard sight line, and the only billboard is the
+-- wanderer's short-range speech bubble (west of that line).
+local function buildJimothy(map, cfg)
+	local hub = map:FindFirstChild("Hub")
+	local base = jimothyDef(cfg, 1, false)
+	if not hub or not base then
+		return
+	end
+	local function sized(scale)
+		local d = jimothyDef(cfg, scale, false)
+		return d
+	end
+
+	-- West-plaza loop, inside the square and off the roads and the leaderboard view.
+	local feet = {
+		V(-28, 0.45, -18),
+		V(-42, 0.45, -4),
+		V(-40, 0.45, 16),
+		V(-22, 0.45, 22),
+		V(-24, 0.45, 6),
+		V(-30, 0.45, -8),
+	}
+	local wander = placeJimothy(hub, "JimothyWander", E.CFrame.new(feet[1]), sized(1.05), { line = "Praise Jimothy!!" })
+	local bodyPart = wander:FindFirstChild("Body")
+	local lift = (bodyPart and bodyPart.CFrame.Position.Y or feet[1].Y) - feet[1].Y
+	local path = folder(hub, "JimothyPath")
+	for i, f in ipairs(feet) do
+		part(path, "P" .. i, V(0.3, 0.3, 0.3), E.CFrame.new(f.X, f.Y + lift, f.Z), "#FF00FF", nil, {
+			Transparency = 1,
+			CanCollide = false,
+			CanQuery = false,
+			CanTouch = false,
+			CastShadow = false,
+		})
+	end
+
+	-- Poster on the west side of the square, facing in. SurfaceGui only, so it isn't a
+	-- floating label over the Cook-Off board.
+	local posterCf = lookAt(V(-42, 3.5, -20), V(-12, 3.2, -6))
+	local poster = model(hub, "PraiseJimothy")
+	part(poster, "Post", V(0.45, 4.2, 0.45), posterCf * E.CFrame.new(0, -2.3, 0.2), "#6B4226", E.Enum.Material.Wood)
+	local board = part(poster, "Board", V(6.4, 3.6, 0.28), posterCf, "#F6E2C4", E.Enum.Material.Wood)
+	surfaceText(board, E.Enum.NormalId.Front, "PRAISE\nJIMOTHY!!", "#5A2E1E", nil)
+	surfaceText(board, E.Enum.NormalId.Back, "PRAISE\nJIMOTHY!!", "#5A2E1E", nil)
+
+	-- Town-square statue, west of the Cook-Off stage and clear of the center sight line.
+	local st = E.CFrame.new(-22, 0.45, 20)
+	cyl(hub, "JimothyPedestal", 1.55, 3.6, st * E.CFrame.new(0, 0.78, 0) * upright(), "#C9C2B8", E.Enum.Material.Slate)
+	cyl(hub, "JimothyPedestalCap", 0.28, 4.3, st * E.CFrame.new(0, 1.66, 0) * upright(), "#E6E0D6", E.Enum.Material.Slate)
+	local plaque = part(hub, "JimothyPlaque", V(3.4, 0.7, 0.16), st * E.CFrame.new(0, 0.7, -2.15), "#C9A04A", E.Enum.Material.Metal)
+	surfaceText(plaque, E.Enum.NormalId.Front, "PRAISE JIMOTHY", "#3A2414", nil)
+	placeJimothy(hub, "JimothyStatue", E.CFrame.new(-22, 2.25, 20), sized(1.45))
+
+	local sightings = folder(hub, "JimothySightings")
+	local shack = hub:FindFirstChild("SauceShack")
+	local back = shack and shack:FindFirstChild("Back")
+	local roof = shack and shack:FindFirstChild("Roof")
+	if back and back:IsA("BasePart") then
+		local behind = back.CFrame * E.CFrame.new(2.6, -back.Size.Y / 2, back.Size.Z / 2 + 1.7) * E.CFrame.Angles(0, math.pi, 0)
+		placeJimothy(sightings, "Sighting_shack", behind, sized(0.62), { sighting = "shack" })
+	end
+	if roof and roof:IsA("BasePart") then
+		local onRoof = roof.CFrame * E.CFrame.new(4.8, roof.Size.Y / 2, 2.2)
+		placeJimothy(sightings, "Sighting_roof", onRoof, sized(0.5), { sighting = "roof", dist = 12 })
+	end
+
+	-- Trash can, lid ajar, southeast edge of the square (between the roads).
+	local canCf = E.CFrame.new(48, 0.45, -24)
+	local can = model(sightings, "TrashCan")
+	cyl(can, "Can", 2.3, 2.15, canCf * E.CFrame.new(0, 1.15, 0) * upright(), "#3E4A3A", E.Enum.Material.Metal)
+	cyl(can, "Lid", 0.16, 2.35, canCf * E.CFrame.new(0.15, 2.45, -0.15) * E.CFrame.Angles(math.rad(62), 0.4, 0), "#2C3328", E.Enum.Material.Metal)
+	local canSign = part(can, "Sign", V(1.7, 0.45, 0.08), canCf * E.CFrame.new(0, 1.35, -1.12), "#F4E1C1", E.Enum.Material.Wood)
+	surfaceText(canSign, E.Enum.NormalId.Front, "KING OF THE TRASH", "#3A2414", nil)
+	placeJimothy(can, "Sighting_trash", canCf * E.CFrame.new(0, 1.15, 0), sized(0.4), { sighting = "trash", object = "King of the trash", dist = 9 })
+
+	local stage = hub:FindFirstChild("CookOff")
+	local lb = stage and stage:FindFirstChild("Leaderboard")
+	if lb and lb:IsA("BasePart") then
+		local beside = lb.CFrame * E.CFrame.new(lb.Size.X / 2 + 1.5, -lb.Size.Y / 2 - 0.85, lb.Size.Z / 2 + 1.4)
+		placeJimothy(sightings, "Sighting_board", beside, sized(0.55), { sighting = "board" })
+	end
+
+	local arch = hub:FindFirstChild("WelcomeArch")
+	local post = arch and arch:FindFirstChild("PostL")
+	if post and post:IsA("BasePart") then
+		local hide = post.CFrame * E.CFrame.new(-1.35, 0.5 - post.CFrame.Position.Y, -1.15)
+		placeJimothy(sightings, "Sighting_spawn", hide, sized(0.46), { sighting = "spawn" })
+	end
+
+	-- Hay bales in the hub sit near (-28, 36). Tuck him on the far side.
+	placeJimothy(sightings, "Sighting_hay", E.CFrame.new(-31.5, 0.5, 39), sized(0.52), { sighting = "hay" })
+
+	local scenery = map:FindFirstChild("Scenery")
+	local decor = scenery and scenery:FindFirstChild("HubDecor")
+	local bertha = decor and decor:FindFirstChild("BigBertha")
+	if bertha then
+		placeJimothy(bertha, "Sighting_bertha", E.CFrame.new(5.5, 0.55, 22.5), sized(0.48), { sighting = "bertha" })
+	end
+
+	-- Outside the pads: angular midpoint of plot 1 and plot 2, past the outward edge.
+	local gapPos = polar(22.5, 188)
+	local gapParent = scenery or map
+	placeJimothy(gapParent, "Sighting_plots", E.CFrame.new(gapPos + V(0, 0.55, 0)), sized(0.58), { sighting = "plots" })
+
+	local creek = map:FindFirstChild("Creek")
+	placeJimothy(creek or map, "Sighting_creek", E.CFrame.new(-72, 0.55, -270), sized(0.5), { sighting = "creek" })
+
+	local oakPos = polar(112.5, 182)
+	local oakParent = scenery or map
+	placeJimothy(oakParent, "Sighting_oak", E.CFrame.new(oakPos + oakPos.Unit * 7 + V(0, 0.55, 0)), sized(0.55), { sighting = "oak" })
+end
+
 function WorldBuilder.build(env, parent, cfg, content)
 	E = env
 	local map = model(parent, "Map")
@@ -2073,6 +2243,7 @@ function WorldBuilder.build(env, parent, cfg, content)
 		end
 	end
 	buildScenery(map, cfg, content)
+	buildJimothy(map, cfg)
 	return map
 end
 

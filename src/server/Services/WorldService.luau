@@ -33,6 +33,111 @@ local playerPlot: { [Player]: number } = {}
 local customerModels: { [Player]: { [number]: Model } } = {}
 local map: any = nil
 
+type Waiter = {
+	model: Model,
+	points: { Vector3 },
+	index: number,
+	from: Vector3,
+	to: Vector3,
+	dist: number,
+	walked: number,
+}
+local waiters: { [Player]: Waiter } = {}
+
+local function waiterDef(): any
+	for _, c in ipairs(Config.Critters) do
+		if c.id == "jimothy" then
+			local copy: any = table.clone(c)
+			copy.waiter = true
+			copy.scale = 1
+			return copy
+		end
+	end
+	return nil
+end
+
+local function clearWaiter(player: Player)
+	local w = waiters[player]
+	if w and w.model then
+		w.model:Destroy()
+	end
+	waiters[player] = nil
+end
+
+local function syncWaiter(player: Player)
+	local plot = WorldService.plotModel(player)
+	local data = ctx.Game.dataOf(player)
+	if not plot or not data then
+		return
+	end
+	if not ctx.Game.hasPass(player, "AutoServe") then
+		clearWaiter(player)
+		local old = plot:FindFirstChild("JimothyWaiter")
+		if old then
+			old:Destroy()
+		end
+		return
+	end
+	local existing = waiters[player]
+	if existing and existing.model.Parent then
+		return
+	end
+	local def = waiterDef()
+	local pad = plot:FindFirstChild("Pad") :: BasePart?
+	local top = plot.Grill:FindFirstChild("Top") :: BasePart?
+	if not def or not pad or not top then
+		return
+	end
+	local groundY = pad.Position.Y + pad.Size.Y / 2
+	local function standAt(pos: Vector3, side: Vector3): Vector3
+		return Vector3.new(pos.X, groundY, pos.Z) + side
+	end
+	local points: { Vector3 } = {}
+	local firstSeat = plot.Tables:FindFirstChild("t1")
+	local seatPart = firstSeat and firstSeat:FindFirstChild("Seat") :: BasePart?
+	local toward = if seatPart then seatPart.Position - top.Position else Vector3.new(0, 0, -1)
+	local flat = Vector3.new(toward.X, 0, toward.Z)
+	if flat.Magnitude < 0.1 then
+		flat = Vector3.new(0, 0, -1)
+	end
+	local dir = flat.Unit
+	local side = Vector3.new(dir.Z, 0, -dir.X)
+	table.insert(points, standAt(top.Position, dir * 5))
+	for i = 1, Config.CUSTOMER_SPOTS do
+		local tbl = plot.Tables:FindFirstChild("t" .. i)
+		local seat = tbl and tbl:FindFirstChild("Seat") :: BasePart?
+		if seat then
+			table.insert(points, standAt(seat.Position, side * 2.2))
+		end
+	end
+	if #points < 2 then
+		return
+	end
+	local m = WorldBuilder.critter(ENV, plot, def, CFrame.new())
+	m.Name = "JimothyWaiter"
+	for _, c in ipairs(m:GetDescendants()) do
+		if c:IsA("BasePart") then
+			c.CanCollide = false
+			c.CanQuery = false
+			c.CanTouch = false
+		end
+	end
+	local lift = m:GetPivot().Position.Y
+	for i, p in ipairs(points) do
+		points[i] = p + Vector3.new(0, lift, 0)
+	end
+	m:PivotTo(CFrame.lookAt(points[1], points[2]))
+	waiters[player] = {
+		model = m,
+		points = points,
+		index = 2,
+		from = points[1],
+		to = points[2],
+		dist = (points[2] - points[1]).Magnitude,
+		walked = 0,
+	}
+end
+
 function WorldService.map(): any
 	return map
 end
@@ -104,6 +209,7 @@ function WorldService.assignPlot(player: Player): number?
 end
 
 function WorldService.releasePlot(player: Player)
+	clearWaiter(player)
 	local i = playerPlot[player]
 	if not i then
 		return
@@ -282,6 +388,7 @@ function WorldService.refreshStations(player: Player)
 		end
 	end
 	ctx.Social.refreshPassWindow(player)
+	syncWaiter(player)
 	local _ = t
 end
 
@@ -515,6 +622,31 @@ end
 
 function WorldService.start()
 	task.spawn(doneLoop)
+	-- Jimothy the Waiter: a fast waddle between the grill and the tables while AutoServe is owned.
+	RunService.Heartbeat:Connect(function(dt)
+		for _, w in pairs(waiters) do
+			if not w.model.Parent then
+				continue
+			end
+			local speed = 9
+			w.walked += speed * dt
+			local span = math.max(w.dist, 0.05)
+			local a = math.clamp(w.walked / span, 0, 1)
+			local pos = w.from:Lerp(w.to, a)
+			local bob = math.abs(math.sin(os.clock() * 14)) * 0.32
+			local flat = Vector3.new(w.to.X - w.from.X, 0, w.to.Z - w.from.Z)
+			local face = if flat.Magnitude > 0.05 then flat.Unit else Vector3.new(0, 0, -1)
+			local at = pos + Vector3.new(0, bob, 0)
+			w.model:PivotTo(CFrame.lookAt(at, at + face) * CFrame.Angles(0, 0, math.sin(os.clock() * 14) * 0.22))
+			if a >= 1 then
+				w.index = w.index % #w.points + 1
+				w.from = w.to
+				w.to = w.points[w.index]
+				w.dist = (w.to - w.from).Magnitude
+				w.walked = 0
+			end
+		end
+	end)
 	Players.PlayerRemoving:Connect(function(player)
 		customerModels[player] = customerModels[player]
 	end)

@@ -27,6 +27,8 @@ local Gifting = require("../src/shared/Logic/Gifting")
 local HudMenu = require("../src/shared/Logic/HudMenu")
 local ShopCatalog = require("../src/shared/Logic/ShopCatalog")
 local Howdy = require("../src/shared/Logic/Howdy")
+local Jimothy = require("../src/shared/Logic/Jimothy")
+local Reconcile = require("../src/shared/Logic/Reconcile")
 local function fs_read(path: string): string
 	return require("@lune/fs").readFile(path)
 end
@@ -1820,6 +1822,21 @@ test("hub from spawn: name tags and the Dinner Bell label don't cover the Cook-O
 		map.Hub.Temp.Stem.NameTag,
 		map.Scenery.HubDecor.BigBertha.DinnerBell.Bell.Label,
 	}
+	local speech = map.Hub.JimothyWander.Head:FindFirstChild("Speech")
+	truthy(speech and speech:IsA("BillboardGui"), "Jimothy's speech bubble is on his head")
+	table.insert(tags, speech)
+	local spots: { [string]: boolean } = {}
+	for _, d in ipairs(map:GetDescendants()) do
+		if d:IsA("ProximityPrompt") and d:GetAttribute("Kind") == "jimothy" then
+			local id = d:GetAttribute("Sighting")
+			truthy(type(id) == "string" and spots[id] ~= true, "duplicate or blank sighting " .. tostring(id))
+			spots[id :: string] = true
+		end
+	end
+	eq(Jimothy.total(), 10)
+	for _, spot in ipairs(Jimothy.SIGHTINGS) do
+		truthy(spots[spot.id], "missing sighting " .. spot.id .. " (" .. spot.place .. ")")
+	end
 	for _, screen in { { 1280, 720 }, { 844, 390 } } do
 		local W, H = screen[1], screen[2]
 		local f = H / (2 * math.tan(math.rad(35)))
@@ -2051,6 +2068,151 @@ test("birds are built from a beak, feathers and toes, and stay a small part coun
 	local burger = WorldBuilder.meat(env, ws, Config.Meats.burger, nil, roblox.CFrame.new(), 1, false, 1)
 	truthy(burger:FindFirstChild("BunTop") ~= nil, "burger keeps a bun")
 	truthy(burger.BunTop:FindFirstChild("EyeL") ~= nil or burger:FindFirstChild("EyeL", true) ~= nil, "cute face stays")
+end)
+
+print("Jimothy")
+test("Possum Pete's Regulars Index count migrates onto Jimothy, once", function()
+	local template = { critters = {}, forceCritter = "", jimothy = { seen = {}, lastAt = 0, rewarded = false }, coins = 0 }
+	local old = { critters = { possum = 4, armadillo = 2, jimothy = 1 }, forceCritter = "possum", coins = 9 }
+	local filled = Reconcile.fill(old, template)
+	truthy(Jimothy.migrate(filled))
+	eq(filled.critters.jimothy, 5)
+	eq(filled.critters.possum, nil)
+	eq(filled.critters.armadillo, 2)
+	eq(filled.forceCritter, Jimothy.ID)
+	eq(type(filled.jimothy.seen), "table")
+	eq(filled.jimothy.rewarded, false)
+	eq(filled.coins, 9)
+	truthy(not Jimothy.migrate(filled), "a second pass leaves the save alone")
+	local only = { critters = { possum = 3 }, forceCritter = "" }
+	truthy(Jimothy.migrate(only))
+	eq(only.critters.jimothy, 3)
+	eq(only.critters.possum, nil)
+	eq(only.forceCritter, "")
+	local weird = { critters = { possum = "old" } }
+	truthy(Jimothy.migrate(weird))
+	eq(weird.critters.jimothy, 0)
+	eq(weird.critters.possum, nil)
+	local fresh = Reconcile.fill({ coins = 1 }, template)
+	truthy(not Jimothy.migrate(fresh))
+	eq(fresh.critters.possum, nil)
+	eq(fresh.forceCritter, "")
+	truthy(string.find(fs_read("src/shared/DefaultData.luau"), "jimothy = { seen = {}", 1, true) ~= nil, "saves gain the sighting table")
+	truthy(string.find(fs_read("src/server/Services/DataService.luau"), "Jimothy.migrate(data)", 1, true) ~= nil, "load migrates before the game sees the save")
+end)
+test("sightings count once, ignore dupes, rate-limit, and pay the reward a single time", function()
+	eq(Jimothy.total(), 10)
+	eq(#Jimothy.LINES, 4)
+	truthy(Jimothy.LINES[1] == "Praise Jimothy!!")
+	local data = { titles = {} }
+	local t = 100
+	local last: any = nil
+	for i, spot in ipairs(Jimothy.SIGHTINGS) do
+		last = Jimothy.record(data, spot.id, t)
+		t += 2
+		eq(last.ok, true, spot.id)
+		eq(last.duplicate, false)
+		eq(last.count, i)
+		eq(last.justCompleted, i == 10)
+	end
+	eq(last.title, Jimothy.TITLE)
+	eq(last.cosmetic, Jimothy.COSMETIC)
+	eq(data.titles[Jimothy.TITLE], true)
+	eq(data.jimothy.rewarded, true)
+	eq(Jimothy.count(data.jimothy.seen), 10)
+	local again = Jimothy.record(data, Jimothy.SIGHTINGS[1].id, t)
+	eq(again.duplicate, true)
+	eq(again.justCompleted, false)
+	eq(again.count, 10)
+	eq(data.titles[Jimothy.TITLE], true)
+	local fresh = { titles = {} }
+	local first = Jimothy.record(fresh, "shack", 10)
+	local dupe = Jimothy.record(fresh, "shack", 20)
+	eq(first.count, 1)
+	eq(dupe.duplicate, true)
+	eq(dupe.count, 1)
+	eq(Jimothy.count(fresh.jimothy.seen), 1)
+	local limited = Jimothy.record(fresh, "roof", 10 + Jimothy.COOLDOWN - 0.05)
+	eq(limited.ok, false)
+	eq(limited.limited, true)
+	eq(Jimothy.count(fresh.jimothy.seen), 1)
+	local later = Jimothy.record(fresh, "roof", 10 + Jimothy.COOLDOWN)
+	eq(later.ok, true)
+	eq(later.count, 2)
+	eq(Jimothy.record(fresh, "not-a-spot", 50).ok, false)
+	eq(Config.Cosmetics[Jimothy.COSMETIC].source, "sighting")
+	eq(Config.Cosmetics[Jimothy.COSMETIC].slot, "buddy")
+	for _, product in pairs(Monetization.Products) do
+		if product.grants then
+			for _, id in ipairs(product.grants) do
+				truthy(id ~= Jimothy.COSMETIC, "the back-buddy is never sold")
+			end
+		end
+	end
+	local found = false
+	for _, c in ipairs(Config.Critters) do
+		truthy(c.id ~= "possum" and c.name ~= "Possum Pete", "possum is not a live regular")
+		if c.id == "jimothy" then
+			found = true
+			eq(c.name, "Jimothy the Raccoon")
+		end
+		if c.id == "raccoon" then
+			eq(c.name, "Bandit the Raccoon")
+		end
+	end
+	truthy(found)
+	eq(Monetization.Passes.AutoServe.id, 2089955594)
+	eq(Monetization.Passes.AutoServe.price, 299)
+	eq(Monetization.Passes.AutoServe.name, "Jimothy the Waiter")
+end)
+test("Jimothy reads round and neckless; Bandit stays the slimmer raccoon", function()
+	local roblox = require("@lune/roblox")
+	local WorldBuilder = require("../src/shared/WorldBuilder")
+	local env = { Instance = roblox.Instance, Vector3 = roblox.Vector3, CFrame = roblox.CFrame, Color3 = roblox.Color3, Enum = roblox.Enum, UDim2 = roblox.UDim2, NumberSequence = roblox.NumberSequence, NumberRange = roblox.NumberRange, ColorSequence = roblox.ColorSequence, Vector2 = roblox.Vector2 }
+	local ws = roblox.Instance.new("Folder")
+	local function build(id: string, extra: any?)
+		local def: any = nil
+		for _, c in ipairs(Config.Critters) do
+			if c.id == id then
+				def = {}
+				for k, v in pairs(c) do
+					def[k] = v
+				end
+			end
+		end
+		if extra then
+			for k, v in pairs(extra) do
+				def[k] = v
+			end
+		end
+		return WorldBuilder.critter(env, ws, def, roblox.CFrame.new())
+	end
+	local function roundness(part): number
+		local s = part.Size
+		return math.min(s.X, s.Y, s.Z) / math.max(s.X, s.Y, s.Z)
+	end
+	local jim = build("jimothy")
+	local bandit = build("raccoon")
+	truthy(roundness(jim.Body) > 0.9, "jimothy's body is nearly a sphere")
+	truthy(roundness(bandit.Body) < 0.85, "bandit keeps a longer body")
+	local jEar, bEar = jim:FindFirstChild("EarL"), bandit:FindFirstChild("EarL")
+	truthy(jEar and math.abs(jEar.Size.X - jEar.Size.Y) / jEar.Size.X < 0.25, "round ears")
+	truthy(bEar and bEar.Size.Y > bEar.Size.X * 1.4, "bandit's ears stay tall")
+	truthy(jim:FindFirstChild("Mask") ~= nil and bandit:FindFirstChild("Mask") ~= nil)
+	local tails = 0
+	for _, d in ipairs(jim:GetChildren()) do
+		if d.Name == "Tail" then
+			tails += 1
+			truthy(d.Size.X > 0.4, "chunky tail rings")
+		end
+	end
+	eq(tails, 4)
+	-- the head overlaps the body instead of sitting on a neck
+	local gap = jim.Head.CFrame.Position.Y - jim.Head.Size.Y / 2 - (jim.Body.CFrame.Position.Y + jim.Body.Size.Y / 2)
+	truthy(gap < 0, "head sits in the body")
+	local waiter = build("jimothy", { waiter = true })
+	truthy(waiter:FindFirstChild("Apron") ~= nil and waiter:FindFirstChild("BowKnot") ~= nil, "waiter wears a bowtie and apron")
+	truthy(bandit:FindFirstChild("Apron") == nil)
 end)
 
 print(string.format("\n%d passed, %d failed", passed, failed))
