@@ -27,6 +27,7 @@ local TimeUtil = require(Shared.Logic.TimeUtil)
 local Holiday = require(Shared.Logic.Holiday)
 local Rookie = require(Shared.Logic.Rookie)
 local MusicPrefs = require(Shared.Logic.MusicPrefs)
+local Jimothy = require(Shared.Logic.Jimothy)
 
 local GameService = {}
 local ctx: any = nil
@@ -1131,6 +1132,10 @@ local function snapshot(player: Player, data: any): any
 		critters = data.critters,
 		cutsIndex = data.cutsIndex,
 		eggs = data.eggs,
+		jimothy = {
+			n = Jimothy.count(type(data.jimothy) == "table" and data.jimothy.seen or nil),
+			total = Jimothy.total(),
+		},
 		stats = data.stats,
 		streak = data.streak,
 		canClaimDaily = Streak.canClaim(data.streak, today()),
@@ -1459,7 +1464,7 @@ function GameService.start()
 						r.nextSpawn = t + Config.CUSTOMER_SPAWN_SECONDS * (0.7 + rng:NextNumber() * 0.6)
 						spawnCustomer(player, data, r)
 					end
-					-- Possum Pete auto-serve pass
+					-- Jimothy the Waiter auto-serve pass
 					if GameService.hasPass(player, "AutoServe") and t - r.lastAutoServe >= 4 and #r.customers > 0 and #data.cooler > 0 then
 						r.lastAutoServe = t
 						GameService.serveCustomer(player, r.customers[1])

@@ -57,6 +57,7 @@ return {
 	tutorial = { firstBrisket = false, done = false },
 	rookie = { claimed = 0, skipped = false, resumed = false }, -- Unc Hank's Rookie List (Logic/Rookie)
 	forceCritter = "",
+	jimothy = { seen = {}, lastAt = 0, rewarded = false }, -- sighting hunt (Logic/Jimothy)
 	combo = 0,
 	receipts = {},
 	seasonPass = { id = "", base = {}, days = 0, lastDay = -1, skips = 0, paid = false, freeClaimed = 0, paidClaimed = 0 }, -- Logic/SeasonPass

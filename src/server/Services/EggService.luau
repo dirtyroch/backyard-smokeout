@@ -16,6 +16,8 @@
 	  cooked   - get a "Cooked" rating from Granny Pecan
 	  sixseven - serve a plate worth ...67 coins ("6-7!")
 	  dinnerbell - be one of 3 players who ring Big Bertha's dinner bell together (server-wide tip bonus)
+
+	Jimothy sightings are a separate free hunt (Logic/Jimothy): prompts with Kind "jimothy".
 ]]
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local Players = game:GetService("Players")
@@ -30,6 +32,7 @@ local Economy = require(Shared.Logic.Economy)
 local Rarity = require(Shared.Logic.Rarity)
 local Holiday = require(Shared.Logic.Holiday)
 local Howdy = require(Shared.Logic.Howdy)
+local Jimothy = require(Shared.Logic.Jimothy)
 
 local EggService = {}
 local ctx: any = nil
@@ -122,6 +125,26 @@ end
 
 handlers.catch = function(player, _data, prompt)
 	ctx.Social.tryCatch(player, prompt)
+end
+
+handlers.jimothy = function(player, data, prompt)
+	local id = prompt:GetAttribute("Sighting")
+	if typeof(id) ~= "string" then
+		return
+	end
+	local res = Jimothy.record(data, id, os.clock())
+	if not res.ok then
+		return
+	end
+	if res.duplicate then
+		ctx.Game.toast(player, "You already spotted this Jimothy.", "info")
+		return
+	end
+	ctx.Game.toast(player, string.format("Jimothy sighting %d/%d!", res.count, res.total), "good")
+	if res.justCompleted then
+		ctx.Game.grantCosmetic(player, data, Jimothy.COSMETIC)
+		ctx.Game.toast(player, "You found every Jimothy! New title: Jimothy Spotter", "good")
+	end
 end
 
 handlers.cookoff = function(player)

@@ -60,7 +60,7 @@ local Monetization = {}
 -- GAME PASSES (bought once, kept forever)
 Monetization.Passes = {
 	ExtraSmokers = { id = 2089577508, name = "Extra Smoker Slots", price = 249, icon = "🔥", desc = "+2 cooking pit slots on your ranch, forever." },
-	AutoServe = { id = 2089955594, name = "Possum Pete Waiter", price = 299, icon = "🦝", desc = "Possum Pete serves your waiting customers for you while you're in the game." },
+	AutoServe = { id = 2089955594, name = "Jimothy the Waiter", price = 299, icon = "🦝", desc = "Jimothy scurries your waiting customers their food while you're in the game." },
 	DoubleTips = { id = 2088839581, name = "Big Tipper", price = 299, icon = "💰", desc = "Every plate you serve earns +50% coins, forever. Capped for Fair Play; does not affect the Cook-Off or snagging." },
 	PremiumCuts = { id = 2088479585, name = "Premium Cuts", price = 349, icon = "🥩", desc = "Cook Wagyu Brisket and Tomahawk Steaks any time. (Both can also be earned on the Pitmaster Path.)" },
 	VIPPatio = { id = 2089979602, name = "VIP Patio", price = 149, icon = "✨", desc = "String lights over your ranch, a VIP sign and a gold name tag. Looks only." },

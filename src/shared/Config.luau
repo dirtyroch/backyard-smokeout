@@ -194,7 +194,8 @@ Config.Critters = {
 	{ id = "armadillo", name = "Dilly the Armadillo", weight = 20, tip = 1.0, body = "#9C8A7A", head = "#8A7868", scale = 1.0, ears = false },
 	{ id = "roadrunner", name = "Zoom the Roadrunner", weight = 18, tip = 1.0, body = "#6B5B4B", head = "#3A6EA5", scale = 0.9, ears = false },
 	{ id = "raccoon", name = "Bandit the Raccoon", weight = 16, tip = 1.1, body = "#7D7D7D", head = "#505050", scale = 1.0, ears = true },
-	{ id = "possum", name = "Possum Pete", weight = 14, tip = 1.1, body = "#BEBEBE", head = "#F0E6E6", scale = 0.95, ears = true },
+	-- Was "possum" (Possum Pete). Logic/Jimothy moves old Regulars Index counts onto this id.
+	{ id = "jimothy", name = "Jimothy the Raccoon", weight = 14, tip = 1.1, body = "#B7A99A", head = "#C9BBA8", scale = 1.0, ears = true },
 	{ id = "hornedtoad", name = "Spike the Horned Lizard", weight = 10, tip = 1.2, body = "#C2A36B", head = "#B08F55", scale = 0.7, ears = false },
 	{ id = "longhorn", name = "Lil Longhorn", weight = 8, tip = 1.3, body = "#C46A2F", head = "#E0B080", scale = 1.3, ears = true, horns = true },
 	{ id = "hummingbird", name = "Buzz the Hummingbird", weight = 7, tip = 1.3, body = "#2E8B57", head = "#C2185B", scale = 0.6, ears = false },
@@ -204,7 +205,8 @@ Config.Critters = {
 }
 
 -- Cosmetics. `source`: "robux" (developer product), "path", "egg", "rank", "suds", "pass", "rotation" (limited-time Robux),
--- "event" (free, earned during a date-gated event), "rookie" (free, for finishing Unc Hank's Rookie List).
+-- "event" (free, earned during a date-gated event), "rookie" (free, for finishing Unc Hank's Rookie List),
+-- "sighting" (free, for finding every Jimothy; never sold).
 Config.Cosmetics = {
 	hat_pitmaster = { name = "Pitmaster Cowboy Hat", slot = "hat", source = "robux", color = "#3B2A1A" },
 	hat_straw = { name = "Straw Cowboy Hat", slot = "hat", source = "path", color = "#E3C77A" },
@@ -337,8 +339,10 @@ Config.Cosmetics = {
 	premium_bandana = { name = "Premium Pitmaster Bandana", slot = "neck", source = "premium", color = "#E2B714" },
 	-- First-time Pit Pack (one per account)
 	starter_hat = { name = "Rookie Pitmaster Hat", slot = "hat", source = "starter", color = "#E8590C" },
+	-- Jimothy Sightings (free, for finding all 10; never sold)
+	buddy_jimothy = { name = "Jimothy Back-Buddy", slot = "buddy", source = "sighting", color = "#B7A99A" },
 }
-Config.CosmeticSlots = { "hat", "apron", "tool", "neck", "feet", "trail", "skin", "smoke", "patio" }
+Config.CosmeticSlots = { "hat", "apron", "tool", "neck", "feet", "buddy", "trail", "skin", "smoke", "patio" }
 
 -- Suds Saturday & Sunday: wash a muddy pup for a free bandana. Odds shown in game.
 Config.Bandanas = {

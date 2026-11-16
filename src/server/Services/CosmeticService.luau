@@ -164,6 +164,30 @@ local function buildTrail(folder: Folder, hrp: BasePart, id: string)
 	a1:SetAttribute("BSCosmetic", true)
 end
 
+local function buddyBall(folder: Folder, torso: BasePart, name: string, size: Vector3, offset: CFrame, color: string): Part
+	local p = weldPart(folder, torso, name, size, offset, color)
+	p.Shape = Enum.PartType.Ball
+	return p
+end
+
+-- A tiny round Jimothy riding on the back. Free, from the sighting hunt. Never sold.
+local function buildBuddy(folder: Folder, torso: BasePart, id: string)
+	local def = Config.Cosmetics[id]
+	local back = torso.Size.Z / 2 + 0.2
+	buddyBall(folder, torso, "BuddyBody", Vector3.new(1.15, 1.05, 1.1), CFrame.new(0.05, 0.1, back), def.color)
+	buddyBall(folder, torso, "BuddyHead", Vector3.new(0.82, 0.68, 0.74), CFrame.new(0.05, 0.58, back + 0.02), "#C9BBA8")
+	buddyBall(folder, torso, "BuddyMask", Vector3.new(0.7, 0.22, 0.18), CFrame.new(0.05, 0.62, back + 0.32), "#1A120E")
+	buddyBall(folder, torso, "BuddyMuzzle", Vector3.new(0.32, 0.2, 0.2), CFrame.new(0.05, 0.46, back + 0.36), "#F4EDE4")
+	buddyBall(folder, torso, "BuddyNose", Vector3.new(0.12, 0.1, 0.1), CFrame.new(0.05, 0.48, back + 0.46), "#2A1C16")
+	buddyBall(folder, torso, "BuddyEarL", Vector3.new(0.22, 0.2, 0.14), CFrame.new(-0.28, 0.9, back), def.color)
+	buddyBall(folder, torso, "BuddyEarR", Vector3.new(0.22, 0.2, 0.14), CFrame.new(0.38, 0.9, back), def.color)
+	local rings = { "#2A2420", "#E6D3B0", "#2A2420", "#E6D3B0" }
+	for i, color in ipairs(rings) do
+		local sz = 0.32 - i * 0.03
+		buddyBall(folder, torso, "BuddyTail", Vector3.new(sz, sz, sz), CFrame.new(0.32 + i * 0.1, 0.02 + i * 0.06, back - 0.12 - i * 0.14), color)
+	end
+end
+
 local function buildTag(folder: Folder, head: BasePart, player: Player, data: any, resting: boolean, vip: boolean)
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "TitleTag"
@@ -248,6 +272,9 @@ function CosmeticService.apply(player: Player)
 		end
 		if eq.feet and data.owned[eq.feet] then
 			buildFeet(folder, char)
+		end
+		if eq.buddy and data.owned[eq.buddy] then
+			buildBuddy(folder, torso, eq.buddy)
 		end
 		if eq.trail and data.owned[eq.trail] and hrp then
 			buildTrail(folder, hrp, eq.trail)

@@ -9,7 +9,7 @@ Record in Studio with **View > Video Record**, or use the Roblox client's record
 | 1 | 0:00–0:02 | **Hook:** a close-up of the smoker lid opening. The gold beam shoots up and the "SMOKE RING GOLD!" card slams in (UI on). | "WAIT FOR IT..." | Original sizzle SFX, then a hit |
 | 2 | 0:02–0:05 | A Texas-Size brisket grows until the table cracks. The camera shakes on "CRUNCH! It broke the table!" | "TEXAS-SIZE?!" | Crunch SFX |
 | 3 | 0:05–0:08 | A burger spatula flip lands Perfect. "+1000 AURA" pops, then the "LOCKED IN 🔒 x3" combo (UI on). | "+1000 AURA" | Whoosh |
-| 4 | 0:08–0:11 | Critters line up at the tables: Dilly, Bandit, Possum Pete, then Rex says "RAWR means I love you ♥". | "CUTE CUSTOMERS" | Original upbeat loop |
+| 4 | 0:08–0:11 | Critters line up at the tables: Dilly, Bandit, Jimothy the Raccoon, then Rex says "RAWR means I love you ♥". | "CUTE CUSTOMERS" | Original upbeat loop |
 | 5 | 0:11–0:15 | Three avatars run to Big Bertha and ring the dinner bell. "🔔 DINNER'S ON!" plays: the bell swings, the smokestack puffs, confetti bursts and the server banner appears. | "RING THE BELL = BONUS TIPS" | Bell clang SFX (original) |
 | 6 | 0:15–0:18 | Temp at night, slowly turning: "I see your brisket... I always see your brisket." | "TEMP IS WATCHING" | A music sting drops out |
 | 7 | 0:18–0:21 | Saturday Cook-Off. Granny Pecan: "Child, you COOKED." The cat claps. | "YOU COOKED." | Crowd cheer (original) |

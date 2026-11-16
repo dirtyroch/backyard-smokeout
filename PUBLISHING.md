@@ -96,7 +96,7 @@ The manual steps below still work if you'd rather click through the dashboard.
 |---|---|---|
 | `VIPPatio` | VIP Patio | R$ 149 |
 | `ExtraSmokers` | Extra Smoker Slots | R$ 249 |
-| `AutoServe` | Possum Pete Waiter | R$ 299 |
+| `AutoServe` | Jimothy the Waiter | R$ 299 |
 | `PremiumCuts` | Premium Cuts | R$ 349 |
 | `DoubleTips` | Big Tipper (+50% tips, Fair Play cap) | R$ 299 |
 
