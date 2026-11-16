@@ -1423,7 +1423,7 @@ function WorldBuilder.turkeyDay(pot, content)
 		end
 	end
 	local banner = part(m, "Banner", V(10.5, 1.5, 0.2), B(0, 8.05, -1.6), "#7A2E12", E.Enum.Material.Fabric, { CanCollide = false, CanQuery = false, CanTouch = false })
-	local bt = surfaceText(banner, E.Enum.NormalId.Back, content and content.Signs and content.Signs.turkeyBanner or "TURKEY DAY SMOKEOUT", "#FFE3A0", nil)
+	local bt = surfaceText(banner, E.Enum.NormalId.Back, content and content.Signs and content.Signs.turkeyBanner or "TURKEY DAY COOKOUT", "#FFE3A0", nil)
 	bt.Name = "BannerText"
 	local PEN = { "#C8641E", "#E3A126", "#8E3B1E", "#6B8E23" }
 	for k = 0, 12 do
@@ -1523,7 +1523,7 @@ function WorldBuilder.holidaySmokeout(pot, content)
 		dball(m, "WreathBow", 0.4, B(side * 7.6, 4.7, -1.05), "#B3122E", E.Enum.Material.Fabric)
 	end
 	local banner = part(m, "Banner", V(10.5, 1.5, 0.2), B(0, 8.05, -1.6), "#1E6B3A", E.Enum.Material.Fabric, { CanCollide = false, CanQuery = false, CanTouch = false })
-	local bt = surfaceText(banner, E.Enum.NormalId.Back, content and content.Signs and content.Signs.holidayBanner or "HOLIDAY SMOKEOUT", "#FFE9A8", nil)
+	local bt = surfaceText(banner, E.Enum.NormalId.Back, content and content.Signs and content.Signs.holidayBanner or "HOLIDAY COOKOUT", "#FFE9A8", nil)
 	bt.Name = "BannerText"
 	for k = 0, 12 do
 		local x = -7.2 + k * 1.2

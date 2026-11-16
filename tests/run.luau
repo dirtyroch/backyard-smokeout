@@ -831,6 +831,10 @@ test("potluck banner: live dish count for the whole server, then 'full' while th
 	end
 	eq(Content.Signs.turkeyBanner, Content.TurkeyDay.bannerTop .. "\n" .. Content.TurkeyDay.bannerIdle)
 	eq(Content.Signs.holidayBanner, Content.HolidaySmokeout.bannerTop .. "\n" .. Content.HolidaySmokeout.bannerIdle)
+	eq(Content.TurkeyDay.bannerTop, "TURKEY DAY COOKOUT")
+	eq(Content.HolidaySmokeout.bannerTop, "HOLIDAY COOKOUT")
+	truthy(string.find(Content.Signs.turkeyBanner, "SMOKEOUT", 1, true) == nil)
+	truthy(string.find(Content.Signs.holidayBanner, "SMOKEOUT", 1, true) == nil)
 	for _, line in ipairs({ Content.PotluckTable.count, Content.PotluckTable.full, Content.PotluckTable.closed, Content.HolidaySmokeout.progress, Content.TurkeyDay.progress }) do
 		local low = string.lower(line)
 		truthy(not string.find(low, "buy", 1, true) and not string.find(low, "robux", 1, true) and not string.find(low, "hurry", 1, true) and not string.find(low, "last chance", 1, true), "calm copy: " .. line)
@@ -1296,6 +1300,24 @@ test("value notes add up: Whole Hog R$499 vs R$730, Turkey and Holiday sets, sta
 		top = math.max(top, p.price)
 	end
 	truthy(low < 80 and top == 499, "ladder from under R$80 to R$499")
+end)
+test("every game pass and developer product has a real Roblox ID", function()
+	local n = 0
+	local seen: { [number]: string } = {}
+	for key, p in pairs(Monetization.Passes) do
+		n += 1
+		truthy(p.id > 0 and p.id == math.floor(p.id), key .. " id is filled")
+		truthy(seen[p.id] == nil, key .. " id collides with " .. tostring(seen[p.id]))
+		seen[p.id] = key
+	end
+	for key, p in pairs(Monetization.Products) do
+		n += 1
+		truthy(p.id > 0 and p.id == math.floor(p.id), key .. " id is filled")
+		truthy(seen[p.id] == nil, key .. " id collides with " .. tostring(seen[p.id]))
+		seen[p.id] = key
+	end
+	eq(n, 44)
+	eq(Monetization.Products.SmokeGrape.name, "Purple Cloud Smoke")
 end)
 test("IDs are placeholders or real and never pasted twice; subscription is empty or EXP-", function()
 	local seen = {}
