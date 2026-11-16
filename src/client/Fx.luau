@@ -324,5 +324,86 @@ function Fx.rookie(d: any)
 	end
 end
 
+local function speechBubble(part: BasePart, text: string, color: Color3)
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "HowdyBubble"
+	bb.Size = UDim2.fromOffset(220, 64)
+	bb.StudsOffset = Vector3.new(0, 3.2, 0)
+	bb.AlwaysOnTop = true
+	bb.Parent = part
+	local label = Instance.new("TextLabel")
+	label.BackgroundColor3 = Color3.fromHex("#3A2418")
+	label.BackgroundTransparency = 0.1
+	label.TextColor3 = color
+	label.Font = Enum.Font.FredokaOne
+	label.TextScaled = true
+	label.Text = text
+	label.Size = UDim2.fromScale(1, 1)
+	label.Parent = bb
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = label
+	task.delay(4, function()
+		if bb.Parent then
+			bb:Destroy()
+		end
+	end)
+end
+
+-- A howdy is said out loud. The speaker waves, a bubble sits on their head,
+-- and the yard answers even when nobody else is in the server.
+function Fx.howdy(d: any)
+	local speaker = Players:GetPlayerByUserId(d.userId or 0)
+	local char = speaker and speaker.Character
+	local head = char and (char:FindFirstChild("Head") :: BasePart?)
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if head then
+		speechBubble(head, "Howdy!", Color3.fromHex("#FFD15A"))
+	end
+	if hum then
+		pcall(function()
+			(hum :: any):PlayEmote("wave")
+		end)
+	end
+	local map = workspace:FindFirstChild("Map")
+	local hub = map and map:FindFirstChild("Hub")
+	if hub then
+		for _, name in ipairs({ "KingOfThePit", "UncHank", "Temp" }) do
+			local npc = hub:FindFirstChild(name)
+			local npcHead = npc and npc:FindFirstChild("Head", true)
+			if npcHead and npcHead:IsA("BasePart") then
+				speechBubble(npcHead, name == "KingOfThePit" and "Howdy, partner." or "Howdy!", Color3.fromHex("#FFF8F0"))
+			end
+		end
+		local stage = hub:FindFirstChild("CookOff")
+		if stage then
+			for _, name in ipairs({ "Granny", "JudgeBob" }) do
+				local npc = stage:FindFirstChild(name)
+				local npcHead = npc and npc:FindFirstChild("Head", true)
+				if npcHead and npcHead:IsA("BasePart") then
+					speechBubble(npcHead, "Howdy!", Color3.fromHex("#FFF8F0"))
+				end
+			end
+		end
+	end
+	local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local plots = map and map:FindFirstChild("Plots")
+	if hrp and plots then
+		for _, plot in ipairs(plots:GetChildren()) do
+			local tables = plot:FindFirstChild("Tables")
+			if tables then
+				for _, guest in ipairs(tables:GetDescendants()) do
+					if guest:IsA("BasePart") and guest.Name == "Head" and (guest.Position - hrp.Position).Magnitude < 40 then
+						speechBubble(guest, "Howdy!", Color3.fromHex("#C8F0A8"))
+					end
+				end
+			end
+		end
+	end
+	if d.rewarded then
+		Fx.pop("Howdy! The King tipped his hat.", T.gold, 32)
+	end
+end
+
 local _ = Players
 return Fx

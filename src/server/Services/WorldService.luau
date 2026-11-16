@@ -58,9 +58,11 @@ local function setOwnerSign(i: number, player: Player?)
 	if not plot then
 		return
 	end
-	local label = plot.Sign.Board:FindFirstChild("SignGui") and plot.Sign.Board.SignGui:FindFirstChild("OwnerText")
-	if label then
-		label.Text = player and (player.DisplayName .. "'s Ranch") or "Open Ranch"
+	local text = player and (player.DisplayName .. "'s Ranch") or "Open Ranch"
+	for _, d in ipairs(plot.Sign.Board:GetDescendants()) do
+		if d.Name == "OwnerText" and d:IsA("TextLabel") then
+			d.Text = text
+		end
 	end
 	plot:SetAttribute("OwnerUserId", player and player.UserId or 0)
 end

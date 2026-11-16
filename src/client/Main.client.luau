@@ -106,6 +106,8 @@ Net.on("fx", function(p)
 	elseif p.kind == "champ" then
 		Sfx.play("fanfare")
 		Fx.pop(tostring(d.medal) .. " Cook-Off Champ!", UI.Theme.gold, 40)
+	elseif p.kind == "howdy" then
+		Fx.howdy(d)
 	end
 end)
 

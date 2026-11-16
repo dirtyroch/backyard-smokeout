@@ -20,6 +20,7 @@ local TimeUtil = require(Shared.Logic.TimeUtil)
 local Holiday = require(Shared.Logic.Holiday)
 local Gifting = require(Shared.Logic.Gifting)
 local HudMenu = require(Shared.Logic.HudMenu)
+local ShopCatalog = require(Shared.Logic.ShopCatalog)
 local Storefront = require(Shared.Logic.Storefront)
 local Rookie = require(Shared.Logic.Rookie)
 local T = UI.Theme
@@ -240,10 +241,8 @@ local function shopCell(): Vector2
 end
 
 local function shopCard(parent: Instance, order: number, kind: string, key: string, item: any, s: any)
-	local available = kind == "pass" and s.productIds.passes[key] or s.productIds.products[key]
-	if not available then
-		return false
-	end
+	-- Listed even when the Roblox id is still 0. Hiding those cards is what left
+	-- the Outfitters blank on a live server before the ids were published.
 	local f = UI.frame({ BackgroundColor3 = T.card, LayoutOrder = order, ZIndex = 22, Parent = parent })
 	UI.corner(f, 14)
 	UI.pad(f, 10)
@@ -269,9 +268,11 @@ local function shopCard(parent: Instance, order: number, kind: string, key: stri
 	elseif item.once then
 		owned = s.onceBought ~= nil and s.onceBought[key] == true
 	end
-	local idIsZero = item.id == 0
-	local text = owned and "Owned" or (idIsZero and "Studio test (free)" or ("Buy  R$ " .. item.price))
-	local canGift = kind == "product" and Gifting.giftable(item)
+	local studio = s.productIds ~= nil and s.productIds.studio == true
+	local state = ShopCatalog.saleState(item.id, studio, owned)
+	local text = ShopCatalog.robuxLabel(state, item.price)
+	local canBuy = state == "buy" or state == "studio"
+	local canGift = canBuy and kind == "product" and Gifting.giftable(item)
 	local row = UI.frame({ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 48), LayoutOrder = 8, ZIndex = 23, Parent = col })
 	if canGift then
 		-- Gift it to someone in the server (looks only). Shows held gifts that can go out free.
@@ -280,8 +281,8 @@ local function shopCard(parent: Instance, order: number, kind: string, key: stri
 			Panels.open("gift", key)
 		end)
 	end
-	btn(row, text, owned and T.cardHi or T.green, { Position = UDim2.new(0, 0, 0, 0), Size = UDim2.new(1, canGift and -64 or 0, 0, 44), TextSize = 16, AutoButtonColor = not owned }, function()
-		if not owned then
+	btn(row, text, (state == "owned" or state == "soon") and T.cardHi or T.green, { Position = UDim2.new(0, 0, 0, 0), Size = UDim2.new(1, canGift and -64 or 0, 0, 44), TextSize = 16, AutoButtonColor = canBuy }, function()
+		if canBuy then
 			Net.act("Prompt", kind, key)
 		end
 	end)
@@ -344,18 +345,17 @@ local function renderShop(s: any)
 			return Monetization.Passes[a].price < Monetization.Passes[b].price
 		end)
 		for i, k in ipairs(keys) do
-			if shopCard(sf, i, "pass", k, Monetization.Passes[k], s) then
-				n += 1
-			end
+			shopCard(sf, i, "pass", k, Monetization.Passes[k], s)
+			n += 1
 		end
 		local m = s.member or {}
 		local club = Monetization.Subscriptions.PitCrewClub
-		if m.club or m.clubOffer then
-			n += 1
-			infoCard(sf, 100, club.icon, club.name, "A new look every month (yours to keep), a Pit Crew tag, a daily Smoke Shower for your server and 1 free Season tier a month. No coins.", club.id == "" and "Studio test" or "$4.99 a month. Cancel any time.", m.club and "Member ✓" or (club.id == "" and "Studio test (free)" or "Join the Club"), m.club and T.cardHi or T.green, (not m.club) and function()
-				Net.act("Subscribe")
-			end or nil)
-		end
+		local clubStudio = s.productIds ~= nil and s.productIds.studio == true
+		local clubSoon = club.id == "" and not clubStudio and not m.club
+		n += 1
+		infoCard(sf, 100, club.icon, club.name, "A new look every month (yours to keep), a Pit Crew tag, a daily Smoke Shower for your server and 1 free Season tier a month. No coins.", clubSoon and "Coming soon" or (club.id == "" and "Studio test" or "$4.99 a month. Cancel any time."), m.club and "Member ✓" or (clubSoon and "Coming soon" or (club.id == "" and "Studio test (free)" or "Join the Club")), m.club and T.cardHi or (clubSoon and T.cardHi or T.green), (not m.club and not clubSoon) and function()
+			Net.act("Subscribe")
+		end or nil)
 		n += 1
 		local prem = Monetization.Premium
 		infoCard(sf, 101, prem.icon, prem.name, prem.desc, nil, m.premium and "Premium ✓" or "Learn about Premium", m.premium and T.cardHi or T.blue, (not m.premium) and function()
@@ -395,9 +395,8 @@ local function renderShop(s: any)
 			end)
 		end
 		for i, k in ipairs(keys) do
-			if shopCard(sf, i, "product", k, Monetization.Products[k], s) then
-				n += 1
-			end
+			shopCard(sf, i, "product", k, Monetization.Products[k], s)
+			n += 1
 		end
 	end
 	if n == 0 then
@@ -467,12 +466,17 @@ local function renderSeason(s: any)
 	fill.ZIndex = 23
 	fill.Size = UDim2.fromScale(sp.need > 0 and math.clamp(sp.into / sp.need, 0, 1) or 1, 1)
 	local pass = Monetization.Products.SeasonPass
-	local avail = s.productIds.products.SeasonPass
-	if sp.paid then
-		btn(body, "Pass owned", T.cardHi, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(if UI.compact then 1 else 0, if UI.compact then 0 else 240, 0, 48), TextSize = 18, AutoButtonColor = false })
-	elseif avail then
-		btn(body, pass.id == 0 and "Get the pass (Studio test)" or ("Get the pass  R$ " .. pass.price), T.green, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(if UI.compact then 1 else 0, if UI.compact then 0 else 240, 0, 48), TextSize = 16 }, function()
-			Net.act("Prompt", "product", "SeasonPass")
+	local studio = s.productIds ~= nil and s.productIds.studio == true
+	local passState = ShopCatalog.saleState(pass.id, studio, sp.paid == true)
+	local passSize = { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(if UI.compact then 1 else 0, if UI.compact then 0 else 240, 0, 48), TextSize = if passState == "buy" then 16 else 15 }
+	if passState == "owned" then
+		btn(body, "Pass owned", T.cardHi, passSize)
+	else
+		local passText = if passState == "buy" then "Get the pass  R$ " .. pass.price elseif passState == "studio" then "Get the pass (Studio test)" else "Coming soon"
+		btn(body, passText, passState == "soon" and T.cardHi or T.green, passSize, function()
+			if passState ~= "soon" then
+				Net.act("Prompt", "product", "SeasonPass")
+			end
 		end)
 	end
 	-- the two tracks
@@ -499,12 +503,18 @@ local function renderSeason(s: any)
 	UI.list(skipRow, Enum.FillDirection.Horizontal, 8)
 	for i, key in ipairs({ "TierSkip1", "TierSkip5" }) do
 		local p = Monetization.Products[key]
-		if s.productIds.products[key] and sp.tier + (p.count or 1) <= sp.max then
-			local text = p.id == 0 and (p.icon .. " " .. p.name .. " (Studio test)") or string.format("%s %s  R$ %d", p.icon, p.name, p.price)
-			btn(skipRow, text, T.blue, { Size = UDim2.new(0, 250, 0, 40), TextSize = 15, LayoutOrder = i }, function()
+		local room = sp.tier + (p.count or 1) <= sp.max
+		local skipState = ShopCatalog.saleState(p.id, studio, false)
+		local text = if not room
+			then p.icon .. " " .. p.name .. " (top tier)"
+			elseif skipState == "buy" then string.format("%s %s  R$ %d", p.icon, p.name, p.price)
+			elseif skipState == "studio" then p.icon .. " " .. p.name .. " (Studio test)"
+			else p.icon .. " " .. p.name .. " (Coming soon)"
+		btn(skipRow, text, (room and skipState ~= "soon") and T.blue or T.cardHi, { Size = UDim2.new(0, 250, 0, 40), TextSize = 15, LayoutOrder = i }, function()
+			if room and skipState ~= "soon" then
 				Net.act("Prompt", "product", key)
-			end)
-		end
+			end
+		end)
 	end
 	local skip5 = Monetization.Products.TierSkip5
 	if skip5.valueNote then
@@ -538,8 +548,13 @@ local function renderGift(s: any)
 			local f = card(sf, n, 64)
 			lbl(f, other.DisplayName, { Size = UDim2.new(1, -200, 0, 26), TextSize = 20 })
 			lbl(f, "@" .. other.Name, { Position = UDim2.new(0, 0, 0, 26), Size = UDim2.new(1, -200, 0, 20), TextSize = 13, Font = T.body, TextColor3 = T.dim })
-			local label = held > 0 and "Send free 🎁" or (item.id == 0 and "Studio gift (free)" or ("Gift for R$ " .. item.price))
-			btn(f, label, T.green, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 180, 0, 44), TextSize = 16 }, function()
+			local giftState = ShopCatalog.saleState(item.id, s.productIds ~= nil and s.productIds.studio == true, false)
+			local label = held > 0 and "Send free 🎁" or (giftState == "buy" and ("Gift for R$ " .. item.price) or (giftState == "studio" and "Studio gift (free)" or "Coming soon"))
+			local giftOn = held > 0 or giftState == "buy" or giftState == "studio"
+			btn(f, label, giftOn and T.green or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 180, 0, 44), TextSize = 16, AutoButtonColor = giftOn }, function()
+				if not giftOn then
+					return
+				end
 				local ok = Net.act("Gift", key, other.UserId)
 				if ok then
 					Panels.open("shop")
@@ -567,11 +582,13 @@ local function renderSauce(s: any)
 	local sf = scroller(body)
 	local head = card(sf, 0, 40)
 	head.BackgroundTransparency = 1
-	lbl(head, string.format("New sauce in %s  •  restocks every 5 minutes  •  bought with coins only", TimeUtil.formatDuration(s.restock.nextIn)), { Size = UDim2.new(1, 0, 1, 0), TextSize = 16, TextColor3 = T.gold })
+	local restock = s.restock or { nextIn = 0, shelf = {}, bought = {} }
+	lbl(head, string.format("New sauce in %s  •  restocks every 5 minutes  •  bought with coins only", TimeUtil.formatDuration(restock.nextIn or 0)), { Size = UDim2.new(1, 0, 1, 0), TextSize = 16, TextColor3 = T.gold })
 	local rm = Economy.rankMult(s.rank, Config.RANK_STEP)
-	for i, e in ipairs(s.restock.shelf) do
+	for i, e in ipairs(ShopCatalog.sauceRows(restock.shelf, Config.SauceOrder)) do
 		local def = Config.Sauces[e.id]
-		local left = e.qty - (s.restock.bought[e.id] or 0)
+		if def then
+		local left = e.qty - ((restock.bought or {})[e.id] or 0)
 		local price = math.floor(def.price * (1 + (rm - 1) * 0.5))
 		local f = card(sf, i, 76)
 		local sw = UI.frame({ BackgroundColor3 = Color3.fromHex(def.color), Size = UDim2.new(0, 40, 0, 56), ZIndex = 23, Parent = f })
@@ -583,6 +600,7 @@ local function renderSauce(s: any)
 				Net.act("BuySauce", e.id)
 			end
 		end)
+		end
 	end
 	local mine = card(sf, 10, 60)
 	local parts = {}
@@ -1103,7 +1121,7 @@ end
 
 function Panels.welcome(payload: any)
 	if payload.isNew then
-		Panels.dialog({ npc = "Unc Hank", text = "Hi Hungry, I'm Unc! Welcome to Backyard Smokeout.\n\nHere's how it works: brisket and ribs smoke for real hours (even while you're offline), burgers take 30 seconds on the grill. Serve the critters, upgrade your pit, find the secrets.\n\nHit the big orange button to smoke your first brisket. It only takes a minute this time. 😉" })
+		Panels.dialog({ npc = "Unc Hank", text = "Hi Hungry, I'm Unc! Welcome to Backyard Cookout.\n\nHere's how it works: brisket and ribs smoke for real hours (even while you're offline), burgers take 30 seconds on the grill. Serve the critters, upgrade your pit, find the secrets.\n\nHit the big orange button to smoke your first brisket. It only takes a minute this time. 😉" })
 	elseif payload.away and payload.ready and payload.ready > 0 then
 		Panels.dialog({ npc = "Unc Hank", text = string.format("Welcome back! You were gone %s and %d meat%s finished smoking. They're resting in the smoker, ready to collect.", TimeUtil.formatDuration(payload.away), payload.ready, payload.ready == 1 and "" or "s") })
 	end

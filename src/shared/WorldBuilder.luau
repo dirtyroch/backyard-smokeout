@@ -70,6 +70,26 @@ local function lookAt(a, b)
 	return E.CFrame.new(a, b)
 end
 
+-- Thin edge of a WedgePart points along local -Z. Point that at the beak tip or the feather tip.
+local function wedge(parent, name, size, cf, color, material, props)
+	local p = E.Instance.new("WedgePart")
+	p.Name = name
+	p.Anchored = true
+	p.Size = size
+	p.CFrame = cf
+	p.Color = hex(color)
+	p.Material = material or E.Enum.Material.SmoothPlastic
+	p.TopSurface = E.Enum.SurfaceType.Smooth
+	p.BottomSurface = E.Enum.SurfaceType.Smooth
+	if props then
+		for k, v in pairs(props) do
+			p[k] = v
+		end
+	end
+	p.Parent = parent
+	return p
+end
+
 local function cyl(parent, name, length, diameter, cf, color, material, props)
 	-- Roblox cylinders run along X. `cf` is the center.
 	local p = part(parent, name, V(length, diameter, diameter), cf, color, material, props)
@@ -330,6 +350,9 @@ function WorldBuilder.npc(parent, name, cf, o)
 	for _, c in ipairs(m:GetDescendants()) do
 		if c:IsA("BasePart") then
 			c.CanCollide = c == torso or c == legL or c == legR
+			-- Prompts hang off the torso and the name tag off the head. Those two
+			-- have to stay queryable or "Say howdy" never appears.
+			c.CanQuery = true
 		end
 	end
 	m.PrimaryPart = torso
@@ -362,6 +385,7 @@ function WorldBuilder.critter(env, parent, def, cf)
 	local body, head
 	-- eye placement (head-relative), filled in per body plan
 	local eyeY, eyeZ, eyeX, eyeSize = 2.55, -2.0, 0.38, 1
+	local skipEyes = false
 	if def.rex then
 		body = e("Body", 2.4, 2.6, 2.6, BC, 0, 2.2, 0.3)
 		e("Belly", 1.7, 2.0, 1.2, "#E8F5C8", 0, 2.0, -0.55)
@@ -388,25 +412,36 @@ function WorldBuilder.critter(env, parent, def, cf)
 		billboard(head, "Ribbon", def.ribbon or "RAWR means I love you ♥", 2.6, 70, "#FF8FB1", 260, 34)
 		eyeY, eyeZ, eyeX, eyeSize = 4.75, -1.62, 0.5, 1.3
 	elseif id == "roadrunner" or id == "hummingbird" then
+		-- Cylinders and wedges instead of one blob: a beak, separate feathers, toes.
 		local hb = id == "hummingbird"
-		body = e("Body", 1.5, 1.5, 2.1, BC, 0, 1.7, 0, hb and -10 or -15, 0, 0)
-		e("Chest", 1.1, 1.1, 1.0, lighten(BC, 0.45), 0, 1.6, -0.7)
-		head = e("Head", 1.3, 1.3, 1.3, HC, 0, 2.85, -0.9)
-		e("Beak", 0.28, 0.28, hb and 1.8 or 1.2, hb and "#2A2A2A" or "#5A4A3A", 0, 2.75, hb and -2.2 or -1.9)
-		if hb then
-			e("WingL", 0.15, 1.7, 1.0, lighten(BC, 0.2), -0.85, 2.3, 0.1, 0, 0, 30, E.Enum.Material.Glass)
-			e("WingR", 0.15, 1.7, 1.0, lighten(BC, 0.2), 0.85, 2.3, 0.1, 0, 0, -30, E.Enum.Material.Glass)
-			e("Tail", 0.6, 0.2, 1.0, BC, 0, 1.4, 1.3, 20, 0, 0)
-		else
-			e("Crest", 0.3, 1.0, 1.0, "#24456B", 0, 3.55, -0.6, -20, 0, 0)
-			e("Tail", 0.5, 0.45, 2.4, BC, 0, 2.2, 1.6, -28, 0, 0)
-			e("CheekPatch", 0.9, 0.3, 0.2, "#E2572E", 0, 2.85, -0.25)
-		end
+		skipEyes = true
+		local yaw = E.CFrame.Angles(0, math.pi / 2, 0)
+		body = cyl(m, "Body", (hb and 1.5 or 2.2) * s, (hb and 0.55 or 0.85) * s, at(0, hb and 1.35 or 1.55, 0.15) * yaw, BC, E.Enum.Material.SmoothPlastic)
+		cyl(m, "Chest", (hb and 0.55 or 0.7) * s, (hb and 0.48 or 0.7) * s, at(0, hb and 1.4 or 1.6, -0.55) * yaw, lighten(BC, 0.4))
+		head = sph(m, "Head", V((hb and 0.7 or 0.95) * s, (hb and 0.62 or 0.85) * s, (hb and 0.7 or 0.9) * s), at(0, hb and 1.85 or 2.35, hb and -0.85 or -1.05), HC)
+		local beakColor = hb and "#1A1A1A" or "#C4A574"
+		local beakLen = hb and 0.95 or 0.7
+		wedge(m, "Beak", V((hb and 0.16 or 0.28) * s, (hb and 0.14 or 0.22) * s, beakLen * s), at(0, hb and 1.78 or 2.22, hb and -1.55 or -1.7), beakColor, E.Enum.Material.SmoothPlastic)
+		local feather = lighten(BC, 0.25)
 		for _, side in { -1, 1 } do
-			cyl(m, "Leg", 1.0 * s, 0.2 * s, at(side * 0.35, 0.55, 0.1) * E.CFrame.Angles(0, 0, math.pi / 2), "#C9A060")
-			e("Foot", 0.4, 0.15, 0.6, "#C9A060", side * 0.35, 0.08, -0.05)
+			for i = 1, hb and 3 or 2 do
+				local z = (i - 2) * (hb and 0.28 or 0.35)
+				wedge(m, "Feather", V((hb and 0.08 or 0.12) * s, (hb and 0.9 or 0.7) * s, (hb and 0.45 or 0.55) * s), at(side * (hb and 0.55 or 0.7), hb and 1.55 or 1.7, z, 0, side * (hb and 55 or 40), side * (hb and 25 or 18)), feather, E.Enum.Material.SmoothPlastic)
+			end
+			wedge(m, "Tail", V((hb and 0.12 or 0.18) * s, (hb and 0.35 or 0.4) * s, (hb and 0.7 or 1.1) * s), at(side * 0.12, hb and 1.15 or 1.35, hb and 0.95 or 1.35, -25, side * 12, 0), BC)
+			cyl(m, "Leg", (hb and 0.55 or 0.9) * s, (hb and 0.08 or 0.12) * s, at(side * 0.22, hb and 0.45 or 0.55, 0.05) * E.CFrame.Angles(0, 0, math.pi / 2), "#C9A060")
+			for t = -1, 1 do
+				part(m, "Toe", V((hb and 0.22 or 0.32) * s, 0.06 * s, 0.08 * s), at(side * 0.22 + t * 0.08, 0.06, -0.08), "#C9A060")
+			end
+			local ex, ey, ez = side * (hb and 0.16 or 0.22), hb and 1.95 or 2.48, hb and -1.15 or -1.42
+			part(m, "EyeWhite", V(0.16 * s, 0.16 * s, 0.08 * s), at(ex, ey, ez), "#FFFFFF").Shape = E.Enum.PartType.Ball
+			part(m, "Pupil", V(0.08 * s, 0.08 * s, 0.06 * s), at(ex, ey, ez - 0.04), "#1A120E").Shape = E.Enum.PartType.Ball
+			part(m, "Shine", V(0.04 * s, 0.04 * s, 0.04 * s), at(ex - 0.03, ey + 0.03, ez - 0.06), "#FFFFFF", E.Enum.Material.Neon).Shape = E.Enum.PartType.Ball
 		end
-		eyeY, eyeZ, eyeX, eyeSize = 3.0, -1.45, 0.33, 0.85
+		if not hb then
+			wedge(m, "Crest", V(0.12 * s, 0.7 * s, 0.45 * s), at(0, 2.85, -0.85, -30, 0, 0), "#24456B")
+			part(m, "CheekPatch", V(0.7 * s, 0.16 * s, 0.08 * s), at(0, 2.25, -1.35), "#E2572E")
+		end
 	else
 		local flat = id == "hornedtoad"
 		local bodyH = flat and 1.0 or 1.6
@@ -437,10 +472,13 @@ function WorldBuilder.critter(env, parent, def, cf)
 			e("CheekL", 0.32, 0.18, 0.1, "#F7A1A9", -0.62, hy - 0.2, -1.95)
 			e("CheekR", 0.32, 0.18, 0.1, "#F7A1A9", 0.62, hy - 0.2, -1.95)
 		end
-		-- legs
+		-- legs: thin cylinders and a flat paw, not four more balls
 		for _, lx in { -0.62, 0.62 } do
 			for _, lz in { -0.75, 0.75 } do
-				e("Leg", flat and 0.6 or 0.55, flat and 0.5 or 0.8, flat and 0.6 or 0.55, BC, lx * (flat and 1.25 or 1), flat and 0.25 or 0.4, lz)
+				local px = lx * (flat and 1.25 or 1)
+				local py = flat and 0.22 or 0.42
+				cyl(m, "Leg", (flat and 0.28 or 0.55) * s, (flat and 0.28 or 0.22) * s, at(px, py, lz) * E.CFrame.Angles(0, 0, math.pi / 2), BC)
+				part(m, "Paw", V((flat and 0.45 or 0.38) * s, 0.12 * s, (flat and 0.4 or 0.42) * s), at(px, 0.06, lz - 0.08), BC)
 			end
 		end
 		-- ears
@@ -508,7 +546,8 @@ function WorldBuilder.critter(env, parent, def, cf)
 			part(m, "PawR", V(0.45 * s, 0.45 * s, 0.45 * s), at(0.32, 1.85, -2.05), BC).Shape = E.Enum.PartType.Ball
 		end
 	end
-	-- big shiny eyes
+	-- big shiny eyes (birds build their own)
+	if not skipEyes then
 	for _, side in { -1, 1 } do
 		local eyeColor = id == "clapcat" and "#E8D44D" or DARK
 		e(side < 0 and "EyeL" or "EyeR", 0.32 * eyeSize, 0.44 * eyeSize, 0.16, eyeColor, side * eyeX, eyeY, eyeZ)
@@ -516,6 +555,7 @@ function WorldBuilder.critter(env, parent, def, cf)
 			e("Pupil", 0.12, 0.34, 0.1, DARK, side * eyeX, eyeY, eyeZ - 0.06)
 		end
 		e(side < 0 and "ShineL" or "ShineR", 0.12 * eyeSize, 0.12 * eyeSize, 0.06, "#FFFFFF", side * eyeX - 0.06, eyeY + 0.1 * eyeSize, eyeZ - 0.08, 0, 0, 0, E.Enum.Material.Neon)
+	end
 	end
 	for _, c in ipairs(m:GetChildren()) do
 		if c:IsA("BasePart") then
@@ -546,6 +586,11 @@ local function attachCuteFace(meatPart, meatId, burnt)
 	local ok, CuteFace = pcall(function()
 		return require(script.Parent.Logic.CuteFace)
 	end)
+	if not ok then
+		ok, CuteFace = pcall(function()
+			return require("./Logic/CuteFace")
+		end)
+	end
 	if not ok or not CuteFace.kind(meatId) then
 		return
 	end
@@ -625,7 +670,45 @@ function WorldBuilder.meat(env, parent, meatDef, rarityDef, cf, doneness, burnt,
 		p.Transparency = 0
 	end
 	p.Parent = parent
-	attachCuteFace(p, meatDef.id, burnt == true)
+	local id = meatDef.id
+	local function bit(name: string, size: { number }, offset: { number }, color: string, shape: string?)
+		local q = E.Instance.new("Part")
+		q.Name = name
+		q.Anchored = true
+		q.CanCollide = false
+		q.CanQuery = false
+		q.Size = V(size[1] * scale, size[2] * scale, size[3] * scale)
+		q.CFrame = p.CFrame * E.CFrame.new(offset[1] * scale, offset[2] * scale, offset[3] * scale)
+		q.Color = if burnt then hex("#141414") else hex(color)
+		q.Material = E.Enum.Material.SmoothPlastic
+		if shape == "ball" then
+			q.Shape = E.Enum.PartType.Ball
+		elseif shape == "cyl" then
+			q.Shape = E.Enum.PartType.Cylinder
+		end
+		q.Parent = p
+		return q
+	end
+	local faceOn = p
+	if id == "burger" then
+		bit("BunBottom", { sz[1] * 0.95, 0.28, sz[3] * 0.95 }, { 0, -0.22, 0 }, "#E6B15A", "ball")
+		faceOn = bit("BunTop", { sz[1] * 0.9, 0.32, sz[3] * 0.9 }, { 0, 0.28, 0 }, "#F0C56A", "ball")
+		bit("Lettuce", { sz[1] * 0.85, 0.06, sz[3] * 0.85 }, { 0, 0.08, 0 }, "#7CB342")
+		bit("Sesame", { 0.12, 0.06, 0.1 }, { 0.2, 0.42, -0.15 }, "#F7F1D0")
+		bit("Sesame", { 0.12, 0.06, 0.1 }, { -0.18, 0.4, 0.1 }, "#F7F1D0")
+	elseif id == "hotlink" or id == "sausage" then
+		bit("EndL", { 0.2, sz[2] * 0.7, sz[3] * 0.7 }, { -sz[1] / 2, 0, 0 }, "#8B3A3A", "ball")
+		bit("EndR", { 0.2, sz[2] * 0.7, sz[3] * 0.7 }, { sz[1] / 2, 0, 0 }, "#8B3A3A", "ball")
+	elseif id == "ribs" then
+		for k = -1, 1 do
+			bit("Bone", { 0.12, sz[2] * 1.4, 0.12 }, { k * 0.35, 0.05, 0 }, "#F3E6D0", "cyl")
+		end
+	elseif id == "tomahawk" then
+		for k = -1, 1 do
+			bit("Mark", { sz[1] * 0.7, 0.04, 0.08 }, { 0, sz[2] / 2, k * 0.22 }, "#3A2418")
+		end
+	end
+	attachCuteFace(faceOn, meatDef.id, burnt == true)
 	return p
 end
 
@@ -676,6 +759,10 @@ local function smoker(parent, name, cf)
 	smoke.Color = hex("#DDDDDD")
 	smoke.Parent = chimney
 	part(m, "Handle", V(2, 0.3, 0.3), cf * E.CFrame.new(0, 4, -1.7), "#C0C0C0", E.Enum.Material.Metal)
+	part(m, "Door", V(1.6, 1.5, 0.12), cf * E.CFrame.new(0.4, 3.5, -1.55), "#5C3E30", E.Enum.Material.Metal)
+	part(m, "DoorKnob", V(0.22, 0.22, 0.22), cf * E.CFrame.new(0.9, 3.5, -1.68), "#E8E8E8", E.Enum.Material.Metal)
+	cyl(m, "ChimneyCap", 0.2, 1.15, cf * E.CFrame.new(2, 7.9, 0) * E.CFrame.Angles(0, 0, math.pi / 2), "#1A1A1A", E.Enum.Material.Metal)
+	wedge(m, "Log", V(0.35, 0.35, 1.1), cf * E.CFrame.new(-3.3, 2.4, 0.2), "#6B4226", E.Enum.Material.Wood)
 	local spot = part(m, "MeatSpot", V(1, 0.2, 1), cf * E.CFrame.new(0, 5.15, 0), "#000000", nil, { Transparency = 1, CanCollide = false })
 	local gui = billboard(barrel, "SlotGui", "", 4.2, 70, "#FFFFFF", 180, 44, { 7.5, 2 })
 	gui.Name = "SlotGui"
@@ -737,8 +824,11 @@ local function buildPlot(root, i, cfg)
 	local sign = model(m, "Sign")
 	part(sign, "PostL", V(0.6, 7, 0.6), cf * E.CFrame.new(-6, 3.5, -S / 2 - 1), "#6B4226", E.Enum.Material.Wood)
 	part(sign, "PostR", V(0.6, 7, 0.6), cf * E.CFrame.new(6, 3.5, -S / 2 - 1), "#6B4226", E.Enum.Material.Wood)
-	local board = part(sign, "Board", V(12.5, 2.6, 0.4), cf * E.CFrame.new(0, 6.2, -S / 2 - 1) * E.CFrame.Angles(0, math.pi, 0), "#F4E1C1", E.Enum.Material.Wood)
+	-- The plot looks toward the hub, so the board's front (its LookVector) already
+	-- points out the path. A 180 degree yaw used to turn that face into the yard.
+	local board = part(sign, "Board", V(12.5, 2.6, 0.4), cf * E.CFrame.new(0, 6.2, -S / 2 - 1), "#F4E1C1", E.Enum.Material.Wood)
 	surfaceText(board, E.Enum.NormalId.Front, "Open Ranch", "#5A2E1E", nil).Name = "OwnerText"
+	surfaceText(board, E.Enum.NormalId.Back, "Open Ranch", "#5A2E1E", nil).Name = "OwnerText"
 
 	-- smokers
 	local smokers = folder(m, "Smokers")
@@ -747,8 +837,18 @@ local function buildPlot(root, i, cfg)
 	end
 	-- grill (flat-top with 4 spots)
 	local grill = model(m, "Grill")
-	part(grill, "Base", V(22, 3, 4), cf * E.CFrame.new(-19.5, 2.1, 4), "#2E2E2E", E.Enum.Material.Metal)
-	local top = part(grill, "Top", V(22, 0.4, 4), cf * E.CFrame.new(-19.5, 3.8, 4), "#555555", E.Enum.Material.DiamondPlate)
+	part(grill, "Base", V(20, 1.2, 3.2), cf * E.CFrame.new(-19.5, 2.4, 4), "#2E2E2E", E.Enum.Material.Metal)
+	for _, gx in { -8.5, 8.5 } do
+		for _, gz in { -1.2, 1.2 } do
+			part(grill, "Leg", V(0.35, 2.2, 0.35), cf * E.CFrame.new(-19.5 + gx, 1.1, 4 + gz), "#1A1A1A", E.Enum.Material.Metal)
+		end
+	end
+	wedge(grill, "Hood", V(20, 1.6, 2.2), cf * E.CFrame.new(-19.5, 4.5, 5.1) * E.CFrame.Angles(0, math.pi, 0), "#3A3A3A", E.Enum.Material.Metal)
+	cyl(grill, "Handle", 16, 0.28, cf * E.CFrame.new(-19.5, 4.3, 2.3) * E.CFrame.Angles(0, math.pi / 2, 0), "#C0C0C0", E.Enum.Material.Metal)
+	local top = part(grill, "Top", V(20, 0.28, 3.4), cf * E.CFrame.new(-19.5, 3.55, 4), "#555555", E.Enum.Material.DiamondPlate)
+	for gi = -2, 2 do
+		part(grill, "Grate", V(18, 0.08, 0.12), cf * E.CFrame.new(-19.5, 3.72, 4 + gi * 0.45), "#2A2A2A", E.Enum.Material.Metal)
+	end
 	local gsmoke = E.Instance.new("Smoke")
 	gsmoke.Name = "Smoke"
 	gsmoke.Enabled = false
@@ -757,7 +857,7 @@ local function buildPlot(root, i, cfg)
 	gsmoke.RiseVelocity = 3
 	gsmoke.Parent = top
 	for gi, x in ipairs(WorldBuilder.GRILL_X) do
-		local spot = part(grill, "g" .. gi, V(4, 0.2, 3), cf * E.CFrame.new(x, 4.05, 4), "#333333", E.Enum.Material.Metal)
+		local spot = part(grill, "g" .. gi, V(4, 0.2, 3), cf * E.CFrame.new(x, 3.78, 4), "#333333", E.Enum.Material.Metal)
 		spot:SetAttribute("Slot", "g" .. gi)
 		billboard(spot, "SlotGui", "", 3, 60, "#FFFFFF", 150, 40, { 4.6, 1.5 })
 	end
@@ -770,8 +870,9 @@ local function buildPlot(root, i, cfg)
 	local pw = model(m, "PassWindow")
 	local counter = part(pw, "Counter", V(8, 3.4, 2.5), cf * E.CFrame.new(10, 2.3, -22), "#8B5A2B", E.Enum.Material.WoodPlanks)
 	part(pw, "Top", V(8.4, 0.3, 2.9), cf * E.CFrame.new(10, 4.1, -22), "#DEB887", E.Enum.Material.Wood)
-	local pwSign = part(pw, "Sign", V(6, 1.2, 0.2), cf * E.CFrame.new(10, 5.8, -21.8) * E.CFrame.Angles(0, math.pi, 0), "#F4E1C1", E.Enum.Material.Wood)
+	local pwSign = part(pw, "Sign", V(6, 1.2, 0.2), cf * E.CFrame.new(10, 5.8, -21.8), "#F4E1C1", E.Enum.Material.Wood)
 	surfaceText(pwSign, E.Enum.NormalId.Front, "PASS WINDOW", "#5A2E1E", nil)
+	surfaceText(pwSign, E.Enum.NormalId.Back, "PASS WINDOW", "#5A2E1E", nil)
 	folder(pw, "Plates")
 	prompt(counter, "snag", "Snag a plate", "Pass Window", 1.2, 9, { Enabled = false })
 	billboard(counter, "LockGui", "", 5, 50, "#FFB3B3", 200, 30)
@@ -797,8 +898,9 @@ local function buildPlot(root, i, cfg)
 		ball(vip, "Bulb", 0.6, cf * E.CFrame.new(x, 7 + math.sin(li / 12 * math.pi) * -1.2, 27), li % 2 == 0 and "#FFE9A8" or "#FFB347", E.Enum.Material.Neon, { Transparency = 1, CanCollide = false })
 	end
 	part(vip, "Wire", V(S - 2, 0.1, 0.1), cf * E.CFrame.new(0, 7.2, 27), "#222222", nil, { Transparency = 1, CanCollide = false })
-	local vipSign = part(vip, "VIPSign", V(6, 2, 0.2), cf * E.CFrame.new(-26, 5, 26.5) * E.CFrame.Angles(0, math.pi, 0), "#1A1A1A", nil, { Transparency = 1 })
+	local vipSign = part(vip, "VIPSign", V(6, 2, 0.2), cf * E.CFrame.new(-26, 5, 26.5), "#1A1A1A", nil, { Transparency = 1 })
 	surfaceText(vipSign, E.Enum.NormalId.Front, "VIP PATIO", "#FFD700", nil).TextTransparency = 1
+	surfaceText(vipSign, E.Enum.NormalId.Back, "VIP PATIO", "#FFD700", nil).TextTransparency = 1
 	-- cooler (decor)
 	part(m, "Cooler", V(4, 2.4, 2.4), cf * E.CFrame.new(-26, 1.8, 10), "#2E86C1", E.Enum.Material.SmoothPlastic)
 	part(m, "CoolerLid", V(4.1, 0.4, 2.5), cf * E.CFrame.new(-26, 3.2, 10), "#FFFFFF", E.Enum.Material.SmoothPlastic)

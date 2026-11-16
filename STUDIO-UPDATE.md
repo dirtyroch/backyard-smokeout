@@ -43,7 +43,7 @@ Use this if the Rojo plugin is already connected to this repo.
 2. Open `BackyardSmokeout.rbxlx` in a **second** Studio window (File > Open from File). Do not choose the existing experience when Studio asks where to publish.
 3. Copy the source from `monetization-backup.luau` into the new place's **ReplicatedStorage > Shared > Monetization**, or copy each id by hand.
 4. Play once. Shop buttons that you already created on the dashboard should say **Buy for R$ …**, not **Studio test (free)**.
-5. Only then use File > Publish to Roblox and choose the **existing** Backyard Smokeout experience.
+5. Only then use File > Publish to Roblox and choose the **existing** Backyard Cookout experience.
 
 ## Music (not playing yet)
 

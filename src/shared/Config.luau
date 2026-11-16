@@ -8,7 +8,7 @@
 
 local Config = {}
 
-Config.GAME_NAME = "Backyard Smokeout"
+Config.GAME_NAME = "Backyard Cookout"
 Config.TAGLINE = "Low and slow. Smoke it while you sleep."
 
 -- Daily resets, streaks and the Saturday Cook-Off use Texas time (Central, fixed UTC-6).

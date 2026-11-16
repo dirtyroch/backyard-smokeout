@@ -1,4 +1,4 @@
-# Publish Backyard Smokeout (first time)
+# Publish Backyard Cookout (first time)
 
 You only need the place file to get the game onto Roblox. Real Robux purchases stay off until the passes and developer products exist. The long version, including the maturity answers, is [PUBLISHING.md](PUBLISHING.md).
 
@@ -14,7 +14,7 @@ Saving in Studio says progress is not saved until step 4. Shop buttons say **Stu
 
 1. **File > Publish to Roblox**.
 2. Choose **Create new experience** (older Studio builds label this **Publish to Roblox As**).
-3. Name it **Backyard Smokeout**. Genre: **Simulation**. Turn on Computer, Phone, and Tablet.
+3. Name it **Backyard Cookout**. Genre: **Simulation**. Turn on Computer, Phone, and Tablet.
 4. Click **Create**.
 
 ## 3. Creator Dashboard
