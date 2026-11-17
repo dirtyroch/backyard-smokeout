@@ -25,6 +25,7 @@ local DefaultData = require(Shared.DefaultData)
 local SessionLock = require(Shared.Logic.SessionLock)
 local Reconcile = require(Shared.Logic.Reconcile)
 local Jimothy = require(Shared.Logic.Jimothy)
+local Signal = require(Shared.Signal)
 
 local STORE_NAME = "BackyardSmokeout_Players_v1"
 local STALE_LOCK = 300 -- seconds
@@ -46,7 +47,9 @@ export type Profile = {
 
 local DataService = {}
 DataService.profiles = {} :: { [Player]: Profile }
-DataService.onLoaded = Instance.new("BindableEvent")
+-- Listeners must see the stored profile. A BindableEvent would deep-copy it, the
+-- copy would fail GameService's identity check, and the ranch would never start.
+DataService.onLoaded = Signal.new()
 
 local jobId = game.JobId ~= "" and game.JobId or ("studio-" .. HttpService:GenerateGUID(false))
 local store: DataStore? = nil

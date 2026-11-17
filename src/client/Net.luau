@@ -3,10 +3,13 @@
 -- Remotes are created by the server script. Waiting forever here used to freeze the client
 -- before any UI existed if that script was still starting (or had died before creating them).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Signal = require(Shared.Signal)
 
 local Net = {}
 Net.state = nil :: any
-Net.changed = Instance.new("BindableEvent")
+-- Not a BindableEvent: those copy the snapshot, so listeners would not see Net.state.
+Net.changed = Signal.new()
 Net.notify = function(_text: string, _kind: string?) end
 local handlers: { [string]: { (any) -> () } } = {}
 local action: RemoteFunction? = nil

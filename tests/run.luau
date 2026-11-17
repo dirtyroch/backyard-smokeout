@@ -2276,6 +2276,9 @@ test("Jimothy reads round and neckless; Bandit stays the slimmer raccoon", funct
 	truthy(bandit:FindFirstChild("Apron") == nil)
 end)
 
+print("Ranch load")
+require("./ranch_load")(test, eq, truthy)
+
 print(string.format("\n%d passed, %d failed", passed, failed))
 if failed > 0 then
 	process.exit(1)

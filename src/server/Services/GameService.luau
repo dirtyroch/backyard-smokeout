@@ -1262,7 +1262,8 @@ local function serverNow(): number
 end
 
 local function onLoaded(player: Player, profile: any, isNew: boolean)
-	-- onLoaded is a (deferred) event: the player may already have left and been released.
+	-- Listeners run on their own threads. The player may already have left, and
+	-- `profile` has to be the table DataService stored (a copied table must not pass).
 	if not player.Parent or ctx.Data.get(player) ~= profile then
 		return
 	end
