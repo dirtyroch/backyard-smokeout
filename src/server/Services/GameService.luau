@@ -31,6 +31,7 @@ local Jimothy = require(Shared.Logic.Jimothy)
 local Staff = require(Shared.Logic.Staff)
 local Income = require(Shared.Logic.Income)
 local FreeGift = require(Shared.Logic.FreeGift)
+local Guide = require(Shared.Logic.Guide)
 
 local GameService = {}
 local ctx: any = nil
@@ -65,6 +66,7 @@ GameService.runtime = {} :: { [Player]: Runtime }
 
 local globalLimiter = RateLimiter.new(25, 12) -- any action: burst 25, 12/sec sustained
 local actionLimiter = RateLimiter.new(6, 3) -- per (player, action)
+local acting: { [Player]: boolean } = {} -- blocks a second remote while the first is yielding
 
 local function T(): number
 	return workspace:GetServerTimeNow()
@@ -934,6 +936,7 @@ end
 
 Actions.ClaimDaily = function(player, data)
 	local d = today()
+	Streak.healClock(data.streak, d)
 	if not Streak.canClaim(data.streak, d) then
 		return false, "Already claimed today. See you tomorrow!"
 	end
@@ -959,7 +962,9 @@ end
 
 Actions.ClaimGift = function(player, data)
 	Staff.normalize(data)
-	if not FreeGift.claim(data.freeGift, T()) then
+	local now = os.time()
+	FreeGift.normalize(data.freeGift, now)
+	if not FreeGift.claim(data.freeGift, now) then
 		return false, "Your free gift isn't ready yet."
 	end
 	local amount = FreeGift.payout(rankMult(data))
@@ -971,19 +976,20 @@ end
 
 Actions.HireStaff = function(player, data)
 	Staff.normalize(data)
-	local have = #data.staff.roster
-	if have >= Staff.slots(data.pitLevel) then
-		return false, "Upgrade your pit to hire another hand."
+	local outcome = Staff.tryHire(data.staff.roster, data.pitLevel, data.coins)
+	if not outcome.ok or not outcome.employee or not outcome.cost then
+		return false, Staff.hireMessage(outcome.reason, outcome.cost)
 	end
-	local cost = Staff.hireCost(have)
-	local hire = Staff.template(have)
-	if not cost or not hire then
-		return false, "The crew is full."
+	local hire = outcome.employee
+	if Staff.find(data.staff.roster, hire.id) then
+		return false, "They're already on the crew."
 	end
-	if data.coins < cost then
-		return false, string.format("You need %d coins.", cost)
+	local before = data.coins
+	GameService.addCoins(player, data, -outcome.cost, false, "Staff")
+	if data.coins < 0 or data.coins ~= data.coins then
+		data.coins = before
+		return false, Staff.hireMessage("coins", outcome.cost)
 	end
-	GameService.addCoins(player, data, -cost, false, "Staff")
 	table.insert(data.staff.roster, hire)
 	local r = rt(player)
 	if r then
@@ -991,33 +997,44 @@ Actions.HireStaff = function(player, data)
 		r.staffJob[hire.id] = "idle"
 	end
 	GameService.toast(player, hire.name .. " clocked in!", "good")
-	GameService.fx(player, "hired", { name = hire.name, title = Staff.hand(hire.id) and Staff.hand(hire.id).title or "Crew" })
+	local hand = Staff.hand(hire.id)
+	GameService.fx(player, "hired", { name = hire.name, title = if hand then hand.title else "Crew" })
 	ctx.World.refreshStations(player)
 	return true, nil
 end
 
 Actions.UpgradeStaff = function(player, data, id, stat)
-	if type(id) ~= "string" or (stat ~= "speed" and stat ~= "capacity" and stat ~= "quality") then
-		return false, "Bad request."
-	end
 	Staff.normalize(data)
+	local outcome = Staff.tryUpgrade(data.staff.roster, id, stat, data.coins)
+	if not outcome.ok or not outcome.stat or not outcome.cost or not outcome.level or outcome.from == nil then
+		return false, Staff.upgradeMessage(outcome.reason, outcome.cost)
+	end
 	local e = Staff.find(data.staff.roster, id)
-	if not e then
-		return false, "That hand isn't on the crew."
+	if not e or e[outcome.stat] ~= outcome.from then
+		return false, Staff.upgradeMessage("max", nil)
 	end
-	local cost = Staff.upgradeCost(stat, e[stat])
-	if not cost then
-		return false, "That's as high as it goes."
+	local before = data.coins
+	GameService.addCoins(player, data, -outcome.cost, false, "Staff")
+	if data.coins < 0 or data.coins ~= data.coins then
+		data.coins = before
+		return false, Staff.upgradeMessage("coins", outcome.cost)
 	end
-	if data.coins < cost then
-		return false, string.format("You need %d coins.", cost)
-	end
-	GameService.addCoins(player, data, -cost, false, "Staff")
-	e[stat] += 1
-	local label = if stat == "speed" then "Speed" elseif stat == "capacity" then "Carry" else "Quality"
-	GameService.toast(player, string.format("%s's %s is now %d.", e.name, label, e[stat]), "good")
-	GameService.fx(player, "levelup", { text = e.name .. " " .. label .. " " .. e[stat] })
+	e[outcome.stat] = outcome.level
+	local label = if outcome.stat == "speed" then "Speed" elseif outcome.stat == "capacity" then "Carry" else "Quality"
+	GameService.toast(player, string.format("%s's %s is now %d.", e.name, label, e[outcome.stat]), "good")
+	GameService.fx(player, "levelup", { text = e.name .. " " .. label .. " " .. outcome.level })
 	ctx.World.refreshStations(player)
+	return true, nil
+end
+
+Actions.GuideSkip = function(player, data)
+	if type(data.guide) ~= "table" then
+		data.guide = Guide.new()
+	end
+	if not Guide.skip(data.guide) then
+		return false, "You're already all set."
+	end
+	GameService.toast(player, "Hints tucked away. Have fun at the ranch.", "info")
 	return true, nil
 end
 
@@ -1252,16 +1269,23 @@ local function snapshot(player: Player, data: any): any
 		customers = customers,
 		combo = data.combo,
 		income = Income.perSecond(r.earns, t, Income.WINDOW),
+		earns = r.earns,
+		today = today(),
 		staff = {
 			slots = Staff.slots(data.pitLevel),
 			roster = data.staff.roster,
 			waiter = r.passes.AutoServe == true,
 		},
-		freeGift = {
-			ready = FreeGift.ready(data.freeGift.nextAt, t),
-			nextAt = data.freeGift.nextAt,
-			coins = FreeGift.payout(rankMult(data)),
-		},
+		freeGift = (function()
+			local giftNow = os.time()
+			FreeGift.normalize(data.freeGift, giftNow)
+			return {
+				ready = FreeGift.ready(data.freeGift.nextAt, giftNow),
+				nextAt = data.freeGift.nextAt,
+				coins = FreeGift.payout(rankMult(data)),
+			}
+		end)(),
+		guide = if type(data.guide) == "table" then Guide.view(data.guide) else { active = false },
 		crew = r.crew,
 		rush = (function()
 			local w = Hype.rushWindow(T(), Config.Rush.period)
@@ -1421,6 +1445,24 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 	elseif not plotOk then
 		warn("[GameService] assignPlot failed:\n" .. tostring(plotIndex))
 	end
+	guard("guide", function()
+		if type(data.guide) ~= "table" then
+			data.guide = Guide.new()
+		end
+		local rosterN = if type(data.staff) == "table" and type(data.staff.roster) == "table" then #data.staff.roster else 0
+		Guide.prepare(data.guide, {
+			served = data.stats and data.stats.served or 0,
+			firstBrisket = data.tutorial and data.tutorial.firstBrisket == true,
+			tutorialDone = data.tutorial and data.tutorial.done == true,
+			playSeconds = data.playSeconds or 0,
+			crew = rosterN,
+		})
+		Guide.sync(data.guide, Guide.signals(data))
+		Streak.healClock(data.streak, today())
+		if type(data.freeGift) == "table" then
+			FreeGift.normalize(data.freeGift, os.time())
+		end
+	end)
 	guard("push", function()
 		GameService.push(player)
 	end)
@@ -1536,6 +1578,7 @@ local function onRemoving(player: Player)
 	ctx.Social.onLeave(player)
 	ctx.World.releasePlot(player)
 	globalLimiter:forget(player)
+	acting[player] = nil
 	local uid = tostring(player.UserId)
 	for name in pairs(Actions) do
 		actionLimiter:forget(uid .. name)
@@ -1596,17 +1639,25 @@ local function handle(player: Player, action: any, a: any, b: any, c: any): (boo
 	if not data or not r then
 		return false, "Still loading your ranch..."
 	end
+	if acting[player] then
+		return false, "Slow down, partner!"
+	end
+	acting[player] = true
 	r.lastActive = now
 	advanceAll(player, data, T(), true)
 	local ok, res, msg = pcall(function()
 		return (fn :: any)(player, data, a, b, c)
 	end)
+	acting[player] = nil
 	if not ok then
 		warn("[GameService] action " .. action .. " errored: " .. tostring(res))
 		return false, "Something went wrong."
 	end
 	if res then
 		GameService.checkRookie(player, data)
+		if type(data.guide) == "table" then
+			Guide.sync(data.guide, Guide.signals(data))
+		end
 	end
 	GameService.markDirty(player)
 	return res, msg
@@ -1758,6 +1809,19 @@ function GameService.start()
 					ctx.Insights.onboarding(player, data)
 					-- day rollover while playing
 					local d = today()
+					if Streak.healClock(data.streak, d) then
+						r.dirty = true
+					end
+					if type(data.freeGift) == "table" then
+						local giftAt = data.freeGift.nextAt
+						FreeGift.normalize(data.freeGift, os.time())
+						if data.freeGift.nextAt ~= giftAt then
+							r.dirty = true
+						end
+					end
+					if type(data.guide) == "table" and Guide.sync(data.guide, Guide.signals(data)) then
+						r.dirty = true
+					end
 					if d ~= r.today then
 						r.today = d
 						PitmasterPath.registerPlayDay(data.path, d)

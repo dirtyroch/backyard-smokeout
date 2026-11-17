@@ -13,7 +13,7 @@ end
 export type Event = { t: number, n: number }
 
 function Income.record(events: { Event }, now: number, amount: number, window: number?)
-	if type(amount) ~= "number" or amount <= 0 or amount ~= amount then
+	if type(amount) ~= "number" or amount <= 0 or amount ~= amount or amount == math.huge then
 		return
 	end
 	local span = window or Income.WINDOW

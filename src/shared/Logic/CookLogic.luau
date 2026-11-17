@@ -21,6 +21,7 @@ export type Cook = {
 	doneAt: number?,
 	flip: string?, -- nil | "perfect" | "good" | "miss"
 	burnt: boolean?,
+	spentToken: boolean?, -- true when this cook spent a premium token, so a rebirth can give it back
 }
 
 function CookLogic.new(meat: string, rarity: string, duration: number, now: number, rateMult: number?): Cook
