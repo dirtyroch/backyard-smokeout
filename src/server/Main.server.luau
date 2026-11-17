@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
 local Services = script.Parent:WaitForChild("Services")
+local Boot = require(script.Parent:WaitForChild("Boot"))
 
 local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
@@ -33,18 +34,10 @@ local ctx = {
 }
 
 -- World first: it builds the map if it wasn't baked into the place file.
-local order = { "World", "Game", "Social", "Event", "Egg", "Cosmetics", "Purchase", "Season", "Membership", "Insights" }
-for _, name in ipairs(order) do
-	local svc = (ctx :: any)[name]
-	if svc.init then
-		svc.init(ctx)
-	end
-end
-ctx.Data.start()
-for _, name in ipairs({ "World", "Social", "Event", "Egg", "Cosmetics", "Purchase", "Season", "Membership", "Insights", "Game" }) do
-	local svc = (ctx :: any)[name]
-	if svc.start then
-		svc.start()
-	end
-end
+-- Every init runs before any start, so actions are registered and the map exists
+-- before Game.start connects PlayerAdded. Game.start is first among starts:
+-- a throw in chat, analytics, or a shop API must not leave joins unwired.
+local initOrder = { "World", "Game", "Social", "Event", "Egg", "Cosmetics", "Purchase", "Season", "Membership", "Insights" }
+local startOrder = { "World", "Social", "Event", "Egg", "Cosmetics", "Purchase", "Season", "Membership", "Insights" }
+Boot.run(ctx, initOrder, { "Game" }, startOrder)
 print("[Backyard Smokeout] server ready")

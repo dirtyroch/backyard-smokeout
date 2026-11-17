@@ -530,6 +530,67 @@ test("session lock: stale lock (crashed server) can be taken", function()
 	eq(st, "stale-taken")
 	eq(r2.lock.jobId, "server-B")
 end)
+test("session lock: a bad timestamp from an older server is taken, not thrown", function()
+	local missing = { data = { coins = 4 }, lock = { jobId = "old", time = nil } }
+	local rec, st = SessionLock.acquire(missing, "new", 5000, 300)
+	truthy(rec ~= nil)
+	eq(st, "stale-taken")
+	eq(rec.data.coins, 4)
+	local future = { data = { coins = 9 }, lock = { jobId = "old", time = 5000 + 100000 } }
+	local rec2, st2 = SessionLock.acquire(future, "new", 5000, 300)
+	eq(st2, "stale-taken")
+	eq(rec2.data.coins, 9)
+	local textTime = { data = { coins = 2 }, lock = { jobId = "old", time = "5000" } }
+	local rec3, st3 = SessionLock.acquire(textTime, "new", 5000, 300)
+	eq(st3, "stale-taken")
+	eq(rec3.data.coins, 2)
+end)
+test("session lock: force takes a lock another server still holds", function()
+	local rec = SessionLock.acquire(nil, "server-A", 1000, 300)
+	local blocked, st = SessionLock.acquire(rec, "server-B", 1010, 300)
+	eq(blocked, nil)
+	eq(st, "locked")
+	local taken, st2 = SessionLock.acquire(rec, "server-B", 1010, 300, true)
+	truthy(taken ~= nil)
+	eq(st2, "stale-taken")
+	eq(taken.lock.jobId, "server-B")
+end)
+test("a service start() throwing still loads the player and assigns a plot", function()
+	local Boot = require("../src/server/Boot")
+	local player = { Name = "Casey", UserId = 7 }
+	local loaded = false
+	local plot = nil
+	local Data = {
+		start = function() end,
+		load = function(p)
+			eq(p, player)
+			loaded = true
+		end,
+	}
+	local World = {
+		assignPlot = function(p)
+			eq(p, player)
+			plot = 1
+			return 1
+		end,
+	}
+	local Game = {
+		init = function() end,
+		start = function()
+			Data.load(player)
+			plot = World.assignPlot(player)
+		end,
+	}
+	local Broken = {
+		init = function() end,
+		start = function()
+			error("MarketplaceService:GetUserSubscriptionStatusAsync is not a valid member")
+		end,
+	}
+	Boot.run({ Data = Data, World = World, Game = Game, Broken = Broken }, { "World", "Game", "Broken" }, { "Game" }, { "Broken", "World" })
+	truthy(loaded, "player data still loads")
+	eq(plot, 1)
+end)
 test("session lock: only the holder can save; release clears lock", function()
 	local rec = SessionLock.acquire(nil, "A", 0, 300)
 	local bad = SessionLock.save(rec, "B", 10, { coins = 1 }, false)

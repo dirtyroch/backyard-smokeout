@@ -1170,7 +1170,8 @@ local function snapshot(player: Player, data: any): any
 		saturday = GameService.isSaturday(),
 		suds = GameService.isSudsWeekend(),
 		rotation = CookOff.rotation(Config.RotationPool, Config.ROTATION_FEATURED, week),
-		memoryOnly = ctx.Data.isStudioMemoryMode(player),
+		memoryOnly = RunService:IsStudio() and ctx.Data.isStudioMemoryMode(player),
+		degraded = (not RunService:IsStudio()) and ctx.Data.isStudioMemoryMode(player),
 		studio = RunService:IsStudio(),
 		productIds = ctx.Purchase.availability(),
 		giftsHeld = data.giftsHeld,
@@ -1239,6 +1240,27 @@ local function spawnCustomer(player: Player, data: any, r: Runtime)
 end
 
 -- ===== Lifecycle =====
+local function guard(label: string, fn: () -> ())
+	-- Return a value so xpcall's type has a success flag and an error to unpack.
+	local ok, err = xpcall(function(): string?
+		fn()
+		return nil
+	end, debug.traceback)
+	if not ok then
+		warn("[GameService] " .. label .. " failed:\n" .. tostring(err))
+	end
+end
+
+local function serverNow(): number
+	local ok, t = pcall(function()
+		return workspace:GetServerTimeNow()
+	end)
+	if ok and type(t) == "number" then
+		return t
+	end
+	return os.clock()
+end
+
 local function onLoaded(player: Player, profile: any, isNew: boolean)
 	-- onLoaded is a (deferred) event: the player may already have left and been released.
 	if not player.Parent or ctx.Data.get(player) ~= profile then
@@ -1257,7 +1279,7 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 		crew = 0,
 		customers = {},
 		nextCustomerId = 0,
-		nextSpawn = T() + 3,
+		nextSpawn = serverNow() + 3,
 		lastAutoServe = 0,
 		snagLockUntil = 0,
 		snagCooldownUntil = 0,
@@ -1267,61 +1289,126 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 		cookoffReadyAt = 0,
 		announcedDone = {},
 	}
+	-- Runtime goes in before any yielding call. Until it exists, every action
+	-- returns "Still loading your ranch..." and prompts no-op.
 	GameService.runtime[player] = r
-	r.passes = ctx.Purchase.loadPasses(player)
-	-- loadPasses yields (game pass checks). If they left meanwhile, onRemoving already cleaned up;
-	-- stop here so we don't hand a plot (and a runtime) to someone who's gone.
+
+	-- The plot and the first snapshot happen before pass checks, season sync, or
+	-- cosmetics. Those call Marketplace / friends / the map and must not be able
+	-- to leave a joined player with no plot and no push.
+	local plotOk, plotIndex = pcall(function()
+		return ctx.World.assignPlot(player)
+	end)
+	if plotOk and type(plotIndex) == "number" then
+		r.plot = plotIndex
+	elseif not plotOk then
+		warn("[GameService] assignPlot failed:\n" .. tostring(plotIndex))
+	end
+	guard("push", function()
+		GameService.push(player)
+	end)
 	if not player.Parent or GameService.runtime[player] ~= r then
 		if GameService.runtime[player] == r then
 			GameService.runtime[player] = nil
 		end
 		return
 	end
-	if Rookie.shouldSkip(data.rookie, data.tutorial.done, data.stats, Config.ROOKIE_VETERAN_SERVES) then
-		data.rookie.skipped = true
-	end
+
+	-- Pass ownership yields (UserOwnsGamePassAsync has no engine timeout). It used
+	-- to run before assignPlot, so a hung web call left the ranch on the loading screen.
+	task.spawn(function()
+		if not player.Parent or GameService.runtime[player] ~= r then
+			return
+		end
+		local ok, passes = pcall(function()
+			return ctx.Purchase.loadPasses(player)
+		end)
+		if not player.Parent or GameService.runtime[player] ~= r then
+			return
+		end
+		if ok and type(passes) == "table" then
+			r.passes = passes
+		else
+			warn("[GameService] loadPasses failed: " .. tostring(passes))
+		end
+		guard("passes-refresh", function()
+			ctx.World.refreshStations(player)
+			ctx.Cosmetics.apply(player)
+		end)
+		GameService.markDirty(player)
+	end)
+
+	guard("rookie", function()
+		if Rookie.shouldSkip(data.rookie, data.tutorial.done, data.stats, Config.ROOKIE_VETERAN_SERVES) then
+			data.rookie.skipped = true
+		end
+	end)
 
 	-- Offline progress: one jump from the saved `last` of each cook to now.
 	local readyBefore = 0
-	for _, cook in pairs(data.stations) do
-		if type(cook) == "table" and CookLogic.isDone(cook) then
-			readyBefore += 1
-		end
-	end
-	advanceAll(player, data, T(), false)
 	local readyAfter = 0
-	for key, cook in pairs(data.stations) do
-		if type(cook) == "table" and CookLogic.isDone(cook) then
-			readyAfter += 1
-			r.announcedDone[key] = true
+	guard("offline", function()
+		for _, cook in pairs(data.stations) do
+			if type(cook) == "table" and CookLogic.isDone(cook) then
+				readyBefore += 1
+			end
 		end
-	end
+		advanceAll(player, data, serverNow(), false)
+		for key, cook in pairs(data.stations) do
+			if type(cook) == "table" and CookLogic.isDone(cook) then
+				readyAfter += 1
+				r.announcedDone[key] = true
+			end
+		end
+	end)
 
-	PitmasterPath.registerPlayDay(data.path, r.today)
-	ctx.Season.sync(player, data)
-	ctx.Membership.onLoaded(player, data)
-	local rank = Config.Ranks[data.rank]
-	if rank and rank.unlock then
-		data.owned[rank.unlock] = true
-	end
+	guard("season", function()
+		PitmasterPath.registerPlayDay(data.path, r.today)
+		ctx.Season.sync(player, data)
+	end)
+	guard("membership", function()
+		ctx.Membership.onLoaded(player, data)
+	end)
+	guard("rank", function()
+		local rank = Config.Ranks[data.rank]
+		if rank and rank.unlock then
+			data.owned[rank.unlock] = true
+		end
+	end)
+	guard("social", function()
+		ctx.Social.onJoin(player)
+	end)
+	guard("cosmetics", function()
+		ctx.Cosmetics.apply(player)
+	end)
+	guard("stations", function()
+		ctx.World.refreshStations(player)
+	end)
+	guard("push", function()
+		GameService.push(player)
+	end)
 
-	r.plot = ctx.World.assignPlot(player)
-	ctx.Social.onJoin(player)
-	ctx.Cosmetics.apply(player)
-	ctx.World.refreshStations(player)
-	GameService.push(player)
-
-	if isNew then
-		ctx.Remotes.Push:FireClient(player, "welcome", { isNew = true })
-	elseif readyAfter > readyBefore and lastSeen > 0 then
-		local away = os.time() - lastSeen
-		ctx.Remotes.Push:FireClient(player, "welcome", { isNew = false, away = away, ready = readyAfter - readyBefore })
-	else
-		ctx.Remotes.Push:FireClient(player, "welcome", { isNew = false })
+	if not player.Parent then
+		return
 	end
-	if ctx.Data.isStudioMemoryMode(player) then
-		GameService.toast(player, "Studio test mode: saving is off. Turn on 'Enable Studio Access to API Services' to test saving.", "warn")
-	end
+	guard("welcome", function()
+		-- A failed live load has empty data, so it looks brand new. Don't play the first-visit
+		-- script over a ranch we simply couldn't read. Studio memory mode is a real test session.
+		local degraded = profile.memoryOnly and not RunService:IsStudio()
+		if isNew and not degraded then
+			ctx.Remotes.Push:FireClient(player, "welcome", { isNew = true })
+		elseif readyAfter > readyBefore and lastSeen > 0 then
+			local away = os.time() - lastSeen
+			ctx.Remotes.Push:FireClient(player, "welcome", { isNew = false, away = away, ready = readyAfter - readyBefore })
+		elseif not degraded then
+			ctx.Remotes.Push:FireClient(player, "welcome", { isNew = false })
+		end
+		if profile.memoryOnly and RunService:IsStudio() then
+			GameService.toast(player, "Studio test mode: saving is off. Turn on 'Enable Studio Access to API Services' to test saving.", "warn")
+		elseif profile.memoryOnly then
+			GameService.toast(player, "Roblox save servers didn't answer, so this visit won't be saved. Your real ranch is untouched. Try rejoining in a minute.", "warn")
+		end
+	end)
 end
 
 local function onRemoving(player: Player)
@@ -1485,7 +1572,13 @@ function GameService.start()
 			task.wait(0.25)
 			for player, r in pairs(GameService.runtime) do
 				if r.dirty then
-					GameService.push(player)
+					local okPush, errPush = pcall(function(): nil
+						GameService.push(player)
+						return nil
+					end)
+					if not okPush then
+						warn("[GameService] push failed: " .. tostring(errPush))
+					end
 				end
 			end
 		end

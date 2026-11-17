@@ -199,11 +199,18 @@ function MembershipService.init(c: any)
 end
 
 function MembershipService.start()
-	Players.UserSubscriptionStatusChanged:Connect(function(player: Player, subscriptionId: string)
-		if subscriptionId == CLUB.id then
-			refreshClub(player)
-		end
+	-- The subscription event is live-server only. Indexing it must not be fatal if an
+	-- older engine build doesn't have it; the club id is empty until it's created anyway.
+	local okSub, errSub = pcall(function()
+		Players.UserSubscriptionStatusChanged:Connect(function(player: Player, subscriptionId: string)
+			if subscriptionId == CLUB.id and CLUB.id ~= "" then
+				refreshClub(player)
+			end
+		end)
 	end)
+	if not okSub then
+		warn("[Membership] UserSubscriptionStatusChanged: " .. tostring(errSub))
+	end
 	Players.PlayerMembershipChanged:Connect(function(player: Player)
 		refreshPremium(player)
 		ctx.Game.markDirty(player)

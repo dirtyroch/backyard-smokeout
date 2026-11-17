@@ -1,22 +1,59 @@
 --!strict
 -- Client entry: builds the whole UI in code and connects server pushes to it.
+-- A module that throws must not skip the "ask again for my snapshot" loop, or the
+-- panel stays on "Your ranch is still loading" after a missed first push.
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local UI = require(script.Parent.UI)
+local function tryRequire(mod: ModuleScript, name: string): any
+	-- pcall(require, mod) instead of require(mod): a thrown module must not kill the
+	-- snapshot retry that was already spawned, and the path is not a literal require().
+	local ok, result = pcall(require, mod)
+	if not ok then
+		warn("[Client] " .. name .. " failed to load:\n" .. tostring(result))
+		return nil
+	end
+	return result
+end
+
+-- Net is required directly so a later module can throw without taking the retry with it.
 local Net = require(script.Parent.Net)
-local Fx = require(script.Parent.Fx)
-local Hud = require(script.Parent.Hud)
-local Panels = require(script.Parent.Panels)
-local WorldClient = require(script.Parent.WorldClient)
-local Ambient = require(script.Parent.Ambient)
-local Sfx = require(script.Parent.Sfx)
-local Music = require(script.Parent.Music)
-local RookieGuide = require(script.Parent.RookieGuide)
+
+-- Keep asking until a snapshot arrives. The server also pushes on load; this covers
+-- a push that landed before this client was listening, and a load that finished late.
+-- Spawned before the other requires: if one of those throws, this loop is already running.
+task.spawn(function()
+	local pause = 1.5
+	while not Net.state do
+		task.wait(pause)
+		if Net.state then
+			break
+		end
+		pcall(function(): nil
+			Net.pull()
+			return nil
+		end)
+		pause = math.min(pause * 1.4, 8)
+	end
+end)
+
+local UI = tryRequire(script.Parent.UI, "UI")
+local Fx = tryRequire(script.Parent.Fx, "Fx")
+local Hud = tryRequire(script.Parent.Hud, "Hud")
+local Panels = tryRequire(script.Parent.Panels, "Panels")
+local WorldClient = tryRequire(script.Parent.WorldClient, "WorldClient")
+local Ambient = tryRequire(script.Parent.Ambient, "Ambient")
+local Sfx = tryRequire(script.Parent.Sfx, "Sfx")
+local Music = tryRequire(script.Parent.Music, "Music")
+local RookieGuide = tryRequire(script.Parent.RookieGuide, "RookieGuide")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Config = require(Shared.Config)
-local Content = require(Shared.Content)
+local Config = tryRequire(Shared:WaitForChild("Config") :: ModuleScript, "Config")
+local Content = tryRequire(Shared:WaitForChild("Content") :: ModuleScript, "Content")
+if not (UI and Fx and Hud and Panels and Sfx and Music and RookieGuide and Config and Content) then
+	warn("[Client] UI did not finish loading. The snapshot retry is still running.")
+	return
+end
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -48,8 +85,22 @@ if workspace.CurrentCamera then
 	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
 end
 Net.notify = Fx.toast
-WorldClient.start(Panels)
-task.spawn(Ambient.start)
+if WorldClient then
+	local okWorld, errWorld = xpcall(function()
+		WorldClient.start(Panels)
+	end, debug.traceback)
+	if not okWorld then
+		warn("[Client] WorldClient.start failed:\n" .. tostring(errWorld))
+	end
+end
+if Ambient then
+	task.spawn(function()
+		local okAmbient, errAmbient = xpcall(Ambient.start, debug.traceback)
+		if not okAmbient then
+			warn("[Client] Ambient.start failed:\n" .. tostring(errAmbient))
+		end
+	end)
+end
 
 pcall(function()
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
@@ -131,12 +182,3 @@ task.spawn(function()
 		end
 	end
 end)
-
--- Ask for a first snapshot (the server also pushes one when your data loads).
-task.delay(2, function()
-	if not Net.state then
-		Net.act("Hello")
-	end
-end)
-
-local _ = Config
