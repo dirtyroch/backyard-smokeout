@@ -12,6 +12,7 @@ local Config = require(Shared.Config)
 local Content = require(Shared.Content)
 local Rookie = require(Shared.Logic.Rookie)
 local Net = require(script.Parent.Net)
+local Hud = require(script.Parent.Hud)
 local T = UI.Theme
 
 local RookieGuide = {}
@@ -95,13 +96,27 @@ function RookieGuide.applyLayout()
 	if not card then
 		return
 	end
-	local v = UI.viewport
-	if UI.compact then
+	local b = Hud.box("rookie")
+	local placed = b ~= nil and b.w > 0 and b.h > 0
+	local short = UI.compact or (placed and b.h < 150)
+	if placed then
+		local w = math.max(1, UI.viewport.X)
+		local h = math.max(1, UI.viewport.Y)
+		card.AnchorPoint = Vector2.new(0, 0)
+		card.Position = UDim2.fromScale(b.x / w, b.y / h)
+		card.Size = UDim2.fromScale(b.w / w, b.h / h)
+	elseif short then
 		local top = UI.topChrome
-		local height = math.max(92, v.Y - top - UI.stationReserve)
+		local height = math.max(92, UI.viewport.Y - top - UI.stationReserve)
 		card.AnchorPoint = Vector2.new(0, 0)
 		card.Position = UDim2.new(0, 8, 0, top)
 		card.Size = UDim2.new(1, -16, 0, height)
+	else
+		card.AnchorPoint = Vector2.new(1, 0)
+		card.Position = UDim2.new(1, -16, 0, 68)
+		card.Size = UDim2.new(0, W, 0, H)
+	end
+	if short then
 		refs.head.Size = UDim2.new(1, -150, 0, 22)
 		refs.count.Position = UDim2.new(1, -100, 0, 0)
 		refs.goal.Position = UDim2.new(0, 0, 0, 22)
@@ -122,9 +137,6 @@ function RookieGuide.applyLayout()
 			refs.skip.Size = UDim2.fromOffset(88, 44)
 		end
 	else
-		card.AnchorPoint = Vector2.new(1, 0)
-		card.Position = UDim2.new(1, -16, 0, 68)
-		card.Size = UDim2.new(0, W, 0, H)
 		refs.head.Size = UDim2.new(1, -168, 0, 28)
 		refs.count.Position = UDim2.new(1, -100, 0, 2)
 		refs.goal.Position = UDim2.new(0, 0, 0, 50)
@@ -272,6 +284,12 @@ local TAGS = { grill = "Flip here!", tables = "Hungry critters!", smoker = "Smok
 function RookieGuide.update(s: any)
 	if not refs.card then
 		return
+	end
+	local b = Hud.box("rookie")
+	local key = if b then string.format("%d,%d,%d,%d", b.x, b.y, b.w, b.h) else ""
+	if key ~= refs.boxKey then
+		refs.boxKey = key
+		RookieGuide.applyLayout()
 	end
 	local st = s and s.rookie
 	if not st or st.finished or not s.tutorial or not s.tutorial.done then

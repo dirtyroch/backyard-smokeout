@@ -16,6 +16,7 @@ local Income = require(Shared.Logic.Income)
 local Staff = require(Shared.Logic.Staff)
 local Economy = require(Shared.Logic.Economy)
 local Goals = require(Shared.Logic.Goals)
+local HudLayout = require(Shared.Logic.HudLayout)
 local T = UI.Theme
 
 local Hud = {}
@@ -220,6 +221,7 @@ function Hud.mount(screen: GuiObject, panels: any)
 	refs.btnIndex = byId.index
 	refs.btnPath = byId.path
 	refs.btnUp = byId.upgrades
+	refs.btnCrew = byId.crew
 	refs.btnDaily = byId.daily
 	refs.btnSettings = byId.settings
 	refs.btnInvite = byId.invite
@@ -268,14 +270,15 @@ function Hud.mount(screen: GuiObject, panels: any)
 			refs.first.Visible = false
 		end
 	end)
+	local pulse = UI.new("UIScale", { Name = "Pulse", Scale = 1, Parent = refs.first })
 	task.spawn(function()
 		while true do
 			if refs.first.Visible then
-				local base = refs.first:GetAttribute("BaseW") or 460
-				local tw = TweenService:Create(refs.first, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 0, true), { Size = UDim2.new(0, base + 16, 0, 68) })
+				local tw = TweenService:Create(pulse, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 0, true), { Scale = 1.03 })
 				tw:Play()
 				tw.Completed:Wait()
 			else
+				pulse.Scale = 1
 				task.wait(0.5)
 			end
 		end
@@ -299,43 +302,72 @@ function Hud.mount(screen: GuiObject, panels: any)
 	Hud.applyLayout()
 end
 
+local function place(gui: GuiObject, b: { x: number, y: number, w: number, h: number })
+	local w = math.max(1, UI.viewport.X)
+	local h = math.max(1, UI.viewport.Y)
+	gui.AnchorPoint = Vector2.new(0, 0)
+	if b.w <= 0 or b.h <= 0 then
+		gui.Position = UDim2.fromOffset(0, 0)
+		gui.Size = UDim2.fromOffset(0, 0)
+		return
+	end
+	gui.Position = UDim2.fromScale(b.x / w, b.y / h)
+	gui.Size = UDim2.fromScale(b.w / w, b.h / h)
+end
+
+function Hud.layoutOptions(): HudLayout.Options
+	local s = Net.state
+	local guideOn = s ~= nil and s.guide ~= nil and s.guide.active == true
+	return {
+		guide = guideOn,
+		rookie = s ~= nil and s.rookie ~= nil and s.rookie.finished ~= true and s.tutorial ~= nil and s.tutorial.done == true,
+		goals = not guideOn,
+		hint = true,
+		first = true,
+	}
+end
+
 function Hud.applyLayout()
 	if not refs.top then
 		return
 	end
 	local v = UI.viewport
-	local compact = UI.compact
-	local stationH = if compact then 128 else 180
-	local actionH = if compact then 48 else 0
-	UI.stationReserve = stationH + actionH + (if compact then 12 else 16)
-	UI.topChrome = if compact then 156 else 116
-	local menuW = if compact then 0 else 112
-	local rightW = if compact then 0 else 204
+	local lay = HudLayout.compute(v.X, v.Y, UI.insets, Hud.layoutOptions())
+	refs.layout = lay
+	local compact = lay.compact
+	UI.stationReserve = lay.stations.h + lay.actions.h + 16
+	UI.topChrome = (lay.guide.h > 0 and (lay.guide.y + lay.guide.h) or (lay.goals.y + lay.goals.h)) - lay.safe.y
+	if UI.topChrome < lay.menu.y then
+		UI.topChrome = lay.menu.y + lay.menu.h
+	end
+
+	place(refs.top, lay.currencies)
+	place(refs.menu, lay.menu)
+	place(refs.goals, lay.goals)
+	place(refs.bar, lay.stations)
+	place(refs.first, lay.first)
+	place(refs.hint, lay.hint)
+	local pillH = math.max(40, math.min(48, lay.currencies.h))
+	refs.coinPill.Size = UDim2.fromOffset(188, pillH)
+	for _, child in ipairs(refs.top:GetChildren()) do
+		if child:IsA("GuiObject") and child ~= refs.coinPill and not child:IsA("UIListLayout") then
+			local wide = child.Size.X.Offset
+			if wide < 40 then
+				wide = 120
+			end
+			child.Size = UDim2.fromOffset(wide, pillH)
+		end
+	end
 
 	if compact then
-		refs.top.AnchorPoint = Vector2.new(0, 0)
-		refs.top.Position = UDim2.new(0, 8, 0, 2)
-		refs.top.Size = UDim2.new(1, -16, 0, 46)
-		refs.menu.Position = UDim2.new(0, 8, 0, 50)
-		refs.menu.Size = UDim2.new(1, -16, 0, 60)
-		refs.goals.AnchorPoint = Vector2.new(0, 0)
-		refs.goals.Position = UDim2.new(0, 8, 0, 114)
-		refs.goals.Size = UDim2.new(1, -16, 0, 40)
 		refs.menu.AutomaticCanvasSize = Enum.AutomaticSize.X
 		refs.menu.ScrollingDirection = Enum.ScrollingDirection.X
 		refs.menuList.FillDirection = Enum.FillDirection.Horizontal
-		for _, b in ipairs(menuButtons) do
-			b.Size = UDim2.new(0, 96, 0, 56)
-		end
-		refs.bar.Position = UDim2.new(0, 8, 1, -6)
-		refs.bar.Size = UDim2.new(1, -16, 0, stationH)
-		local bw = math.max(UI.TOUCH, math.floor((v.X - 40) / 3))
-		refs.right.AnchorPoint = Vector2.new(0, 1)
-		refs.right.Position = UDim2.new(0, 8, 1, -(stationH + 10))
-		refs.right.Size = UDim2.new(1, -16, 0, 48)
-		refs.serveAll.Size = UDim2.fromOffset(bw, 44)
-		refs.collectAll.Size = UDim2.fromOffset(bw, 44)
-		refs.homeBtn.Size = UDim2.fromOffset(bw, 44)
+		local bw = math.max(UI.TOUCH, math.floor((lay.actions.w - 16) / 3))
+		place(refs.right, lay.actions)
+		refs.serveAll.Size = UDim2.fromOffset(bw, math.max(44, lay.actions.h - 4))
+		refs.collectAll.Size = UDim2.fromOffset(bw, math.max(44, lay.actions.h - 4))
+		refs.homeBtn.Size = UDim2.fromOffset(bw, math.max(44, lay.actions.h - 4))
 		refs.rightList.FillDirection = Enum.FillDirection.Horizontal
 		refs.rightList.HorizontalAlignment = Enum.HorizontalAlignment.Left
 		refs.rightList.VerticalAlignment = Enum.VerticalAlignment.Center
@@ -344,38 +376,22 @@ function Hud.applyLayout()
 		refs.customers.Parent = refs.top
 		for index, line in ipairs({ refs.rush, refs.combo, refs.customers }) do
 			line.LayoutOrder = 20 + index
-			line.Size = UDim2.fromOffset(220, 40)
+			line.Size = UDim2.fromOffset(180, math.max(36, pillH - 4))
 			line.AutomaticSize = Enum.AutomaticSize.X
 		end
 		refs.status.Visible = false
 	else
-		refs.top.AnchorPoint = Vector2.new(0.5, 0)
-		refs.top.Position = UDim2.new(0.5, 0, 0, 8)
-		refs.top.Size = UDim2.new(0, math.min(1100, v.X - 40), 0, 52)
-		refs.goals.AnchorPoint = Vector2.new(0.5, 0)
-		refs.goals.Position = UDim2.new(0.5, 0, 0, 64)
-		local goalW = math.clamp(v.X - 780, 200, 520)
-		refs.goals.Size = UDim2.new(0, goalW, 0, 44)
-		refs.menu.Position = UDim2.new(0, 10, 0, 116)
-		refs.menu.Size = UDim2.new(0, 108, 1, -116 - stationH - 16)
 		refs.menu.AutomaticCanvasSize = Enum.AutomaticSize.Y
 		refs.menu.ScrollingDirection = Enum.ScrollingDirection.Y
 		refs.menuList.FillDirection = Enum.FillDirection.Vertical
-		for _, b in ipairs(menuButtons) do
-			b.Size = UDim2.new(0, 96, 0, 72)
-		end
-		refs.bar.Position = UDim2.new(0, menuW + 8, 1, -8)
-		refs.bar.Size = UDim2.new(1, -(menuW + rightW + 24), 0, stationH)
-		refs.right.AnchorPoint = Vector2.new(1, 1)
-		refs.right.Position = UDim2.new(1, -12, 1, -(stationH + 16))
-		refs.right.Size = UDim2.new(0, 188, 0, 164)
-		refs.serveAll.Size = UDim2.new(0, 188, 0, 52)
-		refs.collectAll.Size = UDim2.new(0, 188, 0, 48)
-		refs.homeBtn.Size = UDim2.new(0, 140, 0, 44)
+		place(refs.right, lay.right)
+		refs.serveAll.Size = UDim2.fromOffset(math.max(44, lay.right.w), 52)
+		refs.collectAll.Size = UDim2.fromOffset(math.max(44, lay.right.w), 48)
+		refs.homeBtn.Size = UDim2.fromOffset(math.max(44, lay.right.w - 48), 44)
 		refs.rightList.FillDirection = Enum.FillDirection.Vertical
 		refs.rightList.HorizontalAlignment = Enum.HorizontalAlignment.Right
 		refs.rightList.VerticalAlignment = Enum.VerticalAlignment.Bottom
-		refs.status.Visible = true
+		refs.status.Visible = lay.status.h > 0
 		refs.rush.Parent = refs.status
 		refs.combo.Parent = refs.status
 		refs.customers.Parent = refs.status
@@ -384,19 +400,52 @@ function Hud.applyLayout()
 			line.AutomaticSize = Enum.AutomaticSize.None
 			line.Size = UDim2.new(1, 0, 0, 32)
 		end
-		refs.status.AnchorPoint = Vector2.new(1, 1)
-		refs.status.Position = UDim2.new(1, -210, 1, -(stationH + 16))
-		refs.status.Size = UDim2.new(0, math.min(360, math.max(160, v.X - 460)), 0, 110)
+		place(refs.status, lay.status)
 	end
-
-	local firstW = math.clamp(v.X - 48, 260, 480)
-	refs.first:SetAttribute("BaseW", firstW)
-	refs.first.Size = UDim2.new(0, firstW, 0, 64)
-	refs.first.Position = UDim2.new(0.5, 0, 1, -(stationH + actionH + 78))
-	refs.hint.Size = UDim2.new(0, math.clamp(v.X - 48, 240, 640), 0, 44)
-	refs.hint.Position = UDim2.new(0.5, 0, 1, -(stationH + actionH + 128))
+	for _, b in ipairs(menuButtons) do
+		b.Size = UDim2.fromOffset(lay.menuButton.w, lay.menuButton.h)
+	end
 	for _, c in pairs(cards) do
 		styleCard(c)
+	end
+end
+
+function Hud.box(name: string): any
+	return refs.layout and refs.layout[name]
+end
+
+function Hud.guideTarget(id: string): GuiObject?
+	if id == "ranch" then
+		return refs.first
+	elseif id == "serve" then
+		return refs.serveAll
+	elseif id == "crew" then
+		return refs.btnCrew
+	elseif id == "gift" then
+		if refs.gift and refs.gift.Visible then
+			return refs.gift
+		end
+		return refs.btnDaily
+	end
+	return nil
+end
+
+function Hud.reveal(id: string)
+	local target = Hud.guideTarget(id)
+	if not target or not target.Parent then
+		return
+	end
+	local parent = target.Parent
+	if not parent:IsA("ScrollingFrame") then
+		return
+	end
+	local scroller = parent :: ScrollingFrame
+	local relX = target.AbsolutePosition.X - scroller.AbsolutePosition.X + scroller.CanvasPosition.X
+	local relY = target.AbsolutePosition.Y - scroller.AbsolutePosition.Y + scroller.CanvasPosition.Y
+	if scroller.ScrollingDirection == Enum.ScrollingDirection.X then
+		scroller.CanvasPosition = Vector2.new(math.max(0, relX - 8), 0)
+	else
+		scroller.CanvasPosition = Vector2.new(0, math.max(0, relY - 8))
 	end
 end
 
@@ -407,17 +456,28 @@ end
 
 function styleCard(c)
 	local compact = UI.compact
-	c.frame.Size = UDim2.new(0, if compact then 158 else 176, 0, if compact then 120 else 168)
+	local card = if refs.layout then refs.layout.stationCard else { w = if compact then 158 else 176, h = if compact then 120 else 168 }
+	c.frame.Size = UDim2.fromOffset(card.w, card.h)
+	if c.ratio then
+		c.ratio.AspectRatio = card.w / math.max(1, card.h)
+	end
+	local nameH = if compact then 20 else 36
 	c.title.Size = UDim2.new(1, 0, 0, if compact then 16 else 18)
 	c.name.Position = UDim2.new(0, 0, 0, if compact then 16 else 22)
-	c.name.Size = UDim2.new(1, c.peek.Visible and -48 or 0, 0, if compact then 20 else 40)
+	c.name.Size = UDim2.new(1, c.peek.Visible and -48 or 0, 0, nameH)
+	local barY = if compact then 36 else 62
 	if c.barBack then
-		c.barBack.Position = UDim2.new(0, 0, 0, if compact then 38 else 66)
+		c.barBack.Position = UDim2.fromOffset(0, barY)
 		c.barBack.Size = UDim2.new(1, 0, 0, if compact then 8 else 12)
 	end
 	c.time.TextWrapped = not compact
-	c.time.Position = UDim2.new(0, 0, 0, if compact then 48 else 82)
-	c.time.Size = UDim2.new(1, 0, 0, if compact then 16 else 28)
+	local timeY = barY + (if compact then 10 else 16)
+	local btnTop = card.h - 44
+	if timeY + 16 > btnTop then
+		timeY = math.max(barY + 10, btnTop - 16)
+	end
+	c.time.Position = UDim2.fromOffset(0, timeY)
+	c.time.Size = UDim2.new(1, 0, 0, 16)
 	c.peek.Position = UDim2.new(1, -44, 0, if compact then 0 else 16)
 	c.btn.Position = UDim2.new(0, 0, 1, -44)
 	c.btn.Size = UDim2.new(1, 0, 0, 44)
@@ -430,6 +490,7 @@ local function makeCard(key: string, order: number): any
 	c.stroke = UI.stroke(f, T.card, 2)
 	UI.pad(f, 6)
 	c.frame = f
+	c.ratio = UI.new("UIAspectRatioConstraint", { Name = "CardRatio", AspectRatio = 176 / 168, DominantAxis = Enum.DominantAxis.Width, Parent = f })
 	c.title = UI.label(slotName(key), { Size = UDim2.new(1, 0, 0, 18), TextSize = 16, TextColor3 = T.dim, Font = T.bold, Parent = f })
 	c.name = UI.label("Empty", { Position = UDim2.new(0, 0, 0, 22), Size = UDim2.new(1, 0, 0, 40), TextSize = 18, TextWrapped = true, Parent = f })
 	local back, fill = UI.bar(f, T.accent, { Position = UDim2.new(0, 0, 0, 66), Size = UDim2.new(1, 0, 0, 12) })
@@ -529,7 +590,11 @@ function Hud.update()
 		refs.shownCoins += diff * 0.35
 	end
 	refs.coins.Text = UI.fmt(math.floor(refs.shownCoins + 0.5))
-	refs.income.Text = Income.format(s.income or 0)
+	local rate = s.income or 0
+	if type(s.earns) == "table" then
+		rate = Income.perSecond(s.earns, workspace:GetServerTimeNow(), Income.WINDOW)
+	end
+	refs.income.Text = Income.format(rate)
 	refs.aura.Text = UI.fmt(s.aura)
 	local gift = s.freeGift
 	refs.gift.Visible = gift ~= nil and gift.ready == true
@@ -538,11 +603,12 @@ function Hud.update()
 	end
 	local roster = s.staff and s.staff.roster or {}
 	local slots = s.staff and s.staff.slots or 1
-	local hireCost = if #roster < slots then Staff.hireCost(#roster) else nil
-	local nextHand = if hireCost then Staff.preview(#roster) else nil
+	local nextHand = if #roster < slots then Staff.nextHand(roster) else nil
+	local hireCost = if nextHand then Staff.hireCost(#roster) else nil
 	local pitCost = Economy.nextPitCost(Config.PitLevels, s.pitLevel)
 	local nextPit = pitCost and Config.PitLevels[s.pitLevel + 1] or nil
 	local rookieActive = s.rookie ~= nil and s.rookie.finished ~= true
+	local guideOn = s.guide ~= nil and s.guide.active == true
 	local goal = Goals.next({
 		rookieActive = rookieActive,
 		giftReady = gift ~= nil and gift.ready == true,
@@ -554,7 +620,13 @@ function Hud.update()
 		crew = #roster,
 		crewSlots = slots,
 	})
-	refs.goals.Visible = goal ~= nil
+	refs.goals.Visible = goal ~= nil and not guideOn
+	local opts = Hud.layoutOptions()
+	local layoutKey = (if opts.guide then "g" else "") .. (if opts.rookie then "r" else "") .. (if opts.goals then "o" else "")
+	if refs.layoutKey ~= layoutKey then
+		refs.layoutKey = layoutKey
+		Hud.applyLayout()
+	end
 	if goal then
 		refs.goalAction = goal.action
 		refs.goalTitle.Text = goal.title

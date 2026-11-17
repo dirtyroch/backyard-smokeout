@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local HudMenu = require(Shared:WaitForChild("Logic"):WaitForChild("HudMenu"))
+local HudLayout = require(Shared:WaitForChild("Logic"):WaitForChild("HudLayout"))
 local Numbers = require(Shared:WaitForChild("Logic"):WaitForChild("Numbers"))
 
 local UI = {}
@@ -67,7 +68,13 @@ end
 
 function UI.setViewport(v: Vector2)
 	UI.viewport = v
-	UI.compact = v.X < 1000 or v.Y < 620
+	UI.compact = HudLayout.compact(v.X, v.Y)
+end
+
+UI.insets = { left = 0, top = 0, right = 0, bottom = 0 }
+
+function UI.setInsets(insets: { left: number, top: number, right: number, bottom: number })
+	UI.insets = insets
 end
 
 function UI.new(className: string, props: Props?, children: { Instance }?): any

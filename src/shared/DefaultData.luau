@@ -56,6 +56,7 @@ return {
 	settings = { peace = true, sfx = true, music = true, musicVolume = 0.22 }, -- snagging is opt-in; music is its own quiet loop
 	tutorial = { firstBrisket = false, done = false },
 	rookie = { claimed = 0, skipped = false, resumed = false }, -- Unc Hank's Rookie List (Logic/Rookie)
+	guide = { step = 1, done = false, skipped = false, introduced = false }, -- first-visit hints (Logic/Guide)
 	forceCritter = "",
 	jimothy = { seen = {}, lastAt = 0, rewarded = false }, -- sighting hunt (Logic/Jimothy)
 	staff = { roster = {} }, -- hired ranch hands (Logic/Staff). Empty for old saves.

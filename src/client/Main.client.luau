@@ -4,6 +4,7 @@
 -- panel stays on "Your ranch is still loading" after a missed first push.
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
+local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local function tryRequire(mod: ModuleScript, name: string): any
@@ -47,10 +48,11 @@ local Ambient = tryRequire(script.Parent.Ambient, "Ambient")
 local Sfx = tryRequire(script.Parent.Sfx, "Sfx")
 local Music = tryRequire(script.Parent.Music, "Music")
 local RookieGuide = tryRequire(script.Parent.RookieGuide, "RookieGuide")
+local GuideHint = tryRequire(script.Parent.GuideHint, "GuideHint")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = tryRequire(Shared:WaitForChild("Config") :: ModuleScript, "Config")
 local Content = tryRequire(Shared:WaitForChild("Content") :: ModuleScript, "Content")
-if not (UI and Fx and Hud and Panels and Sfx and Music and RookieGuide and Config and Content) then
+if not (UI and Fx and Hud and Panels and Sfx and Music and RookieGuide and GuideHint and Config and Content) then
 	warn("[Client] UI did not finish loading. The snapshot retry is still running.")
 	return
 end
@@ -59,16 +61,62 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local screen = UI.new("ScreenGui", { Name = "BackyardSmokeout", ResetOnSpawn = false, IgnoreGuiInset = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = playerGui })
+do
+	local applied = pcall(function()
+		local insets = (Enum :: any).ScreenInsets
+		if insets and insets.CoreUISafeInsets then
+			(screen :: any).ScreenInsets = insets.CoreUISafeInsets
+			local compat = (Enum :: any).SafeAreaCompatibility
+			if compat and compat.None then
+				(screen :: any).SafeAreaCompatibility = compat.None
+			end
+			screen.IgnoreGuiInset = true
+			screen:SetAttribute("SafeInsets", true)
+		end
+	end)
+	if not applied then
+		screen:SetAttribute("SafeInsets", false)
+	end
+end
 -- Text stays full size on phones. Layouts reflow (Hud.applyLayout, Panels.applyLayout)
--- instead of shrinking every letter with a UIScale.
+-- instead of shrinking every letter with a UIScale. CoreUISafeInsets keeps the
+-- notch and the home indicator outside this screen. If that enum is missing,
+-- the leftover bottom and side insets are padded by hand.
 local root = UI.new("Frame", { Name = "Root", BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), Parent = screen })
+local function safeInsets(): { left: number, top: number, right: number, bottom: number }
+	if screen:GetAttribute("SafeInsets") == true then
+		return { left = 0, top = 0, right = 0, bottom = 0 }
+	end
+	local topLeft = Vector2.zero
+	local bottomRight = Vector2.zero
+	pcall(function()
+		local a, b = GuiService:GetGuiInset()
+		if typeof(a) == "Vector2" then
+			topLeft = a
+		end
+		if typeof(b) == "Vector2" then
+			bottomRight = b
+		end
+	end)
+	return {
+		left = math.max(0, topLeft.X),
+		top = 0,
+		right = math.max(0, bottomRight.X),
+		bottom = math.max(0, bottomRight.Y),
+	}
+end
 local function rescale()
-	local cam = workspace.CurrentCamera
-	local v = cam and cam.ViewportSize or Vector2.new(1280, 720)
+	local v = root.AbsoluteSize
+	if v.X < 80 or v.Y < 80 then
+		local cam = workspace.CurrentCamera
+		v = cam and cam.ViewportSize or Vector2.new(1280, 720)
+	end
 	UI.setViewport(v)
+	UI.setInsets(safeInsets())
 	Hud.applyLayout()
 	Panels.applyLayout()
 	RookieGuide.applyLayout()
+	GuideHint.applyLayout()
 end
 
 Sfx.mount()
@@ -80,7 +128,9 @@ Fx.mount(root)
 Panels.mount(root)
 Hud.mount(root, Panels)
 RookieGuide.mount(root)
+GuideHint.mount(root)
 rescale()
+root:GetPropertyChangedSignal("AbsoluteSize"):Connect(rescale)
 if workspace.CurrentCamera then
 	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
 end
@@ -178,6 +228,7 @@ task.spawn(function()
 		local ok, err = pcall(function(): any
 			Hud.update()
 			RookieGuide.update(Net.state)
+			GuideHint.update(Net.state)
 			if Net.state and Net.state.settings then
 				local want = Net.state.settings.sfx ~= false
 				if want ~= Sfx.isEnabled() then

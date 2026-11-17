@@ -897,6 +897,14 @@ local function renderDaily(s: any)
 	UI.list(row, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Center)
 	local count = s.streak.count
 	local nextDay = s.canClaimDaily and ((count % 7) + 1) or (((count - 1) % 7) + 1)
+	local previewCount = if s.canClaimDaily then count + 1 else math.max(count, 1)
+	if type(s.today) == "number" and s.streak then
+		local look = Streak.forecast(s.streak, s.today)
+		if look.ok then
+			previewCount = look.count
+			nextDay = look.cycleDay
+		end
+	end
 	for i, r in ipairs(Config.DailyRewards) do
 		local isNext = i == nextDay and s.canClaimDaily
 		local done = (not s.canClaimDaily and i <= nextDay) or (s.canClaimDaily and i < nextDay)
@@ -908,7 +916,6 @@ local function renderDaily(s: any)
 		mark.AnchorPoint = Vector2.new(0.5, 0)
 		mark.Position = UDim2.new(0.5, 0, 0, 26)
 		mark.ZIndex = 24
-		local previewCount = if s.canClaimDaily then count + 1 else math.max(count, 1)
 		local txt = UI.fmt(Streak.payout(r.coins, previewCount, Economy.rankMult(s.rank, Config.RANK_STEP)))
 		if r.sauce then
 			txt ..= "\n+ " .. Config.Sauces[r.sauce].name
@@ -1175,7 +1182,7 @@ local function renderCrew(s: any)
 	local intro = card(sf, 0, waiter and 78 or 64)
 	intro.BackgroundTransparency = 1
 	lbl(intro, "Hands you hire cook, carry plates and serve. Your first grill and first smoker stay yours. Jimothy the Waiter is a separate pass: he serves food you already cooked, and he makes the crew walk a little faster.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 14, Font = T.body, TextColor3 = T.dim })
-	local nextHand = if #roster < slots then Staff.preview(#roster) else nil
+	local nextHand = if #roster < slots then Staff.nextHand(roster) else nil
 	local cost = if nextHand then Staff.hireCost(#roster) else nil
 	if nextHand and cost then
 		local hire = card(sf, 1, 92)

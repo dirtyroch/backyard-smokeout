@@ -7,6 +7,7 @@
 	The first grill and the first smoker stay the player's. Crew uses the rest.
 ]]
 local Economy = if script ~= nil and script.Parent ~= nil then require(script.Parent.Economy) else require("./Economy")
+local FreeGift = if script ~= nil and script.Parent ~= nil then require(script.Parent.FreeGift) else require("./FreeGift")
 
 local Staff = {}
 
@@ -139,6 +140,147 @@ end
 
 function Staff.preview(have: number): Hand?
 	return Staff.HANDS[have + 1]
+end
+
+-- The next hand who is not already on the roster, in catalog order.
+-- Indexing by roster length hired a duplicate when an earlier id had been dropped.
+function Staff.nextHand(roster: { any }): Hand?
+	local seen: { [string]: boolean } = {}
+	for _, e in ipairs(roster) do
+		if type(e) == "table" and type(e.id) == "string" then
+			seen[e.id] = true
+		end
+	end
+	for _, h in ipairs(Staff.HANDS) do
+		if not seen[h.id] then
+			return h
+		end
+	end
+	return nil
+end
+
+local function finiteNumber(n: any): number?
+	if type(n) ~= "number" or n ~= n or n == math.huge or n == -math.huge then
+		return nil
+	end
+	return n
+end
+
+-- Coins left after paying `cost`, or nil when the spend is not allowed.
+-- NaN, infinity, a non-positive cost, and a balance that would go below zero all refuse.
+function Staff.takeCoins(coins: any, cost: any): number?
+	local have = finiteNumber(coins)
+	local price = finiteNumber(cost)
+	if not have or not price or price <= 0 or have < price then
+		return nil
+	end
+	local left = have - price
+	if left ~= left or left < 0 then
+		return nil
+	end
+	return left
+end
+
+export type HireOutcome = {
+	ok: boolean,
+	reason: string,
+	cost: number?,
+	coins: number,
+	employee: Employee?,
+}
+
+function Staff.hireMessage(reason: string, cost: number?): string
+	if reason == "coins" and cost then
+		return string.format("You need %d coins.", cost)
+	elseif reason == "slots" then
+		return "Upgrade your pit to hire another hand."
+	elseif reason == "full" then
+		return "The crew is full."
+	end
+	return "You can't hire right now."
+end
+
+-- Does not mutate `roster`. The caller inserts `employee` only after this returns ok.
+function Staff.tryHire(roster: { any }, pitLevel: any, coins: any): HireOutcome
+	local level = finiteNumber(pitLevel) or 1
+	local slots = Staff.slots(level)
+	if slots ~= slots then
+		slots = 1
+	end
+	if #roster >= slots then
+		return { ok = false, reason = "slots", coins = if finiteNumber(coins) then coins :: number else 0 }
+	end
+	local hand = Staff.nextHand(roster)
+	local cost = Staff.hireCost(#roster)
+	if not hand or not cost or Staff.find(roster :: { Employee }, hand.id) then
+		return { ok = false, reason = "full", coins = if finiteNumber(coins) then coins :: number else 0 }
+	end
+	local left = Staff.takeCoins(coins, cost)
+	if not left then
+		return { ok = false, reason = "coins", cost = cost, coins = if finiteNumber(coins) then coins :: number else 0 }
+	end
+	return {
+		ok = true,
+		reason = "ok",
+		cost = cost,
+		coins = left,
+		employee = {
+			id = hand.id,
+			name = hand.name,
+			species = hand.species,
+			role = hand.role,
+			speed = 1,
+			capacity = 1,
+			quality = 1,
+		},
+	}
+end
+
+export type UpgradeOutcome = {
+	ok: boolean,
+	reason: string,
+	cost: number?,
+	coins: number,
+	stat: string?,
+	from: number?,
+	level: number?,
+}
+
+function Staff.upgradeMessage(reason: string, cost: number?): string
+	if reason == "coins" and cost then
+		return string.format("You need %d coins.", cost)
+	elseif reason == "max" then
+		return "That's as high as it goes."
+	elseif reason == "missing" then
+		return "That hand isn't on the crew."
+	end
+	return "Bad request."
+end
+
+-- Does not mutate the employee. `from` is the level this price was quoted for,
+-- so a second in-flight upgrade of the same level can be refused.
+function Staff.tryUpgrade(roster: { any }, id: any, stat: any, coins: any): UpgradeOutcome
+	local balance = if finiteNumber(coins) then coins :: number else 0
+	if type(id) ~= "string" or #id > 32 or (stat ~= "speed" and stat ~= "capacity" and stat ~= "quality") then
+		return { ok = false, reason = "bad", coins = balance }
+	end
+	local e = Staff.find(roster :: { Employee }, id)
+	if not e then
+		return { ok = false, reason = "missing", coins = balance }
+	end
+	local from = finiteNumber((e :: any)[stat])
+	if not from then
+		return { ok = false, reason = "max", coins = balance }
+	end
+	local cost = Staff.upgradeCost(stat, from)
+	if not cost then
+		return { ok = false, reason = "max", coins = balance }
+	end
+	local left = Staff.takeCoins(coins, cost)
+	if not left then
+		return { ok = false, reason = "coins", cost = cost, coins = balance }
+	end
+	return { ok = true, reason = "ok", cost = cost, coins = left, stat = stat, from = from, level = from + 1 }
 end
 
 function Staff.hireCost(have: number): number?
@@ -296,11 +438,7 @@ function Staff.normalize(data: any)
 		end
 	end
 	data.staff.roster = clean
-	if type(data.freeGift) ~= "table" then
-		data.freeGift = { nextAt = 0 }
-	elseif type(data.freeGift.nextAt) ~= "number" then
-		data.freeGift.nextAt = 0
-	end
+	data.freeGift = FreeGift.normalize(data.freeGift, nil)
 end
 
 function Staff.signature(roster: { any }, slots: number): string

@@ -34,6 +34,8 @@ local Income = require("../src/shared/Logic/Income")
 local Staff = require("../src/shared/Logic/Staff")
 local FreeGift = require("../src/shared/Logic/FreeGift")
 local Goals = require("../src/shared/Logic/Goals")
+local Guide = require("../src/shared/Logic/Guide")
+local HudLayout = require("../src/shared/Logic/HudLayout")
 local DefaultData = require("../src/shared/DefaultData")
 local function fs_read(path: string): string
 	return require("@lune/fs").readFile(path)
@@ -2473,6 +2475,276 @@ test("every shop grant exists, and nothing on the coin menu is accidentally free
 		end
 	end
 	truthy(Config.Cosmetics.starter_hat ~= nil)
+end)
+
+print("Crew authority, streak clock, gift clock, income window")
+test("hiring cannot duplicate a hand, cannot go negative, and stops when the slots or the catalog run out", function()
+	local coins = 100000
+	local roster = {}
+	local seen: { [string]: boolean } = {}
+	for _ = 1, 12 do
+		local outcome = Staff.tryHire(roster, 5, coins)
+		if not outcome.ok then
+			break
+		end
+		truthy(outcome.employee)
+		truthy(not seen[outcome.employee.id], "hired " .. outcome.employee.id .. " twice")
+		seen[outcome.employee.id] = true
+		truthy(outcome.coins >= 0)
+		truthy(outcome.coins == coins - (outcome.cost or 0))
+		table.insert(roster, outcome.employee)
+		coins = outcome.coins
+	end
+	eq(#roster, 5)
+	eq(roster[1].id, "pip")
+	eq(Staff.tryHire(roster, 5, coins).ok, false)
+	local broke = Staff.tryHire({}, 1, 249)
+	eq(broke.ok, false)
+	eq(broke.reason, "coins")
+	eq(broke.coins, 249)
+	local exact = Staff.tryHire({}, 1, 250)
+	eq(exact.ok, true)
+	eq(exact.coins, 0)
+	eq(Staff.tryHire({}, 1, 0 / 0).ok, false)
+	eq(Staff.tryHire({}, 1, -20).ok, false)
+	eq(Staff.tryHire({}, 1, math.huge).ok, false)
+	-- a dropped id must not hire someone who is already on the crew
+	local gapped = {
+		{ id = "pip", name = "Pip", species = "raccoon", role = "grill", speed = 1, capacity = 1, quality = 1 },
+		{ id = "mango", name = "Mango", species = "clapcat", role = "floor", speed = 1, capacity = 1, quality = 1 },
+	}
+	local fill = Staff.tryHire(gapped, 5, 100000)
+	eq(fill.ok, true)
+	eq(fill.employee.id, "dottie")
+	eq(Staff.tryHire({}, 1, 100000).ok, true)
+	eq(Staff.tryHire({ { id = "pip", speed = 1, capacity = 1, quality = 1 } }, 1, 100000).reason, "slots")
+end)
+test("upgrades charge once per level and refuse a second quote for the same level", function()
+	local pip = Staff.template(0)
+	local roster = { pip }
+	local poor = Staff.tryUpgrade(roster, "pip", "speed", 0)
+	eq(poor.ok, false)
+	eq(pip.speed, 1)
+	local cost = Staff.upgradeCost("speed", 1)
+	local up = Staff.tryUpgrade(roster, "pip", "speed", cost)
+	eq(up.ok, true)
+	eq(up.coins, 0)
+	eq(up.level, 2)
+	eq(up.from, 1)
+	eq(pip.speed, 1, "quote does not mutate")
+	pip.speed = up.level
+	eq(Staff.tryUpgrade(roster, "pip", "speed", 0).ok, false)
+	for _ = 1, 6 do
+		local quote = Staff.tryUpgrade(roster, "pip", "speed", 10 ^ 9)
+		if not quote.ok then
+			break
+		end
+		truthy(quote.level == pip.speed + 1)
+		pip.speed = quote.level
+	end
+	eq(pip.speed, Staff.MAX)
+	eq(Staff.tryUpgrade(roster, "pip", "speed", 10 ^ 9).reason, "max")
+	eq(Staff.tryUpgrade(roster, "pip", "coins", 10 ^ 9).reason, "bad")
+	eq(Staff.tryUpgrade(roster, "nope", "speed", 10 ^ 9).reason, "missing")
+	local burst = RateLimiter.new(6, 3)
+	local allowed = 0
+	for _ = 1, 10 do
+		if burst:allow("hire", 0) then
+			allowed += 1
+		end
+	end
+	eq(allowed, 6, "remote hire spam stops at the action burst")
+	local game = fs_read("src/server/Services/GameService.luau")
+	truthy(string.find(game, "actionLimiter:allow", 1, true) ~= nil)
+	truthy(string.find(game, "acting[player]", 1, true) ~= nil, "a yielding action cannot run twice")
+	truthy(string.find(game, "FreeGift.claim(data.freeGift, now)", 1, true) ~= nil)
+	truthy(string.find(game, "local now = os.time()", 1, true) ~= nil)
+end)
+test("streak day boundary, rejoin, and soft-reset preview match the coins the server pays", function()
+	local offset = -6
+	-- 2026-11-07 06:00 UTC is Texas midnight opening that Saturday. One second earlier is still Friday.
+	local days = 20764
+	local midnight = days * 86400 + 6 * 3600
+	eq(TimeUtil.dayNumber(midnight, offset), days)
+	eq(TimeUtil.dayNumber(midnight - 1, offset), days - 1)
+	local s = Streak.new()
+	local yesterday = TimeUtil.dayNumber(midnight - 1, offset)
+	eq(Streak.claim(s, yesterday).count, 1)
+	-- the "never claimed" sentinel is -1, which is also a real day number near the epoch
+	local fresh = Streak.new()
+	eq(Streak.claim(fresh, -1).ok, true)
+	eq(fresh.count, 1)
+	eq(Streak.claim(fresh, -1).ok, false, "the sentinel day cannot be claimed twice")
+	local rejoined = { lastDay = s.lastDay, count = s.count, best = s.best, freeMissWeek = s.freeMissWeek }
+	local again = Streak.forecast(rejoined, yesterday)
+	eq(again.ok, false)
+	eq(rejoined.count, 1, "forecast does not change the saved streak")
+	eq(Streak.canClaim(rejoined, yesterday), false)
+	local today = TimeUtil.dayNumber(midnight + 30, offset)
+	eq(Streak.claim(s, today).count, 2)
+	-- seven days in, then a long gap: the card used to preview count+1 (week 2)
+	local week = Streak.new()
+	for d = 1, 7 do
+		Streak.claim(week, d)
+	end
+	eq(week.count, 7)
+	local look = Streak.forecast(week, 20)
+	eq(look.ok, true)
+	eq(look.softReset, true)
+	eq(look.count, 1)
+	eq(week.count, 7, "forecast leaves the profile alone")
+	eq(Streak.payout(100, look.count, 1), 100)
+	eq(Streak.payout(100, week.count + 1, 1), 150, "the old count+1 preview overpays")
+	eq(Streak.canClaim(week, 7), false)
+	week.lastDay = 15
+	eq(Streak.canClaim(week, 12), false)
+	truthy(Streak.healClock(week, 12))
+	eq(week.lastDay, 12)
+	eq(Streak.canClaim(week, 12), false, "healing a future stamp does not pay again")
+	eq(Streak.claim(week, 13).ok, true)
+end)
+test("free gift uses a server timestamp, survives rejoin, and a bad stamp cannot lock or repeat it", function()
+	local now = 1700000000
+	local gift = FreeGift.new()
+	truthy(FreeGift.claim(gift, now))
+	local saved = gift.nextAt
+	eq(saved, now + FreeGift.PERIOD)
+	eq(FreeGift.ready(saved, now + 10), false)
+	eq(FreeGift.claim({ nextAt = saved }, now + FreeGift.PERIOD - 1), false)
+	eq(FreeGift.ready(saved, now + FreeGift.PERIOD), true)
+	-- crossing a Texas midnight does not clear a gift that is still on its timer
+	local before = TimeUtil.dayNumber(now, -6)
+	local after = TimeUtil.dayNumber(now + 86400, -6)
+	truthy(after == before + 1)
+	eq(FreeGift.ready(saved, now + 100), false)
+	local nan = { nextAt = 0 / 0 }
+	FreeGift.normalize(nan, now)
+	eq(nan.nextAt, 0)
+	truthy(FreeGift.claim(nan, now))
+	local far = { nextAt = 1e15 }
+	FreeGift.normalize(far, now)
+	eq(far.nextAt, now + FreeGift.PERIOD)
+	eq(FreeGift.ready(far.nextAt, now), false)
+	eq(FreeGift.claim(far, now), false)
+	eq(FreeGift.claim(far, now + FreeGift.PERIOD), true)
+end)
+test("income rate follows the server earn log as the window slides", function()
+	local events = {}
+	Income.record(events, 1000, 300, 30)
+	eq(Income.format(Income.perSecond(events, 1000, 30)), "+10/s")
+	eq(Income.perSecond(events, 1029, 30), 10)
+	eq(Income.perSecond(events, 1031, 30), 0)
+	Income.record(events, 2000, math.huge, 30)
+	eq(#events, 1, "a non-finite earn is not recorded")
+end)
+test("first-visit hints are four saved steps, skippable, and quiet for ranchers who already played", function()
+	eq(#Guide.STEPS, 4)
+	eq(Guide.STEPS[1].id, "ranch")
+	eq(Guide.STEPS[2].id, "serve")
+	eq(Guide.STEPS[3].id, "crew")
+	eq(Guide.STEPS[4].id, "gift")
+	local blob = ""
+	for _, step in ipairs(Guide.STEPS) do
+		blob ..= string.lower(step.title .. " " .. step.body .. " ")
+	end
+	for _, word in ipairs({ "robux", "buy now", "limited time", "last chance", "odds", "loot", "gamble", "hurry" }) do
+		truthy(string.find(blob, word, 1, true) == nil, word)
+	end
+	local fresh = Guide.new()
+	Guide.prepare(fresh, { served = 0, playSeconds = 0, crew = 0 })
+	eq(fresh.introduced, true)
+	eq(fresh.skipped, false)
+	eq(Guide.view(fresh).target, "ranch")
+	local data = {
+		tutorial = { firstBrisket = false, done = false },
+		stats = { served = 0 },
+		staff = { roster = {} },
+		freeGift = { nextAt = 0 },
+		stations = {},
+	}
+	eq(Guide.sync(fresh, Guide.signals(data)), false)
+	data.stations.s1 = { meat = "firstbrisket" }
+	truthy(Guide.sync(fresh, Guide.signals(data)))
+	eq(Guide.view(fresh).id, "serve")
+	data.stats.served = 1
+	data.tutorial.firstBrisket = true
+	Guide.sync(fresh, Guide.signals(data))
+	eq(Guide.view(fresh).id, "crew")
+	data.staff.roster = { { id = "pip" } }
+	Guide.sync(fresh, Guide.signals(data))
+	eq(Guide.view(fresh).id, "gift")
+	data.freeGift.nextAt = 50
+	Guide.sync(fresh, Guide.signals(data))
+	eq(fresh.done, true)
+	eq(Guide.view(fresh).active, false)
+	eq(Guide.skip(fresh), false)
+	local saved = { step = 3, done = false, skipped = false, introduced = true }
+	Guide.prepare(saved, { served = 1, playSeconds = 40, crew = 0 })
+	eq(saved.skipped, false, "rejoin keeps the step")
+	eq(Guide.view(saved).id, "crew")
+	truthy(Guide.skip(saved))
+	eq(Guide.view(saved).active, false)
+	local veteran = Guide.new()
+	Guide.prepare(veteran, { served = 3, firstBrisket = true, tutorialDone = true, playSeconds = 400, crew = 0 })
+	eq(veteran.skipped, true)
+	eq(Guide.view(veteran).active, false)
+	local filled = Reconcile.fill({}, DefaultData)
+	eq(filled.guide.step, 1)
+	eq(filled.guide.done, false)
+end)
+
+local function assertHud(label: string, width: number, height: number, insets: any, opts: any)
+	local lay = HudLayout.compute(width, height, insets, opts)
+	local names = { "currencies", "menu", "goals", "guide", "actions", "stations", "right", "status", "first", "hint", "rookie" }
+	for i, name in ipairs(names) do
+		local item = lay[name]
+		truthy(HudLayout.inside(item, lay.safe), string.format("%s %s leaves the safe area", label, name))
+		for j = i + 1, #names do
+			local other = lay[names[j]]
+			if HudLayout.overlaps(item, other) then
+				error(string.format("%s %s overlaps %s", label, name, names[j]))
+			end
+		end
+	end
+	if lay.stationCard.h > 0 then
+		local aspect = lay.stationCard.w / lay.stationCard.h
+		truthy(aspect > 0.95 and aspect < 1.8, label .. " card aspect " .. aspect)
+	end
+	if width >= 360 and height >= 500 and not lay.compact then
+		truthy(lay.menuButton.h >= 44, label)
+	end
+	if lay.compact and lay.actions.h > 0 and height >= 500 then
+		truthy(lay.actions.h >= 44, label .. " action row")
+		truthy(lay.menuButton.h >= 44, label .. " menu button")
+	end
+end
+
+print("Phone HUD")
+test("currency, menu, goals, stations and the guide card do not overlap on small phones", function()
+	local phones = {
+		{ 1280, 720, nil },
+		{ 1920, 1080, nil },
+		{ 1024, 768, nil },
+		{ 844, 390, { left = 47, top = 0, right = 47, bottom = 21 } },
+		{ 667, 375, { left = 44, top = 0, right = 44, bottom = 12 } },
+		{ 390, 844, { left = 0, top = 0, right = 0, bottom = 34 } },
+		{ 320, 568, { left = 0, top = 0, right = 0, bottom = 20 } },
+		{ 360, 640, { left = 0, top = 0, right = 0, bottom = 24 } },
+	}
+	local modes = {
+		{ guide = true, rookie = false, goals = false, hint = true, first = true },
+		{ guide = true, rookie = true, goals = false, hint = false, first = false },
+		{ guide = false, rookie = true, goals = true, hint = true, first = true },
+		{ guide = false, rookie = false, goals = true, hint = false, first = false },
+	}
+	for _, phone in ipairs(phones) do
+		for _, mode in ipairs(modes) do
+			assertHud(string.format("%dx%d", phone[1], phone[2]), phone[1], phone[2], phone[3], mode)
+		end
+	end
+	local crowded = HudLayout.compute(844, 390, { left = 47, top = 0, right = 47, bottom = 21 }, { guide = true, first = true, rookie = true, hint = true, goals = false })
+	truthy(crowded.guide.h >= 36, "the hint banner stays on a landscape phone")
+	truthy(crowded.safe.x >= 47 and crowded.safe.y + crowded.safe.h <= 390 - 21)
 end)
 
 print("Ranch load")
