@@ -394,42 +394,8 @@ function EggService.init(c: any)
 end
 
 function EggService.start()
-	-- TextChatService is what live servers use. Player.Chatted still arrives in
-	-- Studio and on older chat. The greet function ignores a second copy.
-	local TextChatService = game:GetService("TextChatService")
-	local function bindChannel(channel: Instance)
-		if not channel:IsA("TextChannel") or channel:GetAttribute("HowdyBound") then
-			return
-		end
-		channel:SetAttribute("HowdyBound", true)
-		channel.MessageReceived:Connect(function(message)
-			local src = message.TextSource
-			local speaker = src and Players:GetPlayerByUserId(src.UserId)
-			if speaker then
-				EggService.onChat(speaker, message.Text)
-			end
-		end)
-	end
-	task.spawn(function()
-		local channels = TextChatService:FindFirstChild("TextChannels") or TextChatService:WaitForChild("TextChannels", 30)
-		if not channels then
-			return
-		end
-		for _, channel in ipairs(channels:GetChildren()) do
-			bindChannel(channel)
-		end
-		channels.ChildAdded:Connect(bindChannel)
-	end)
-	local function bindPlayer(plr: Player)
-		plr.Chatted:Connect(function(message)
-			EggService.onChat(plr, message)
-		end)
-	end
-	Players.PlayerAdded:Connect(bindPlayer)
-	for _, plr in ipairs(Players:GetPlayers()) do
-		bindPlayer(plr)
-	end
-
+	-- Prompts first. TextChatService setup must not be able to skip this connection:
+	-- that was Unc Hank, the King, and every other server prompt going quiet.
 	ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, player: Player)
 		local kind = prompt:GetAttribute("Kind")
 		if typeof(kind) ~= "string" then
@@ -453,6 +419,56 @@ function EggService.start()
 		end
 		ctx.Game.markDirty(player)
 	end)
+
+	-- TextChatService is what live servers use. Player.Chatted still arrives in
+	-- Studio and on older chat. The greet function ignores a second copy.
+	-- Both are isolated: a chat API error must not unwind the prompt connection above.
+	local function bindPlayer(plr: Player)
+		local okChat, errChat = pcall(function(): nil
+			plr.Chatted:Connect(function(message)
+				EggService.onChat(plr, message)
+			end)
+			return nil
+		end)
+		if not okChat then
+			warn("[EggService] Chatted: " .. tostring(errChat))
+		end
+	end
+	Players.PlayerAdded:Connect(bindPlayer)
+	for _, plr in ipairs(Players:GetPlayers()) do
+		bindPlayer(plr)
+	end
+	task.spawn(function()
+		local okChat, errChat = xpcall(function(): string?
+			local TextChatService = game:GetService("TextChatService")
+			local function bindChannel(channel: Instance)
+				if not channel:IsA("TextChannel") or channel:GetAttribute("HowdyBound") then
+					return
+				end
+				channel:SetAttribute("HowdyBound", true)
+				channel.MessageReceived:Connect(function(message)
+					local src = message.TextSource
+					local speaker = src and Players:GetPlayerByUserId(src.UserId)
+					if speaker then
+						EggService.onChat(speaker, message.Text)
+					end
+				end)
+			end
+			local channels = TextChatService:FindFirstChild("TextChannels") or TextChatService:WaitForChild("TextChannels", 30)
+			if not channels then
+				return
+			end
+			for _, channel in ipairs(channels:GetChildren()) do
+				bindChannel(channel)
+			end
+			channels.ChildAdded:Connect(bindChannel)
+			return nil
+		end, debug.traceback)
+		if not okChat then
+			warn("[EggService] TextChatService:\n" .. tostring(errChat))
+		end
+	end)
+
 	-- Rex / meteorite / cooked eggs are detected from stats & state.
 	task.spawn(function()
 		while true do

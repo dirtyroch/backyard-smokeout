@@ -1061,7 +1061,11 @@ local function renderSettings(s: any)
 			end or nil)
 		end
 		local f3 = card(sf, 4, 72)
-		lbl(f3, s.memoryOnly and "Studio test mode: progress is NOT saved." or "Your ranch saves automatically. Smokers keep cooking while you're away.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 16, Font = T.body })
+		local saveLine = if s.memoryOnly
+			then "Studio test mode: progress is NOT saved."
+			elseif s.degraded then "Save servers didn't answer, so this visit won't be saved. Your real ranch is safe."
+			else "Your ranch saves automatically. Smokers keep cooking while you're away."
+		lbl(f3, saveLine, { Size = UDim2.new(1, 0, 1, 0), TextSize = 16, Font = T.body })
 	end
 end
 

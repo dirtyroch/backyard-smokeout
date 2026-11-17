@@ -159,14 +159,19 @@ function WorldService.plotIndexOf(player: Player): number?
 end
 
 local function setOwnerSign(i: number, player: Player?)
-	local plot = map.Plots:FindFirstChild("Plot" .. i)
+	local plots = map and map:FindFirstChild("Plots")
+	local plot = plots and plots:FindFirstChild("Plot" .. i)
 	if not plot then
 		return
 	end
 	local text = player and (player.DisplayName .. "'s Ranch") or "Open Ranch"
-	for _, d in ipairs(plot.Sign.Board:GetDescendants()) do
-		if d.Name == "OwnerText" and d:IsA("TextLabel") then
-			d.Text = text
+	local sign = plot:FindFirstChild("Sign")
+	local board = sign and sign:FindFirstChild("Board")
+	if board then
+		for _, d in ipairs(board:GetDescendants()) do
+			if d.Name == "OwnerText" and d:IsA("TextLabel") then
+				d.Text = text
+			end
 		end
 	end
 	plot:SetAttribute("OwnerUserId", player and player.UserId or 0)
@@ -624,27 +629,32 @@ function WorldService.start()
 	task.spawn(doneLoop)
 	-- Jimothy the Waiter: a fast waddle between the grill and the tables while AutoServe is owned.
 	RunService.Heartbeat:Connect(function(dt)
-		for _, w in pairs(waiters) do
-			if not w.model.Parent then
-				continue
+		local ok, err = pcall(function()
+			for _, w in pairs(waiters) do
+				if not w.model.Parent then
+					continue
+				end
+				local speed = 9
+				w.walked += speed * dt
+				local span = math.max(w.dist, 0.05)
+				local a = math.clamp(w.walked / span, 0, 1)
+				local pos = w.from:Lerp(w.to, a)
+				local bob = math.abs(math.sin(os.clock() * 14)) * 0.32
+				local flat = Vector3.new(w.to.X - w.from.X, 0, w.to.Z - w.from.Z)
+				local face = if flat.Magnitude > 0.05 then flat.Unit else Vector3.new(0, 0, -1)
+				local at = pos + Vector3.new(0, bob, 0)
+				w.model:PivotTo(CFrame.lookAt(at, at + face) * CFrame.Angles(0, 0, math.sin(os.clock() * 14) * 0.22))
+				if a >= 1 then
+					w.index = w.index % #w.points + 1
+					w.from = w.to
+					w.to = w.points[w.index]
+					w.dist = (w.to - w.from).Magnitude
+					w.walked = 0
+				end
 			end
-			local speed = 9
-			w.walked += speed * dt
-			local span = math.max(w.dist, 0.05)
-			local a = math.clamp(w.walked / span, 0, 1)
-			local pos = w.from:Lerp(w.to, a)
-			local bob = math.abs(math.sin(os.clock() * 14)) * 0.32
-			local flat = Vector3.new(w.to.X - w.from.X, 0, w.to.Z - w.from.Z)
-			local face = if flat.Magnitude > 0.05 then flat.Unit else Vector3.new(0, 0, -1)
-			local at = pos + Vector3.new(0, bob, 0)
-			w.model:PivotTo(CFrame.lookAt(at, at + face) * CFrame.Angles(0, 0, math.sin(os.clock() * 14) * 0.22))
-			if a >= 1 then
-				w.index = w.index % #w.points + 1
-				w.from = w.to
-				w.to = w.points[w.index]
-				w.dist = (w.to - w.from).Magnitude
-				w.walked = 0
-			end
+		end)
+		if not ok then
+			warn("[WorldService] waiter: " .. tostring(err))
 		end
 	end)
 	Players.PlayerRemoving:Connect(function(player)

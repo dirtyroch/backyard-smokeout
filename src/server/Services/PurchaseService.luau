@@ -71,15 +71,37 @@ function PurchaseService.availability(): any
 	return out
 end
 
+-- UserOwnsGamePassAsync has no engine timeout. One hung id used to stall the whole join
+-- before a plot was assigned. Each check is capped; a miss just leaves that pass off for now.
+local function within(seconds: number, fn: () -> any): (boolean, any)
+	local done = false
+	local ok = false
+	local value: any = nil
+	task.spawn(function()
+		ok, value = pcall(fn)
+		done = true
+	end)
+	local t0 = os.clock()
+	while not done and os.clock() - t0 < seconds do
+		task.wait(0.05)
+	end
+	if not done then
+		return false, "timeout"
+	end
+	return ok, value
+end
+
 function PurchaseService.loadPasses(player: Player): { [string]: boolean }
 	local owned = {}
 	for key, p in pairs(Monetization.Passes) do
-		if p.id ~= 0 then
-			local ok, has = pcall(function()
+		if p.id ~= 0 and player.Parent then
+			local ok, has = within(5, function()
 				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, p.id)
 			end)
-			if ok and has then
+			if ok and has == true then
 				owned[key] = true
+			elseif not ok then
+				warn(string.format("[PurchaseService] pass check %s failed: %s", key, tostring(has)))
 			end
 		end
 	end
