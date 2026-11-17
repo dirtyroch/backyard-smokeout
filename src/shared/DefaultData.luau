@@ -1,6 +1,6 @@
 --!strict
 -- The shape of a saved player. Add new fields here; old saves get them automatically (Reconcile).
-local Config = require(script.Parent.Config)
+local Config = if script ~= nil and script.Parent ~= nil then require(script.Parent.Config) else require("./Config")
 
 return {
 	schema = 1,
@@ -58,6 +58,8 @@ return {
 	rookie = { claimed = 0, skipped = false, resumed = false }, -- Unc Hank's Rookie List (Logic/Rookie)
 	forceCritter = "",
 	jimothy = { seen = {}, lastAt = 0, rewarded = false }, -- sighting hunt (Logic/Jimothy)
+	staff = { roster = {} }, -- hired ranch hands (Logic/Staff). Empty for old saves.
+	freeGift = { nextAt = 0 }, -- timed free gift (Logic/FreeGift). 0 means one is ready.
 	combo = 0,
 	receipts = {},
 	seasonPass = { id = "", base = {}, days = 0, lastDay = -1, skips = 0, paid = false, freeClaimed = 0, paidClaimed = 0 }, -- Logic/SeasonPass

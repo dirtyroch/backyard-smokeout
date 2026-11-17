@@ -23,6 +23,8 @@ local HudMenu = require(Shared.Logic.HudMenu)
 local ShopCatalog = require(Shared.Logic.ShopCatalog)
 local Storefront = require(Shared.Logic.Storefront)
 local Rookie = require(Shared.Logic.Rookie)
+local Staff = require(Shared.Logic.Staff)
+local Streak = require(Shared.Logic.Streak)
 local T = UI.Theme
 
 local player = Players.LocalPlayer
@@ -595,11 +597,14 @@ local function renderSauce(s: any)
 		UI.corner(sw, 8)
 		lbl(f, def.name, { Position = UDim2.new(0, 52, 0, 0), Size = UDim2.new(1, -220, 0, 26), TextSize = 20 })
 		lbl(f, string.format("+%d%% %s for %d cooks  •  %d left in stock", math.floor(def.amount * 100), EFFECT_TEXT[def.effect], def.charges, math.max(0, left)), { Position = UDim2.new(0, 52, 0, 28), Size = UDim2.new(1, -220, 0, 24), TextSize = 14, Font = T.body, TextColor3 = T.dim })
-		btn(f, left > 0 and ("🪙 " .. UI.fmt(price)) or "Sold out", left > 0 and T.green or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 150, 0, 44) }, function()
+		local buy = btn(f, if left > 0 then "" else "Sold out", left > 0 and T.green or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 150, 0, 44) }, function()
 			if left > 0 then
 				Net.act("BuySauce", e.id)
 			end
 		end)
+		if left > 0 then
+			UI.fillPrice(buy, "", price)
+		end
 		end
 	end
 	local mine = card(sf, 10, 60)
@@ -666,11 +671,17 @@ local function renderCook(s: any)
 			local f = card(sf, order, 74)
 			lbl(f, meat.icon, { Size = UDim2.new(0, 50, 1, 0), TextSize = 36 })
 			local secs = meat.cookTime / pit.speed
-			local tokens = meat.premium and not s.passes.PremiumCuts and (s.cuts[id] or 0) > 0 and string.format("  •  you have %d", s.cuts[id]) or ""
+			local access = {
+				pass = s.passes.PremiumCuts == true,
+				tokens = s.cuts[id] or 0,
+				unlocked = id == "tomahawk" and s.unlocks.tomahawk == true,
+			}
+			local bill = Economy.cookBill(meat, s.rank, Config.RANK_STEP, access)
+			local tokenNote = if bill.usesToken then string.format("  •  uses 1 of %d", access.tokens) else ""
 			lbl(f, meat.name, { Position = UDim2.new(0, 56, 0, 0), Size = UDim2.new(1, -230, 0, 26), TextSize = 20 })
-			lbl(f, string.format("%s  •  sells ~%s 🪙%s", TimeUtil.formatDuration(secs), UI.fmt(meat.price * rm), tokens), { Position = UDim2.new(0, 56, 0, 28), Size = UDim2.new(1, -230, 0, 22), TextSize = 14, Font = T.body, TextColor3 = T.dim })
-			local cost = Economy.rawCost(meat, rm)
-			btn(f, why and "🔒" or (cost > 0 and ("Cook 🪙" .. UI.fmt(cost)) or "Cook (free)"), why and T.cardHi or T.accent, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 44) }, function()
+			lbl(f, string.format("%s  •  sells ~%s%s", TimeUtil.formatDuration(secs), UI.fmt(meat.price * rm), tokenNote), { Position = UDim2.new(0, 56, 0, 28), Size = UDim2.new(1, -230, 0, 22), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+			local cost = bill.coins
+			local cookBtn = btn(f, why and "🔒" or "Cook", why and T.cardHi or T.accent, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 168, 0, 44) }, function()
 				if why then
 					Net.notify(why, "info")
 					return
@@ -679,6 +690,9 @@ local function renderCook(s: any)
 					Panels.close()
 				end
 			end)
+			if not why and (meat.premium or cost > 0) then
+				UI.fillPrice(cookBtn, "Cook", cost)
+			end
 			if why then
 				lbl(f, why, { Position = UDim2.new(0, 56, 0, 48), Size = UDim2.new(1, -230, 0, 22), TextSize = 15, Font = T.body, TextColor3 = T.gold })
 			end
@@ -771,7 +785,7 @@ local function rewardText(r: any): string
 		table.insert(parts, r.boostMinutes .. " min x2 speed")
 	end
 	if r.wagyu then
-		table.insert(parts, r.wagyu .. " Wagyu Brisket")
+		table.insert(parts, r.wagyu .. " Wagyu token" .. (r.wagyu == 1 and "" or "s") .. " (meat cost to cook)")
 	end
 	if r.title then
 		table.insert(parts, "Title: " .. r.title)
@@ -780,7 +794,7 @@ local function rewardText(r: any): string
 		table.insert(parts, "a very special visitor 🦖")
 	end
 	if r.tomahawk then
-		table.insert(parts, "Tomahawk Steaks forever")
+		table.insert(parts, "Tomahawk access (meat cost still applies)")
 	end
 	return table.concat(parts, " + ")
 end
@@ -798,7 +812,12 @@ local function renderPath(s: any)
 		local isCur = i == st.step
 		f.BackgroundColor3 = claimed and T.cardHi or (isCur and T.card or T.panel)
 		lbl(f, string.format("Day %d: %s", i, step.label), { Size = UDim2.new(1, -170, 0, 22), TextSize = 16 })
-		lbl(f, "Reward: " .. rewardText(step.reward), { Position = UDim2.new(0, 0, 0, 22), Size = UDim2.new(1, -170, 0, 18), TextSize = 12, Font = T.body, TextColor3 = T.dim })
+		if step.reward.coins then
+			local coin = UI.coin(f, 16)
+			coin.Position = UDim2.new(0, 0, 0, 24)
+			coin.ZIndex = 24
+		end
+		lbl(f, "Reward: " .. rewardText(step.reward), { Position = UDim2.new(0, step.reward.coins and 20 or 0, 0, 22), Size = UDim2.new(1, -170, 0, 18), TextSize = 12, Font = T.body, TextColor3 = T.dim })
 		if claimed then
 			lbl(f, "✅ Done", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 150, 0, 30), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.green })
 		elseif isCur then
@@ -832,9 +851,10 @@ local function renderUpgrades(s: any)
 	lbl(f1, "Pit: " .. pit.name, { Size = UDim2.new(1, -180, 0, 26), TextSize = 20 })
 	lbl(f1, nextPit and string.format("Next: %s  •  speed x%.2f -> x%.2f  •  luck x%.2f -> x%.2f  •  unlocks new meats", nextPit.name, pit.speed, nextPit.speed, pit.luck, nextPit.luck) or "Maxed out! Time for Unc Status.", { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -180, 0, 34), TextSize = 13, Font = T.body, TextColor3 = T.dim })
 	if nextPit then
-		btn(f1, "🪙 " .. UI.fmt(nextPit.cost), s.coins >= nextPit.cost and T.green or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 44) }, function()
+		local pitBtn = btn(f1, "", s.coins >= nextPit.cost and T.green or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 44) }, function()
 			Net.act("UpgradePit")
 		end)
+		UI.fillPrice(pitBtn, "", nextPit.cost)
 	end
 	for i, kind in ipairs({ "smoker", "grill" }) do
 		local def = Config.Slots[kind]
@@ -844,23 +864,24 @@ local function renderUpgrades(s: any)
 		lbl(f, string.format("%s slots: %d / %d", kind == "smoker" and "Smoker" or "Grill", s.slots[kind], cap), { Size = UDim2.new(1, -180, 0, 26), TextSize = 18 })
 		lbl(f, kind == "smoker" and "More smokers = more meat smoking while you're away." or "More grill spots = more burgers at once.", { Position = UDim2.new(0, 0, 0, 26), Size = UDim2.new(1, -180, 0, 20), TextSize = 13, Font = T.body, TextColor3 = T.dim })
 		if cost and s.slots[kind] < cap then
-			btn(f, "🪙 " .. UI.fmt(cost), s.coins >= cost and T.green or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 40) }, function()
+			local slotBtn = btn(f, "", s.coins >= cost and T.green or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 40) }, function()
 				Net.act("BuySlot", kind)
 			end)
+			UI.fillPrice(slotBtn, "", cost)
 		end
 	end
 	local nextRank = Config.Ranks[s.rank + 1]
 	local f4 = card(sf, 5, 120)
-	f4.BackgroundColor3 = Color3.fromHex("#4A3A1A")
+	f4.BackgroundColor3 = T.card
 	lbl(f4, "👴 Unc Status: " .. Config.Ranks[s.rank].name, { Size = UDim2.new(1, -180, 0, 28), TextSize = 22, TextColor3 = T.gold })
 	if nextRank then
-		lbl(f4, string.format("Rebirth into %s: +%d%% coins forever. Resets coins, pit and slots. Keeps cosmetics, Index, sauces, titles, passes and your cooler. Unfinished cooks are refunded.", nextRank.name, math.floor(Config.RANK_STEP * 100)), { Position = UDim2.new(0, 0, 0, 30), Size = UDim2.new(1, -180, 0, 50), TextSize = 13, Font = T.body, TextColor3 = T.dim })
+		lbl(f4, string.format("Rebirth into %s: +%d%% coins forever. Resets coins, pit and slots. Keeps cosmetics, Index, sauces, titles, passes, your cooler and your crew. Unfinished cooks are refunded in coins.", nextRank.name, math.floor(Config.RANK_STEP * 100)), { Position = UDim2.new(0, 0, 0, 30), Size = UDim2.new(1, -180, 0, 50), TextSize = 13, Font = T.body, TextColor3 = T.dim })
 		local back, fill = UI.bar(f4, T.gold, { Position = UDim2.new(0, 0, 0, 86), Size = UDim2.new(1, -180, 0, 12), ZIndex = 23 })
 		fill.ZIndex = 24
 		fill.Size = UDim2.fromScale(math.clamp(s.runCoins / nextRank.need, 0, 1), 1)
 		lbl(f4, UI.fmt(s.runCoins) .. " / " .. UI.fmt(nextRank.need) .. " earned this run", { Position = UDim2.new(0, 0, 0, 98), Size = UDim2.new(1, -180, 0, 16), TextSize = 12, Font = T.body })
 		local _ = back
-		btn(f4, "Rebirth", s.runCoins >= nextRank.need and T.gold or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 50), TextColor3 = Color3.fromHex("#1A0F0A") }, function()
+		btn(f4, "Rebirth", s.runCoins >= nextRank.need and T.gold or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 50), TextColor3 = T.ink }, function()
 			Net.act("Rebirth")
 		end)
 	else
@@ -883,8 +904,12 @@ local function renderDaily(s: any)
 		UI.corner(f, 12)
 		UI.pad(f, 6)
 		lbl(f, "Day " .. i, { Size = UDim2.new(1, 0, 0, 22), TextXAlignment = Enum.TextXAlignment.Center })
-		lbl(f, i == 7 and "🎁" or "🪙", { Position = UDim2.new(0, 0, 0, 22), Size = UDim2.new(1, 0, 0, 40), TextSize = 30, TextXAlignment = Enum.TextXAlignment.Center })
-		local txt = UI.fmt(r.coins)
+		local mark = UI.coin(f, 26)
+		mark.AnchorPoint = Vector2.new(0.5, 0)
+		mark.Position = UDim2.new(0.5, 0, 0, 26)
+		mark.ZIndex = 24
+		local previewCount = if s.canClaimDaily then count + 1 else math.max(count, 1)
+		local txt = UI.fmt(Streak.payout(r.coins, previewCount, Economy.rankMult(s.rank, Config.RANK_STEP)))
 		if r.sauce then
 			txt ..= "\n+ " .. Config.Sauces[r.sauce].name
 		end
@@ -896,7 +921,7 @@ local function renderDaily(s: any)
 			lbl(f, "✓", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0, 20, 0, 20), TextColor3 = T.green })
 		end
 	end
-	lbl(wrap, string.format("🔥 Streak: %d days (best %d). Miss a day? Your free miss each week keeps it going. Miss more and you only go back to the start of this week, never zero.", count, s.streak.best), { Position = UDim2.new(0, 0, 0, 140), Size = UDim2.new(1, 0, 0, 44), TextSize = 14, Font = T.body, TextColor3 = T.dim, ZIndex = 22 })
+	lbl(wrap, string.format("🔥 Streak: %d days (best %d). Amounts include your streak and rank. Miss a day? Your free miss each week keeps it going. Miss more and you only go back to the start of this week, never zero.", count, s.streak.best), { Position = UDim2.new(0, 0, 0, 140), Size = UDim2.new(1, 0, 0, 52), TextSize = 14, Font = T.body, TextColor3 = T.dim, ZIndex = 22 })
 	btn(wrap, s.canClaimDaily and "Claim today's reward!" or "Come back tomorrow (Texas time)", s.canClaimDaily and T.green or T.cardHi, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 196), Size = UDim2.new(0, 340, 0, 54), TextSize = 22 }, function()
 		if s.canClaimDaily then
 			Net.act("ClaimDaily")
@@ -1090,7 +1115,12 @@ function Panels.dialog(payload: any)
 		yap = UI.label("", { TextSize = 16, Font = T.body, TextColor3 = T.dim, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.new(1, 0, 0, 0), ZIndex = 31, LayoutOrder = 3, Parent = f })
 	end
 	if (payload.reward or 0) > 0 then
-		UI.label("+" .. UI.fmt(payload.reward) .. " 🪙", { TextSize = 20, TextColor3 = T.gold, ZIndex = 31, LayoutOrder = 4, Parent = f })
+		local rewardRow = UI.frame({ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 28), ZIndex = 31, LayoutOrder = 4, Parent = f })
+		local rewardList = UI.list(rewardRow, Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Left)
+		rewardList.VerticalAlignment = Enum.VerticalAlignment.Center
+		local rewardCoin = UI.coin(rewardRow, 22)
+		rewardCoin.ZIndex = 32
+		UI.label("+" .. UI.fmt(payload.reward), { Size = UDim2.fromOffset(160, 24), TextSize = 20, TextColor3 = T.gold, ZIndex = 32, Parent = rewardRow })
 	end
 	local row = UI.frame({ BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 44), ZIndex = 31, LayoutOrder = 5, Parent = f })
 	UI.list(row, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Right)
@@ -1133,6 +1163,69 @@ function Panels.welcome(payload: any)
 		Panels.dialog({ npc = "Unc Hank", text = "Hi Hungry, I'm Unc! Welcome to Backyard Cookout.\n\nHere's how it works: brisket and ribs smoke for real hours (even while you're offline), burgers take 30 seconds on the grill. Serve the critters, upgrade your pit, find the secrets.\n\nHit the big orange button to smoke your first brisket. It only takes a minute this time. 😉" })
 	elseif payload.away and payload.ready and payload.ready > 0 then
 		Panels.dialog({ npc = "Unc Hank", text = string.format("Welcome back! You were gone %s and %d meat%s finished smoking. They're resting in the smoker, ready to collect.", TimeUtil.formatDuration(payload.away), payload.ready, payload.ready == 1 and "" or "s") })
+	end
+end
+
+local function renderCrew(s: any)
+	titleLabel.Text = "🍳 Ranch crew"
+	local sf = scroller(body)
+	local roster = s.staff and s.staff.roster or {}
+	local slots = s.staff and s.staff.slots or 1
+	local waiter = s.staff and s.staff.waiter == true
+	local intro = card(sf, 0, waiter and 78 or 64)
+	intro.BackgroundTransparency = 1
+	lbl(intro, "Hands you hire cook, carry plates and serve. Your first grill and first smoker stay yours. Jimothy the Waiter is a separate pass: he serves food you already cooked, and he makes the crew walk a little faster.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+	local nextHand = if #roster < slots then Staff.preview(#roster) else nil
+	local cost = if nextHand then Staff.hireCost(#roster) else nil
+	if nextHand and cost then
+		local hire = card(sf, 1, 92)
+		lbl(hire, "Hire " .. nextHand.name .. " the " .. nextHand.title, { Size = UDim2.new(1, -180, 0, 26), TextSize = 20 })
+		lbl(hire, nextHand.blurb, { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -180, 0, 48), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+		local hireBtn = btn(hire, "", s.coins >= cost and T.green or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 44) }, function()
+			Net.act("HireStaff")
+		end)
+		UI.fillPrice(hireBtn, "Hire", cost)
+	elseif #roster >= #Staff.HANDS then
+		local full = card(sf, 1, 48)
+		lbl(full, "The crew is full. Upgrade them and the ranch keeps humming.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 16 })
+	else
+		local locked = card(sf, 1, 48)
+		lbl(locked, "Upgrade your pit to open another crew slot. (" .. #roster .. " / " .. slots .. " working)", { Size = UDim2.new(1, 0, 1, 0), TextSize = 16 })
+	end
+	for i, e in ipairs(roster) do
+		local hand = Staff.hand(e.id)
+		local working = i <= slots
+		local f = card(sf, 10 + i, 132)
+		f.BackgroundColor3 = working and T.card or T.panel
+		lbl(f, (working and "" or "Waiting · ") .. e.name .. " · " .. (hand and hand.title or e.role), { Size = UDim2.new(1, 0, 0, 24), TextSize = 20, TextColor3 = working and T.text or T.dim })
+		lbl(f, hand and hand.lines[1] or "", { Position = UDim2.new(0, 0, 0, 24), Size = UDim2.new(1, 0, 0, 20), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+		local stats = {
+			{ id = "speed", label = "Speed", level = e.speed },
+			{ id = "capacity", label = "Carry", level = e.capacity },
+			{ id = "quality", label = "Quality", level = e.quality },
+		}
+		for n, stat in ipairs(stats) do
+			local up = Staff.upgradeCost(stat.id, stat.level)
+			local b = btn(f, "", up and (s.coins >= up and T.accent or T.cardHi) or T.cardHi, {
+				Position = UDim2.new((n - 1) * 0.33, 4, 0, 56),
+				Size = UDim2.new(0.33, -8, 0, 58),
+				TextSize = 14,
+			}, function()
+				if up then
+					Net.act("UpgradeStaff", e.id, stat.id)
+				end
+			end)
+			if up then
+				UI.fillPrice(b, stat.label .. " " .. stat.level, up)
+			else
+				b.Text = stat.label .. " MAX"
+			end
+		end
+	end
+	if not waiter then
+		local note = card(sf, 80, 48)
+		note.BackgroundTransparency = 1
+		lbl(note, "Jimothy the Waiter is in the Pit Shop if you want someone serving while you cook the long cuts yourself.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 14, Font = T.body, TextColor3 = T.dim })
 	end
 end
 
@@ -1179,6 +1272,8 @@ function Panels.render()
 			renderUpgrades(s)
 		elseif current == "daily" then
 			renderDaily(s)
+		elseif current == "crew" then
+			renderCrew(s)
 		elseif current == "settings" then
 			renderSettings(s)
 		end

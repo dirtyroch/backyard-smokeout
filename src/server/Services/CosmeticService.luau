@@ -179,6 +179,14 @@ local function buildBuddy(folder: Folder, torso: BasePart, id: string)
 	buddyBall(folder, torso, "BuddyMask", Vector3.new(0.7, 0.22, 0.18), CFrame.new(0.05, 0.62, back + 0.32), "#1A120E")
 	buddyBall(folder, torso, "BuddyMuzzle", Vector3.new(0.32, 0.2, 0.2), CFrame.new(0.05, 0.46, back + 0.36), "#F4EDE4")
 	buddyBall(folder, torso, "BuddyNose", Vector3.new(0.12, 0.1, 0.1), CFrame.new(0.05, 0.48, back + 0.46), "#2A1C16")
+	buddyBall(folder, torso, "BuddyEyeL", Vector3.new(0.16, 0.16, 0.16), CFrame.new(-0.12, 0.66, back + 0.28), "#FFFFFF")
+	buddyBall(folder, torso, "BuddyEyeR", Vector3.new(0.16, 0.16, 0.16), CFrame.new(0.22, 0.66, back + 0.28), "#FFFFFF")
+	buddyBall(folder, torso, "BuddyPupilL", Vector3.new(0.08, 0.08, 0.08), CFrame.new(-0.12, 0.66, back + 0.36), "#1A120E")
+	buddyBall(folder, torso, "BuddyPupilR", Vector3.new(0.08, 0.08, 0.08), CFrame.new(0.22, 0.66, back + 0.36), "#1A120E")
+	local shineL = buddyBall(folder, torso, "BuddyShineL", Vector3.new(0.05, 0.05, 0.05), CFrame.new(-0.15, 0.7, back + 0.38), "#FFFFFF")
+	shineL.Material = Enum.Material.Neon
+	local shineR = buddyBall(folder, torso, "BuddyShineR", Vector3.new(0.05, 0.05, 0.05), CFrame.new(0.19, 0.7, back + 0.38), "#FFFFFF")
+	shineR.Material = Enum.Material.Neon
 	buddyBall(folder, torso, "BuddyEarL", Vector3.new(0.22, 0.2, 0.14), CFrame.new(-0.28, 0.9, back), def.color)
 	buddyBall(folder, torso, "BuddyEarR", Vector3.new(0.22, 0.2, 0.14), CFrame.new(0.38, 0.9, back), def.color)
 	local rings = { "#2A2420", "#E6D3B0", "#2A2420", "#E6D3B0" }

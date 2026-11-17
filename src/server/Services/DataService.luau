@@ -25,6 +25,7 @@ local DefaultData = require(Shared.DefaultData)
 local SessionLock = require(Shared.Logic.SessionLock)
 local Reconcile = require(Shared.Logic.Reconcile)
 local Jimothy = require(Shared.Logic.Jimothy)
+local Staff = require(Shared.Logic.Staff)
 local Signal = require(Shared.Signal)
 
 local STORE_NAME = "BackyardSmokeout_Players_v1"
@@ -142,6 +143,7 @@ local function publish(player: Player, key: string, data: any, memoryOnly: boole
 	data = Reconcile.fill(data or freshData(), DefaultData)
 	local migrated, migrateErr = pcall(function()
 		Jimothy.migrate(data)
+		Staff.normalize(data)
 	end)
 	if not migrated then
 		warn("[DataService] Jimothy migrate failed for " .. player.Name .. ": " .. tostring(migrateErr))

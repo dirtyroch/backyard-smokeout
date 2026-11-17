@@ -362,9 +362,9 @@ function WorldBuilder.npc(parent, name, cf, o)
 	return m, head, torso
 end
 
--- A critter customer: round, plush-toy shapes (ellipsoids) with big shiny eyes and rosy
--- cheeks. Built at `cf` (feet on the ground), facing -Z. The game looks up the parts named
--- Body and Head (prompts, order bubbles, mud spots).
+-- A critter customer, built from parts so the silhouette reads across the yard.
+-- Feet sit on `cf`, facing -Z. The game looks up Body and Head (prompts, order bubbles, mud).
+-- Parts stay anchored: customers, Jimothy and the crew all move with PivotTo.
 local function lighten(c, t)
 	return "#" .. hex(c):Lerp(E.Color3.new(1, 1, 1), t):ToHex()
 end
@@ -381,71 +381,91 @@ function WorldBuilder.critter(env, parent, def, cf)
 		return sph(m, n, V(sx * s, sy * s, sz * s), at(x, y, z, rx, ry, rz), c, mat)
 	end
 	local BC, HC = def.body, def.head
-	local DARK, PINK = "#1E1614", "#F59BB0"
+	local DARK = "#1A120E"
 	local body, head
-	-- eye placement (head-relative), filled in per body plan
-	local eyeY, eyeZ, eyeX, eyeSize = 2.55, -2.0, 0.38, 1
+	local eyeY, eyeZ, eyeX, eyeSize = 2.2, -1.7, 0.36, 1
+	local iris, pupil = "#FFFFFF", DARK
 	local skipEyes = false
+
+	local function paw(x, z, tall, color, wide)
+		local col = color or BC
+		cyl(m, "Leg", tall * s, (wide or 0.22) * s, at(x, tall * 0.5, z) * E.CFrame.Angles(0, 0, math.pi / 2), col)
+		part(m, "Paw", V((wide or 0.22) * 1.7 * s, 0.1 * s, (wide or 0.22) * 1.9 * s), at(x, 0.06, z - 0.1), col)
+	end
+	local function eyesAt(y, z, x, scale)
+		for _, side in ipairs({ -1, 1 }) do
+			local ex = side * x
+			local d = 0.46 * scale * s
+			ball(m, side < 0 and "EyeL" or "EyeR", d, at(ex, y, z), iris)
+			ball(m, "Pupil", d * 0.48, at(ex + side * 0.02, y - 0.01, z - 0.04 * scale), pupil)
+			ball(m, side < 0 and "ShineL" or "ShineR", d * 0.28, at(ex - 0.06, y + 0.06 * scale, z - 0.07 * scale), "#FFFFFF", E.Enum.Material.Neon)
+		end
+	end
+
 	if def.rex then
-		body = e("Body", 2.4, 2.6, 2.6, BC, 0, 2.2, 0.3)
-		e("Belly", 1.7, 2.0, 1.2, "#E8F5C8", 0, 2.0, -0.55)
-		head = e("Head", 2.2, 1.9, 2.4, HC, 0, 4.3, -0.7)
-		e("Snout", 1.7, 1.1, 1.5, HC, 0, 3.95, -1.55)
+		body = e("Body", 2.2, 2.5, 2.15, BC, 0, 2.15, 0.15)
+		e("Belly", 1.55, 1.9, 1.15, "#E7F6C4", 0, 1.9, -0.55)
+		head = e("Head", 2.05, 1.75, 2.15, HC, 0, 4.15, -0.85)
+		e("Snout", 1.35, 0.85, 1.25, lighten(HC, 0.15), 0, 3.85, -1.7)
+		e("Brow", 1.5, 0.28, 0.4, lighten(BC, 0.05), 0, 4.55, -1.35)
 		for k = -2, 2 do
-			e("Tooth", 0.18, 0.22, 0.12, "#FFFFFF", k * 0.3, 3.45, -2.25)
+			part(m, "Tooth", V(0.16 * s, 0.28 * s, 0.12 * s), at(k * 0.28, 3.42, -2.15), "#FFFFFF")
 		end
-		e("NostrilL", 0.16, 0.1, 0.1, DARK, -0.3, 4.3, -2.28)
-		e("NostrilR", 0.16, 0.1, 0.1, DARK, 0.3, 4.3, -2.28)
-		e("ArmL", 0.4, 0.8, 0.4, BC, -0.95, 2.75, -0.9, 40, 0, 10)
-		e("ArmR", 0.4, 0.8, 0.4, BC, 0.95, 2.75, -0.9, 40, 0, -10)
-		e("Tail", 1.1, 1.0, 3.0, BC, 0, 1.5, 2.6, -15, 0, 0)
-		e("LegL", 1.0, 1.4, 1.2, BC, -0.75, 0.6, 0.4)
-		e("LegR", 1.0, 1.4, 1.2, BC, 0.75, 0.6, 0.4)
-		e("FootL", 1.0, 0.45, 1.4, BC, -0.75, 0.2, 0.05)
-		e("FootR", 1.0, 0.45, 1.4, BC, 0.75, 0.2, 0.05)
-		for k = 0, 3 do
-			e("Spike", 0.25, 0.55, 0.55, "#4E9E35", 0, 3.6 - k * 0.55 + (k == 0 and 1.6 or 0), 0.2 + k * 0.7 - (k == 0 and 1.2 or 0))
+		e("NostrilL", 0.16, 0.1, 0.1, DARK, -0.28, 4.15, -2.25)
+		e("NostrilR", 0.16, 0.1, 0.1, DARK, 0.28, 4.15, -2.25)
+		e("ArmL", 0.38, 0.85, 0.38, BC, -1.15, 2.7, -0.7, 50, 0, 18)
+		e("ArmR", 0.38, 0.85, 0.38, BC, 1.15, 2.7, -0.7, 50, 0, -18)
+		e("HandL", 0.32, 0.28, 0.32, HC, -1.35, 2.25, -1.05)
+		e("HandR", 0.32, 0.28, 0.32, HC, 1.35, 2.25, -1.05)
+		e("Tail", 0.85, 0.85, 2.4, BC, 0, 1.7, 2.15, -18, 0, 0)
+		e("TailTip", 0.55, 0.5, 0.7, lighten(BC, 0.2), 0, 1.35, 3.2)
+		paw(-0.7, 0.15, 1.15, BC, 0.38)
+		paw(0.7, 0.15, 1.15, BC, 0.38)
+		for k = 0, 4 do
+			e("Spike", 0.28, 0.62, 0.4, "#3E8E32", 0, 3.35 - k * 0.42, -0.2 + k * 0.55)
 		end
-		part(m, "Ribbon", V(1.9 * s, 0.3 * s, 0.25 * s), at(0, 3.45, -1.05), "#FF5C8A")
-		e("BowL", 0.6, 0.45, 0.25, "#FF5C8A", -0.45, 3.45, -1.25, 0, 0, 20)
-		e("BowR", 0.6, 0.45, 0.25, "#FF5C8A", 0.45, 3.45, -1.25, 0, 0, -20)
+		part(m, "Ribbon", V(1.7 * s, 0.28 * s, 0.2 * s), at(0, 3.35, -1.15), "#FF5C8A")
+		e("BowL", 0.55, 0.4, 0.22, "#FF5C8A", -0.42, 3.4, -1.28, 0, 0, 22)
+		e("BowR", 0.55, 0.4, 0.22, "#FF5C8A", 0.42, 3.4, -1.28, 0, 0, -22)
 		billboard(head, "Ribbon", def.ribbon or "RAWR means I love you ♥", 2.6, 70, "#FF8FB1", 260, 34)
-		eyeY, eyeZ, eyeX, eyeSize = 4.75, -1.62, 0.5, 1.3
+		eyeY, eyeZ, eyeX, eyeSize = 4.55, -1.7, 0.48, 1.35
+		iris, pupil = "#F4FFF0", DARK
 	elseif id == "roadrunner" or id == "hummingbird" then
-		-- Cylinders and wedges instead of one blob: a beak, separate feathers, toes.
 		local hb = id == "hummingbird"
 		skipEyes = true
 		local yaw = E.CFrame.Angles(0, math.pi / 2, 0)
-		body = cyl(m, "Body", (hb and 1.5 or 2.2) * s, (hb and 0.55 or 0.85) * s, at(0, hb and 1.35 or 1.55, 0.15) * yaw, BC, E.Enum.Material.SmoothPlastic)
-		cyl(m, "Chest", (hb and 0.55 or 0.7) * s, (hb and 0.48 or 0.7) * s, at(0, hb and 1.4 or 1.6, -0.55) * yaw, lighten(BC, 0.4))
-		head = sph(m, "Head", V((hb and 0.7 or 0.95) * s, (hb and 0.62 or 0.85) * s, (hb and 0.7 or 0.9) * s), at(0, hb and 1.85 or 2.35, hb and -0.85 or -1.05), HC)
-		local beakColor = hb and "#1A1A1A" or "#C4A574"
-		local beakLen = hb and 0.95 or 0.7
-		wedge(m, "Beak", V((hb and 0.16 or 0.28) * s, (hb and 0.14 or 0.22) * s, beakLen * s), at(0, hb and 1.78 or 2.22, hb and -1.55 or -1.7), beakColor, E.Enum.Material.SmoothPlastic)
-		local feather = lighten(BC, 0.25)
-		for _, side in { -1, 1 } do
-			for i = 1, hb and 3 or 2 do
-				local z = (i - 2) * (hb and 0.28 or 0.35)
-				wedge(m, "Feather", V((hb and 0.08 or 0.12) * s, (hb and 0.9 or 0.7) * s, (hb and 0.45 or 0.55) * s), at(side * (hb and 0.55 or 0.7), hb and 1.55 or 1.7, z, 0, side * (hb and 55 or 40), side * (hb and 25 or 18)), feather, E.Enum.Material.SmoothPlastic)
-			end
-			wedge(m, "Tail", V((hb and 0.12 or 0.18) * s, (hb and 0.35 or 0.4) * s, (hb and 0.7 or 1.1) * s), at(side * 0.12, hb and 1.15 or 1.35, hb and 0.95 or 1.35, -25, side * 12, 0), BC)
-			cyl(m, "Leg", (hb and 0.55 or 0.9) * s, (hb and 0.08 or 0.12) * s, at(side * 0.22, hb and 0.45 or 0.55, 0.05) * E.CFrame.Angles(0, 0, math.pi / 2), "#C9A060")
-			for t = -1, 1 do
-				part(m, "Toe", V((hb and 0.22 or 0.32) * s, 0.06 * s, 0.08 * s), at(side * 0.22 + t * 0.08, 0.06, -0.08), "#C9A060")
-			end
-			local ex, ey, ez = side * (hb and 0.16 or 0.22), hb and 1.95 or 2.48, hb and -1.15 or -1.42
-			part(m, "EyeWhite", V(0.16 * s, 0.16 * s, 0.08 * s), at(ex, ey, ez), "#FFFFFF").Shape = E.Enum.PartType.Ball
-			part(m, "Pupil", V(0.08 * s, 0.08 * s, 0.06 * s), at(ex, ey, ez - 0.04), "#1A120E").Shape = E.Enum.PartType.Ball
-			part(m, "Shine", V(0.04 * s, 0.04 * s, 0.04 * s), at(ex - 0.03, ey + 0.03, ez - 0.06), "#FFFFFF", E.Enum.Material.Neon).Shape = E.Enum.PartType.Ball
+		body = cyl(m, "Body", (hb and 1.35 or 2.15) * s, (hb and 0.55 or 0.78) * s, at(0, hb and 1.35 or 1.7, 0.1) * yaw, BC)
+		cyl(m, "Chest", (hb and 0.5 or 0.62) * s, (hb and 0.48 or 0.62) * s, at(0, hb and 1.42 or 1.78, -0.45) * yaw, lighten(BC, 0.45))
+		head = sph(m, "Head", V((hb and 0.72 or 0.92) * s, (hb and 0.62 or 0.8) * s, (hb and 0.7 or 0.88) * s), at(0, hb and 1.85 or 2.45, hb and -0.85 or -1.05), HC)
+		local beakLen = hb and 1.05 or 0.85
+		wedge(m, "Beak", V((hb and 0.14 or 0.26) * s, (hb and 0.12 or 0.2) * s, beakLen * s), at(0, hb and 1.78 or 2.28, hb and -1.55 or -1.75), hb and "#1A1A1A" or "#E6C07A")
+		if hb then
+			e("Gorget", 0.28, 0.22, 0.16, "#FF4F8B", 0, 1.62, -1.05)
+		else
+			wedge(m, "Crest", V(0.1 * s, 0.72 * s, 0.42 * s), at(0, 2.95, -0.85, -28, 0, 0), "#1E3A5F")
+			part(m, "CheekPatch", V(0.62 * s, 0.14 * s, 0.06 * s), at(0, 2.22, -1.32), "#E2572E")
 		end
-		if not hb then
-			wedge(m, "Crest", V(0.12 * s, 0.7 * s, 0.45 * s), at(0, 2.85, -0.85, -30, 0, 0), "#24456B")
-			part(m, "CheekPatch", V(0.7 * s, 0.16 * s, 0.08 * s), at(0, 2.25, -1.35), "#E2572E")
+		local feather = hb and "#7DFFB2" or lighten(BC, 0.3)
+		for _, side in ipairs({ -1, 1 }) do
+			local feathers = hb and 3 or 2
+			for i = 1, feathers do
+				local z = (i - 2) * (hb and 0.22 or 0.32)
+				wedge(m, "Feather", V((hb and 0.07 or 0.1) * s, (hb and 0.85 or 0.95) * s, (hb and 0.42 or 0.5) * s), at(side * (hb and 0.48 or 0.62), hb and 1.5 or 1.85, z, 0, side * (hb and 58 or 42), side * 16), feather)
+			end
+			wedge(m, "Tail", V((hb and 0.08 or 0.12) * s, (hb and 0.28 or 0.36) * s, (hb and 0.85 or 1.25) * s), at(side * 0.1, hb and 1.2 or 1.45, hb and 0.95 or 1.45, -20, side * 14, 0), hb and "#147A45" or BC)
+			cyl(m, "Leg", (hb and 0.48 or 1.15) * s, (hb and 0.07 or 0.1) * s, at(side * 0.18, hb and 0.4 or 0.62, 0.05) * E.CFrame.Angles(0, 0, math.pi / 2), "#E6C07A")
+			for t = -1, 1 do
+				part(m, "Toe", V((hb and 0.2 or 0.34) * s, 0.05 * s, 0.07 * s), at(side * 0.18 + t * 0.07, 0.05, hb and -0.06 or -0.12), "#E6C07A")
+			end
+			local ex = side * (hb and 0.16 or 0.2)
+			local ey = hb and 1.95 or 2.58
+			local ez = hb and -1.12 or -1.4
+			ball(m, "EyeWhite", (hb and 0.16 or 0.2) * s, at(ex, ey, ez), "#FFFFFF")
+			ball(m, "Pupil", (hb and 0.08 or 0.1) * s, at(ex, ey, ez - 0.03), DARK)
+			ball(m, "Shine", (hb and 0.045 or 0.06) * s, at(ex - 0.03, ey + 0.03, ez - 0.05), "#FFFFFF", E.Enum.Material.Neon)
 		end
 	elseif id == "jimothy" then
-		-- Volleyball body: the head sits in the top of the ball (no neck), the legs are stubs,
-		-- the ears are round, and the tail is a chunky stack of rings. Bandit stays on the
-		-- slimmer raccoon plan in the branch below.
+		-- Round, no neck: the head sits down inside the ball. Bandit is the long raccoon.
 		local BELLY, MASK, MUZZLE, NOSE = "#E4D5C4", "#1A120E", "#F4EDE4", "#2A1C16"
 		body = e("Body", 2.5, 2.4, 2.5, BC, 0, 1.32, 0.08)
 		e("Belly", 1.45, 1.1, 1.1, BELLY, 0, 1.05, -0.82)
@@ -459,8 +479,11 @@ function WorldBuilder.critter(env, parent, def, cf)
 		e("EarR", 0.52, 0.48, 0.26, BC, 0.6, 2.98, -0.18)
 		e("EarInL", 0.26, 0.24, 0.12, "#E8D8C4", -0.6, 2.96, -0.3)
 		e("EarInR", 0.26, 0.24, 0.12, "#E8D8C4", 0.6, 2.96, -0.3)
-		for _, lx in { -0.7, 0.7 } do
-			for _, lz in { -0.5, 0.58 } do
+		for _, side in ipairs({ -1, 1 }) do
+			deco(m, "Whisker", V(0.45 * s, 0.04 * s, 0.04 * s), at(side * 0.55, 2.12, -1.05, 0, 0, side * -12), "#F7F1E8")
+		end
+		for _, lx in ipairs({ -0.7, 0.7 }) do
+			for _, lz in ipairs({ -0.5, 0.58 }) do
 				cyl(m, "Leg", 0.2 * s, 0.34 * s, at(lx, 0.14, lz) * E.CFrame.Angles(0, 0, math.pi / 2), BC)
 				part(m, "Paw", V(0.4 * s, 0.1 * s, 0.38 * s), at(lx, 0.05, lz - 0.05), BC)
 			end
@@ -477,114 +500,160 @@ function WorldBuilder.critter(env, parent, def, cf)
 			local apron = part(m, "Apron", V(1.2 * s, 0.9 * s, 0.08 * s), at(0, 1.15, -1.12), "#F6E7D4", E.Enum.Material.Fabric)
 			surfaceText(apron, E.Enum.NormalId.Front, "JIMOTHY", "#5A2E1E", nil)
 		end
-		eyeY, eyeZ, eyeX, eyeSize = 2.5, -1.08, 0.4, 0.85
+		eyeY, eyeZ, eyeX, eyeSize = 2.52, -1.12, 0.38, 0.95
+		iris, pupil = "#FFFFFF", DARK
+	elseif id == "armadillo" then
+		body = e("Body", 2.35, 1.15, 2.7, BC, 0, 0.85, 0)
+		for k = -1, 2 do
+			e("ShellBand", 2.15, 0.55, 0.38, k % 2 == 0 and "#6E5E50" or lighten(BC, 0.28), 0, 1.25, k * 0.42)
+		end
+		e("ShellRim", 2.45, 0.22, 2.15, "#5C4E42", 0, 0.95, 0)
+		head = e("Head", 0.85, 0.7, 0.8, HC, 0, 0.95, -1.45)
+		wedge(m, "Snout", V(0.55 * s, 0.38 * s, 0.85 * s), at(0, 0.82, -2.05), lighten(HC, 0.2))
+		e("Nose", 0.22, 0.16, 0.16, "#C48B8B", 0, 0.78, -2.4)
+		e("EarNubL", 0.22, 0.16, 0.12, HC, -0.38, 1.2, -1.35)
+		e("EarNubR", 0.22, 0.16, 0.12, HC, 0.38, 1.2, -1.35)
+		e("Tail", 0.28, 0.22, 1.15, BC, 0, 0.7, 1.7, 12, 0, 0)
+		for _, lx in ipairs({ -0.7, 0.7 }) do
+			paw(lx, -0.55, 0.32, BC, 0.2)
+			paw(lx, 0.7, 0.32, BC, 0.2)
+			part(m, "Claw", V(0.08 * s, 0.06 * s, 0.16 * s), at(lx, 0.08, -0.78), "#EDE6DC")
+		end
+		eyeY, eyeZ, eyeX, eyeSize = 1.08, -1.72, 0.22, 0.7
+	elseif id == "raccoon" then
+		-- Longer than he is round, so he doesn't read as Jimothy.
+		body = e("Body", 1.2, 1.35, 2.55, BC, 0, 1.05, 0.05)
+		e("Chest", 0.95, 0.8, 0.7, "#D9D3CC", 0, 1.05, -0.85)
+		head = e("Head", 1.15, 1.05, 1.15, HC, 0, 1.85, -1.15)
+		e("Mask", 1.25, 0.42, 0.28, "#1A1A1A", 0, 1.95, -1.55)
+		e("Muzzle", 0.55, 0.38, 0.45, "#E7E2DC", 0, 1.62, -1.65)
+		e("Nose", 0.2, 0.14, 0.14, "#2A1C16", 0, 1.68, -1.88)
+		e("EarL", 0.42, 0.95, 0.2, HC, -0.48, 2.45, -1.05, 0, 0, 10)
+		e("EarR", 0.42, 0.95, 0.2, HC, 0.48, 2.45, -1.05, 0, 0, -10)
+		e("EarInL", 0.2, 0.55, 0.08, "#F2D2D8", -0.48, 2.42, -1.14, 0, 0, 10)
+		e("EarInR", 0.2, 0.55, 0.08, "#F2D2D8", 0.48, 2.42, -1.14, 0, 0, -10)
+		for k = 0, 4 do
+			e("Tail", 0.55 - k * 0.06, 0.55 - k * 0.06, 0.42, k % 2 == 0 and "#2A2A2A" or "#C8C8C8", 0, 1.15 + k * 0.08, 1.35 + k * 0.38)
+		end
+		for _, lx in ipairs({ -0.42, 0.42 }) do
+			paw(lx, -0.7, 0.48, BC, 0.16)
+			paw(lx, 0.75, 0.48, BC, 0.16)
+		end
+		eyeY, eyeZ, eyeX, eyeSize = 2.0, -1.62, 0.32, 0.85
+		iris, pupil = "#FFFFFF", "#111111"
+	elseif id == "hornedtoad" then
+		body = e("Body", 2.5, 0.72, 2.15, BC, 0, 0.5, 0)
+		e("Belly", 1.8, 0.35, 1.5, lighten(BC, 0.35), 0, 0.32, -0.1)
+		head = e("Head", 1.7, 0.7, 1.15, HC, 0, 0.7, -1.15)
+		for k = 0, 4 do
+			local a = -50 + k * 25
+			wedge(m, "Horns", V(0.16 * s, 0.16 * s, 0.42 * s), at(math.sin(math.rad(a)) * 0.55, 1.05, -1.15 + math.cos(math.rad(a)) * 0.15, 40, a, 0), "#F4EFE4")
+		end
+		for k = 1, 5 do
+			e("Spike", 0.2, 0.2, 0.2, lighten(BC, 0.25), (k - 3) * 0.4, 0.82, -0.3 + (k % 2) * 0.45)
+		end
+		part(m, "Smile", V(0.7 * s, 0.08 * s, 0.08 * s), at(0, 0.48, -1.65), DARK)
+		for _, lx in ipairs({ -0.85, 0.85 }) do
+			paw(lx, -0.45, 0.22, BC, 0.2)
+			paw(lx, 0.6, 0.22, BC, 0.2)
+		end
+		e("Tail", 0.35, 0.2, 0.7, BC, 0, 0.4, 1.25)
+		eyeY, eyeZ, eyeX, eyeSize = 0.85, -1.6, 0.42, 0.8
+	elseif id == "longhorn" then
+		body = e("Body", 2.15, 1.7, 2.7, BC, 0, 1.35, 0)
+		e("Belly", 1.5, 0.9, 1.6, lighten(BC, 0.35), 0, 1.05, -0.15)
+		head = e("Head", 1.35, 1.2, 1.45, HC, 0, 2.15, -1.35)
+		e("Muzzle", 0.85, 0.55, 0.7, lighten(HC, 0.1), 0, 1.85, -1.9)
+		e("Nose", 0.7, 0.28, 0.28, "#F3C1C1", 0, 1.82, -2.2)
+		e("NostrilL", 0.12, 0.1, 0.08, DARK, -0.16, 1.84, -2.32)
+		e("NostrilR", 0.12, 0.1, 0.08, DARK, 0.16, 1.84, -2.32)
+		e("EarL", 0.35, 0.7, 0.18, HC, -0.7, 2.35, -1.1, 0, 0, 28)
+		e("EarR", 0.35, 0.7, 0.18, HC, 0.7, 2.35, -1.1, 0, 0, -28)
+		for _, side in ipairs({ -1, 1 }) do
+			e("Horn", 1.5, 0.28, 0.28, "#F6F1E6", side * 1.15, 2.7, -1.25, 0, 0, side * -28)
+			e("HornTip", 0.4, 0.2, 0.2, "#3A2A1E", side * 1.8, 3.05, -1.2, 0, 0, side * -40)
+		end
+		e("Tail", 0.28, 0.28, 1.3, BC, 0, 1.4, 1.7, 25, 0, 0)
+		e("Tuft", 0.4, 0.45, 0.4, DARK, 0, 1.05, 2.2)
+		for _, lx in ipairs({ -0.55, 0.55 }) do
+			paw(lx, -0.7, 0.7, "#5C3A24", 0.2)
+			paw(lx, 0.75, 0.7, "#5C3A24", 0.2)
+		end
+		eyeY, eyeZ, eyeX, eyeSize = 2.4, -1.9, 0.4, 0.9
+	elseif id == "bellyrubpup" then
+		body = e("Body", 1.7, 1.45, 2.15, BC, 0, 1.05, 0)
+		e("Belly", 1.2, 0.9, 1.3, "#F7B6C8", 0, 0.85, -0.45)
+		head = e("Head", 1.45, 1.3, 1.35, HC, 0, 2.05, -0.95)
+		e("Muzzle", 0.7, 0.45, 0.55, lighten(HC, 0.12), 0, 1.75, -1.5)
+		e("Nose", 0.28, 0.2, 0.18, "#2A1C16", 0, 1.82, -1.78)
+		wedge(m, "Tongue", V(0.22 * s, 0.28 * s, 0.18 * s), at(0.08, 1.5, -1.7, 20, 0, 0), "#FF6F8E")
+		e("EarL", 0.55, 0.95, 0.22, HC, -0.55, 2.15, -0.7, 10, 0, 24)
+		e("EarR", 0.55, 0.95, 0.22, HC, 0.55, 2.15, -0.7, 10, 0, -24)
+		e("EarInL", 0.28, 0.6, 0.1, "#F7B6C8", -0.55, 2.1, -0.82, 10, 0, 24)
+		e("EarInR", 0.28, 0.6, 0.1, "#F7B6C8", 0.55, 2.1, -0.82, 10, 0, -24)
+		e("Tail", 0.4, 0.4, 0.4, BC, 0.15, 1.35, 1.15)
+		e("Tail", 0.32, 0.32, 0.32, BC, 0.35, 1.55, 1.0)
+		e("Tail", 0.28, 0.28, 0.28, lighten(BC, 0.2), 0.2, 1.75, 0.85)
+		for _, lx in ipairs({ -0.45, 0.45 }) do
+			paw(lx, -0.55, 0.45, BC, 0.22)
+			paw(lx, 0.6, 0.45, BC, 0.22)
+		end
+		eyeY, eyeZ, eyeX, eyeSize = 2.2, -1.5, 0.32, 1.05
+	elseif id == "clapcat" then
+		body = e("Body", 1.15, 1.25, 2.2, BC, 0, 1.15, 0.05)
+		e("Chest", 0.8, 0.7, 0.55, "#2A2A2A", 0, 1.15, -0.7)
+		head = e("Head", 1.25, 1.15, 1.15, HC, 0, 2.15, -0.95)
+		e("Muzzle", 0.45, 0.28, 0.35, "#2C2C2C", 0, 1.9, -1.45)
+		e("Nose", 0.16, 0.12, 0.1, "#F48FB1", 0, 1.95, -1.62)
+		e("EarL", 0.4, 0.85, 0.18, HC, -0.42, 2.75, -0.85, 0, 0, 8)
+		e("EarR", 0.4, 0.85, 0.18, HC, 0.42, 2.75, -0.85, 0, 0, -8)
+		e("EarInL", 0.18, 0.5, 0.08, "#F48FB1", -0.42, 2.7, -0.94, 0, 0, 8)
+		e("EarInR", 0.18, 0.5, 0.08, "#F48FB1", 0.42, 2.7, -0.94, 0, 0, -8)
+		for _, side in ipairs({ -1, 1 }) do
+			for k = -1, 1 do
+				deco(m, "Whisker", V(0.55 * s, 0.03 * s, 0.03 * s), at(side * 0.55, 1.9 + k * 0.06, -1.35, 0, 0, side * k * -8), "#F2F2F2")
+			end
+		end
+		e("Tail", 0.28, 0.28, 0.7, BC, 0, 1.7, 1.15, -40, 0, 0)
+		e("Tail", 0.24, 0.24, 0.6, BC, 0, 2.15, 1.35, -10, 0, 0)
+		e("Tail", 0.2, 0.2, 0.45, BC, 0, 2.45, 1.15, 30, 0, 0)
+		ball(m, "PawL", 0.38 * s, at(-0.28, 1.55, -1.15), BC)
+		ball(m, "PawR", 0.38 * s, at(0.28, 1.55, -1.15), BC)
+		for _, lx in ipairs({ -0.35, 0.35 }) do
+			paw(lx, 0.7, 0.5, BC, 0.16)
+		end
+		eyeY, eyeZ, eyeX, eyeSize = 2.3, -1.45, 0.3, 1
+		iris, pupil = "#F6E27A", "#1A120E"
 	else
-		local flat = id == "hornedtoad"
-		local bodyH = flat and 1.0 or 1.6
-		local by = flat and 0.75 or 1.25
-		body = e("Body", flat and 2.4 or 2.0, bodyH, flat and 2.4 or 2.5, BC, 0, by, 0)
-		e("BellyPatch", 1.4, bodyH * 0.6, 1.8, def.bellyRub and PINK or lighten(BC, 0.35), 0, by - bodyH * 0.28, -0.1)
-		local hy = flat and 1.35 or 2.35
-		head = e("Head", flat and 1.7 or 1.75, flat and 1.1 or 1.6, flat and 1.4 or 1.6, HC, 0, hy, flat and -1.45 or -1.3)
-		-- muzzle and nose
-		local muzzleColor = id == "clapcat" and HC or lighten(HC, 0.35)
-		if id == "armadillo" then
-			e("Muzzle", 0.75, 0.6, 1.2, lighten(HC, 0.2), 0, hy - 0.35, -2.25)
-			e("Nose", 0.35, 0.3, 0.25, DARK, 0, hy - 0.3, -2.85)
-		elseif def.bellyRub then
-			e("Muzzle", 1.15, 0.65, 0.45, lighten(HC, 0.15), 0, hy - 0.4, -2.0)
-			e("Nose", 0.45, 0.3, 0.25, DARK, 0, hy - 0.15, -2.18)
-			e("Tongue", 0.32, 0.4, 0.12, "#FF6F8E", 0.12, hy - 0.72, -2.15)
-		elseif not flat then
-			e("Muzzle", 0.95, 0.65, 0.7, muzzleColor, 0, hy - 0.3, -2.0)
-			e("Nose", 0.32, 0.24, 0.2, id == "clapcat" and "#F48FB1" or DARK, 0, hy - 0.12, -2.33)
-		else
-			e("Smile", 0.7, 0.12, 0.1, DARK, 0, hy - 0.25, -2.12)
+		body = e("Body", 1.8, 1.4, 2.2, BC, 0, 1.05, 0)
+		head = e("Head", 1.3, 1.15, 1.2, HC, 0, 2.05, -1.05)
+		e("Muzzle", 0.6, 0.4, 0.45, lighten(HC, 0.2), 0, 1.8, -1.55)
+		e("Nose", 0.2, 0.14, 0.12, DARK, 0, 1.88, -1.78)
+		for _, lx in ipairs({ -0.45, 0.45 }) do
+			paw(lx, -0.5, 0.45, BC, 0.18)
+			paw(lx, 0.6, 0.45, BC, 0.18)
 		end
-		if not flat then
-			e("CheekL", 0.32, 0.18, 0.1, "#F7A1A9", -0.62, hy - 0.2, -1.95)
-			e("CheekR", 0.32, 0.18, 0.1, "#F7A1A9", 0.62, hy - 0.2, -1.95)
-		end
-		-- legs: thin cylinders and a flat paw, not four more balls
-		for _, lx in { -0.62, 0.62 } do
-			for _, lz in { -0.75, 0.75 } do
-				local px = lx * (flat and 1.25 or 1)
-				local py = flat and 0.22 or 0.42
-				cyl(m, "Leg", (flat and 0.28 or 0.55) * s, (flat and 0.28 or 0.22) * s, at(px, py, lz) * E.CFrame.Angles(0, 0, math.pi / 2), BC)
-				part(m, "Paw", V((flat and 0.45 or 0.38) * s, 0.12 * s, (flat and 0.4 or 0.42) * s), at(px, 0.06, lz - 0.08), BC)
-			end
-		end
-		-- ears
-		if def.ears then
-			if def.bellyRub then
-				e("EarL", 0.6, 1.0, 0.25, HC, -0.55, hy + 0.85, -1.2, 0, 0, 18)
-				e("EarR", 0.6, 1.0, 0.25, HC, 0.55, hy + 0.85, -1.2, 0, 0, -18)
-				e("EarInL", 0.35, 0.7, 0.1, PINK, -0.55, hy + 0.82, -1.33, 0, 0, 18)
-				e("EarInR", 0.35, 0.7, 0.1, PINK, 0.55, hy + 0.82, -1.33, 0, 0, -18)
-			elseif id == "clapcat" or id == "raccoon" then
-				e("EarL", 0.5, 0.85, 0.25, HC, -0.5, hy + 0.75, -1.2, 0, 0, 14)
-				e("EarR", 0.5, 0.85, 0.25, HC, 0.5, hy + 0.75, -1.2, 0, 0, -14)
-				e("EarInL", 0.25, 0.5, 0.1, id == "clapcat" and "#F48FB1" or "#EDEDED", -0.5, hy + 0.7, -1.33, 0, 0, 14)
-				e("EarInR", 0.25, 0.5, 0.1, id == "clapcat" and "#F48FB1" or "#EDEDED", 0.5, hy + 0.7, -1.33, 0, 0, -14)
-			else
-				e("EarL", 0.55, 0.4, 0.3, HC, -0.85, hy + 0.35, -1.2, 0, 0, 25)
-				e("EarR", 0.55, 0.4, 0.3, HC, 0.85, hy + 0.35, -1.2, 0, 0, -25)
-			end
-		end
-		-- tails
-		if id == "raccoon" then
-			for k = 0, 3 do
-				e("Tail", 0.65, 0.65, 0.6, k % 2 == 0 and "#3A3A3A" or "#9A9A9A", 0, 1.35 + k * 0.18, 1.35 + k * 0.45)
-			end
-		elseif id == "clapcat" then
-			e("Tail", 0.3, 2.0, 0.3, BC, 0, 2.2, 1.35, -15, 0, 0)
-		elseif id == "armadillo" then
-			e("Tail", 0.35, 0.35, 1.6, BC, 0, 0.8, 1.7, 12, 0, 0)
-			for k = -1, 2 do
-				e("ShellBand", 2.12, 1.5, 0.35, lighten(BC, 0.12), 0, 1.3, k * 0.5)
-			end
-		elseif not flat then
-			e("Tail", 0.4, 0.4, 0.9, BC, 0, 1.65, 1.35, -35, 0, 0)
-		else
-			e("Tail", 0.5, 0.3, 1.4, BC, 0, 0.55, 1.6)
-		end
-		if def.horns then
-			for _, side in { -1, 1 } do
-				e("Horn", 1.7, 0.36, 0.36, "#F5F0E1", side * 1.35, hy + 0.55, -1.2, 0, 0, side * -22)
-				e("HornTip", 0.5, 0.3, 0.3, "#3A2A1E", side * 2.1, hy + 0.9, -1.2, 0, 0, side * -40)
-			end
-		end
-		if flat then
-			for k = 0, 4 do
-				local a = math.rad(-60 + k * 30)
-				e("Horns", 0.22, 0.22, 0.6, "#F5F0E1", math.sin(a) * 0.65, hy + 0.45, -1.2 + math.cos(a) * 0.2, 35, 0, 0)
-			end
-			for k = 1, 6 do
-				e("Spike", 0.22, 0.22, 0.22, lighten(BC, 0.3), (k % 3 - 1) * 0.6, by + 0.48, -0.6 + math.floor((k - 1) / 3) * 0.9)
-			end
-			eyeY, eyeZ, eyeX, eyeSize = hy + 0.15, -2.05, 0.45, 0.95
-		else
-			eyeY, eyeZ = hy + 0.2, -1.99
-		end
-		if id == "raccoon" then
-			e("Mask", 1.6, 0.55, 0.3, "#1A1A1A", 0, eyeY, -1.88)
-		end
-		if id == "clapcat" then
-			part(m, "PawL", V(0.45 * s, 0.45 * s, 0.45 * s), at(-0.32, 1.85, -2.05), BC).Shape = E.Enum.PartType.Ball
-			part(m, "PawR", V(0.45 * s, 0.45 * s, 0.45 * s), at(0.32, 1.85, -2.05), BC).Shape = E.Enum.PartType.Ball
-		end
+		e("Tail", 0.3, 0.3, 0.9, BC, 0, 1.2, 1.3)
+		eyeY, eyeZ, eyeX, eyeSize = 2.2, -1.5, 0.32, 0.9
 	end
-	-- big shiny eyes (birds build their own)
+
 	if not skipEyes then
-	for _, side in { -1, 1 } do
-		local eyeColor = id == "clapcat" and "#E8D44D" or DARK
-		e(side < 0 and "EyeL" or "EyeR", 0.32 * eyeSize, 0.44 * eyeSize, 0.16, eyeColor, side * eyeX, eyeY, eyeZ)
-		if id == "clapcat" then
-			e("Pupil", 0.12, 0.34, 0.1, DARK, side * eyeX, eyeY, eyeZ - 0.06)
+		eyesAt(eyeY, eyeZ, eyeX, eyeSize)
+		if id ~= "hornedtoad" and id ~= "armadillo" then
+			e("CheekL", 0.28, 0.16, 0.08, "#F7A8B4", -eyeX - 0.18, eyeY - 0.22, eyeZ + 0.05)
+			e("CheekR", 0.28, 0.16, 0.08, "#F7A8B4", eyeX + 0.18, eyeY - 0.22, eyeZ + 0.05)
 		end
-		e(side < 0 and "ShineL" or "ShineR", 0.12 * eyeSize, 0.12 * eyeSize, 0.06, "#FFFFFF", side * eyeX - 0.06, eyeY + 0.1 * eyeSize, eyeZ - 0.08, 0, 0, 0, E.Enum.Material.Neon)
 	end
+
+	if def.staff and head and body then
+		local hat = head.CFrame * E.CFrame.new(0, head.Size.Y * 0.46, 0)
+		cyl(m, "ChefBand", 0.14 * s, math.max(0.6, head.Size.X * 0.9), hat * E.CFrame.Angles(0, 0, math.pi / 2), "#F7F4EF")
+		sph(m, "ChefPuff", V(head.Size.X * 0.7, 0.48 * s, head.Size.X * 0.7), hat * E.CFrame.new(0, 0.26 * s, 0), "#FFFFFF")
+		local apron = part(m, "Apron", V(math.max(0.7, body.Size.X * 0.7), math.max(0.6, body.Size.Y * 0.72), 0.07 * s), body.CFrame * E.CFrame.new(0, -body.Size.Y * 0.05, -math.max(0.4, body.Size.Z * 0.42)), "#FFF8F0", E.Enum.Material.Fabric)
+		apron.CanCollide = false
+		surfaceText(apron, E.Enum.NormalId.Front, "CREW", "#E85D04", nil)
 	end
+
 	for _, c in ipairs(m:GetChildren()) do
 		if c:IsA("BasePart") then
 			c.CanCollide = false

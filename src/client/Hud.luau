@@ -12,6 +12,10 @@ local Config = require(Shared.Config)
 local CookLogic = require(Shared.Logic.CookLogic)
 local HudMenu = require(Shared.Logic.HudMenu)
 local TimeUtil = require(Shared.Logic.TimeUtil)
+local Income = require(Shared.Logic.Income)
+local Staff = require(Shared.Logic.Staff)
+local Economy = require(Shared.Logic.Economy)
+local Goals = require(Shared.Logic.Goals)
 local T = UI.Theme
 
 local Hud = {}
@@ -64,8 +68,8 @@ local function menuButton(parent: Instance, entry: HudMenu.Entry): Frame
 		ZIndex = 2,
 		Parent = parent,
 	})
-	UI.corner(holder, 10)
-	UI.stroke(holder, Color3.fromHex("#2A160E"), 2)
+	UI.corner(holder, 12)
+	UI.stroke(holder, T.stroke, 1.5)
 	UI.label(entry.icon, { Size = UDim2.new(1, 0, 0, 36), Position = UDim2.new(0, 0, 0, 4), TextSize = 28, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 3, Parent = holder })
 	local caption = UI.label(entry.label, { Size = UDim2.new(1, -8, 0, 24), Position = UDim2.new(0, 4, 1, -28), TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center, Font = T.bold, ZIndex = 3, Parent = holder })
 	UI.fitText(caption, 16, 12)
@@ -87,6 +91,18 @@ local function menuButton(parent: Instance, entry: HudMenu.Entry): Frame
 		stroke.Transparency = 1
 	end
 	HudMenu.releaseDecorations(holder)
+	hit.MouseEnter:Connect(function()
+		holder.BackgroundColor3 = T.cardHi
+	end)
+	hit.MouseLeave:Connect(function()
+		holder.BackgroundColor3 = T.bg
+	end)
+	hit.MouseButton1Down:Connect(function()
+		holder.BackgroundColor3 = T.accent
+	end)
+	hit.MouseButton1Up:Connect(function()
+		holder.BackgroundColor3 = T.cardHi
+	end)
 	table.insert(menuButtons, holder)
 	return holder
 end
@@ -131,12 +147,53 @@ function Hud.mount(screen: GuiObject, panels: any)
 	local topList = UI.list(top, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Center)
 	topList.VerticalAlignment = Enum.VerticalAlignment.Center
 	refs.top = top
-	refs.coins = topPill(top, "🪙", 1, T.gold)
+	local coinPill = UI.frame({ Name = "CoinPill", BackgroundColor3 = T.bg, BackgroundTransparency = 0.05, Size = UDim2.new(0, 188, 0, 48), LayoutOrder = 1, Parent = top })
+	UI.corner(coinPill, 16)
+	UI.stroke(coinPill, T.gold, 2)
+	local coinIcon = UI.coin(coinPill, 28)
+	coinIcon.Position = UDim2.new(0, 8, 0.5, -14)
+	refs.coins = UI.label("0", { Name = "Value", Size = UDim2.new(1, -48, 0, 26), Position = UDim2.new(0, 42, 0, 2), TextSize = 22, TextColor3 = T.gold, Font = T.bold, Parent = coinPill })
+	refs.income = UI.label("+0/s", { Name = "Rate", Size = UDim2.new(1, -48, 0, 16), Position = UDim2.new(0, 42, 0, 28), TextSize = 14, TextColor3 = T.green, Font = T.bold, Parent = coinPill })
+	UI.fitText(refs.coins, 22, 14)
+	UI.fitText(refs.income, 14, 11)
+	refs.coinPill = coinPill
+	refs.shownCoins = 0
 	refs.aura = topPill(top, "✨", 2, Color3.fromHex("#D4C2FF"))
 	refs.rank = topPill(top, "👴", 3, T.text, 210)
 	refs.cooler = topPill(top, "🧊", 4, Color3.fromHex("#B9E6FF"))
 	refs.boost = topPill(top, "⏩", 5, Color3.fromHex("#B6F0C8"))
 	refs.boost.Parent.Visible = false
+
+	refs.gift = UI.button("Gift", T.green, { Name = "Gift", Size = UDim2.new(0, 120, 0, 44), LayoutOrder = 6, Visible = false, TextSize = 16, Parent = top }, function()
+		Net.act("ClaimGift")
+	end)
+
+	local goals = UI.frame({
+		Name = "Goals",
+		BackgroundColor3 = T.bg,
+		BackgroundTransparency = 0.04,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 64),
+		Size = UDim2.new(0, 460, 0, 44),
+		Visible = false,
+		ZIndex = 3,
+		Parent = root,
+	})
+	UI.corner(goals, 12)
+	UI.stroke(goals, T.stroke, 1.5)
+	refs.goals = goals
+	refs.goalTitle = UI.label("Next", { Position = UDim2.new(0, 12, 0, 2), Size = UDim2.new(1, -130, 0, 20), TextSize = 16, Font = T.bold, ZIndex = 4, Parent = goals })
+	refs.goalDetail = UI.label("", { Position = UDim2.new(0, 12, 0, 22), Size = UDim2.new(1, -130, 0, 16), TextSize = 13, TextColor3 = T.dim, Font = T.body, ZIndex = 4, Parent = goals })
+	local gBack, gFill = UI.bar(goals, T.accent, { Position = UDim2.new(0, 12, 1, -8), Size = UDim2.new(1, -140, 0, 6), ZIndex = 4 })
+	refs.goalBack, refs.goalFill = gBack, gFill
+	refs.goalBtn = UI.button("Go", T.accent, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.new(0, 88, 0, 36), TextSize = 16, ZIndex = 5, Parent = goals }, function()
+		local action = refs.goalAction
+		if action == "gift" then
+			Net.act("ClaimGift")
+		elseif action == "crew" or action == "upgrades" then
+			Panels.open(action)
+		end
+	end)
 
 	local menu = UI.new("ScrollingFrame", {
 		Name = "Menu",
@@ -251,7 +308,7 @@ function Hud.applyLayout()
 	local stationH = if compact then 128 else 180
 	local actionH = if compact then 48 else 0
 	UI.stationReserve = stationH + actionH + (if compact then 12 else 16)
-	UI.topChrome = if compact then 108 else 68
+	UI.topChrome = if compact then 156 else 116
 	local menuW = if compact then 0 else 112
 	local rightW = if compact then 0 else 204
 
@@ -261,6 +318,9 @@ function Hud.applyLayout()
 		refs.top.Size = UDim2.new(1, -16, 0, 46)
 		refs.menu.Position = UDim2.new(0, 8, 0, 50)
 		refs.menu.Size = UDim2.new(1, -16, 0, 60)
+		refs.goals.AnchorPoint = Vector2.new(0, 0)
+		refs.goals.Position = UDim2.new(0, 8, 0, 114)
+		refs.goals.Size = UDim2.new(1, -16, 0, 40)
 		refs.menu.AutomaticCanvasSize = Enum.AutomaticSize.X
 		refs.menu.ScrollingDirection = Enum.ScrollingDirection.X
 		refs.menuList.FillDirection = Enum.FillDirection.Horizontal
@@ -291,9 +351,13 @@ function Hud.applyLayout()
 	else
 		refs.top.AnchorPoint = Vector2.new(0.5, 0)
 		refs.top.Position = UDim2.new(0.5, 0, 0, 8)
-		refs.top.Size = UDim2.new(0, math.min(980, v.X - 40), 0, 52)
-		refs.menu.Position = UDim2.new(0, 10, 0, 68)
-		refs.menu.Size = UDim2.new(0, 108, 1, -68 - stationH - 16)
+		refs.top.Size = UDim2.new(0, math.min(1100, v.X - 40), 0, 52)
+		refs.goals.AnchorPoint = Vector2.new(0.5, 0)
+		refs.goals.Position = UDim2.new(0.5, 0, 0, 64)
+		local goalW = math.clamp(v.X - 780, 200, 520)
+		refs.goals.Size = UDim2.new(0, goalW, 0, 44)
+		refs.menu.Position = UDim2.new(0, 10, 0, 116)
+		refs.menu.Size = UDim2.new(0, 108, 1, -116 - stationH - 16)
 		refs.menu.AutomaticCanvasSize = Enum.AutomaticSize.Y
 		refs.menu.ScrollingDirection = Enum.ScrollingDirection.Y
 		refs.menuList.FillDirection = Enum.FillDirection.Vertical
@@ -454,8 +518,50 @@ function Hud.update()
 	if layoutKey(s) ~= cardLayoutKey then
 		rebuildCards(s)
 	end
-	refs.coins.Text = UI.fmt(s.coins)
+	local targetCoins = s.coins or 0
+	if refs.shownCoins == nil then
+		refs.shownCoins = targetCoins
+	end
+	local diff = targetCoins - refs.shownCoins
+	if math.abs(diff) < 1 then
+		refs.shownCoins = targetCoins
+	else
+		refs.shownCoins += diff * 0.35
+	end
+	refs.coins.Text = UI.fmt(math.floor(refs.shownCoins + 0.5))
+	refs.income.Text = Income.format(s.income or 0)
 	refs.aura.Text = UI.fmt(s.aura)
+	local gift = s.freeGift
+	refs.gift.Visible = gift ~= nil and gift.ready == true
+	if gift and gift.ready then
+		refs.gift.Text = "Gift " .. UI.fmt(gift.coins or 0)
+	end
+	local roster = s.staff and s.staff.roster or {}
+	local slots = s.staff and s.staff.slots or 1
+	local hireCost = if #roster < slots then Staff.hireCost(#roster) else nil
+	local nextHand = if hireCost then Staff.preview(#roster) else nil
+	local pitCost = Economy.nextPitCost(Config.PitLevels, s.pitLevel)
+	local nextPit = pitCost and Config.PitLevels[s.pitLevel + 1] or nil
+	local rookieActive = s.rookie ~= nil and s.rookie.finished ~= true
+	local goal = Goals.next({
+		rookieActive = rookieActive,
+		giftReady = gift ~= nil and gift.ready == true,
+		coins = s.coins or 0,
+		hireCost = hireCost,
+		hireName = nextHand and nextHand.name or nil,
+		pitCost = pitCost,
+		pitName = nextPit and nextPit.name or nil,
+		crew = #roster,
+		crewSlots = slots,
+	})
+	refs.goals.Visible = goal ~= nil
+	if goal then
+		refs.goalAction = goal.action
+		refs.goalTitle.Text = goal.title
+		refs.goalDetail.Text = goal.detail
+		refs.goalFill.Size = UDim2.fromScale(if goal.goal > 0 then math.clamp(goal.current / goal.goal, 0, 1) else 0, 1)
+		refs.goalBtn.Text = if goal.action == "gift" then "Claim" elseif goal.action == "crew" then "Crew" else "Upgrade"
+	end
 	local rank = Config.Ranks[s.rank]
 	refs.rank.Text = (s.title ~= "" and s.title or (rank and rank.name or ""))
 	refs.cooler.Text = #s.cooler .. "/" .. Config.COOLER_MAX

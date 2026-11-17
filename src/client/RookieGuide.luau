@@ -59,7 +59,11 @@ function RookieGuide.mount(root: GuiObject)
 	refs.skip = skip
 	UI.corner(skip, 8)
 	refs.goal = UI.label("", { Position = UDim2.new(0, 0, 0, 50), Size = UDim2.new(1, -96, 0, 32), TextSize = 20, Parent = card })
-	refs.reward = UI.label("", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 50), Size = UDim2.new(0, 88, 0, 32), TextSize = 16, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = GOLD, Parent = card })
+	refs.rewardCoin = UI.coin(card, 16)
+	refs.rewardCoin.AnchorPoint = Vector2.new(1, 0)
+	refs.rewardCoin.Visible = false
+	refs.rewardCoin.ZIndex = 4
+	refs.reward = UI.label("", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 50), Size = UDim2.new(0, 72, 0, 32), TextSize = 16, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = GOLD, Parent = card })
 	local back, fill = UI.bar(card, T.green, { Position = UDim2.new(0, 0, 0, 88), Size = UDim2.new(1, -52, 0, 12) })
 	refs.fill = fill
 	refs.prog = UI.label("", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 84), Size = UDim2.new(0, 48, 0, 22), TextSize = 16, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.dim, Parent = card })
@@ -103,7 +107,8 @@ function RookieGuide.applyLayout()
 		refs.goal.Position = UDim2.new(0, 0, 0, 22)
 		refs.goal.Size = UDim2.new(1, -150, 0, 22)
 		refs.reward.Position = UDim2.new(1, -100, 0, 22)
-		refs.reward.Size = UDim2.new(0, 96, 0, 20)
+		refs.reward.Size = UDim2.new(0, 78, 0, 20)
+		refs.rewardCoin.Position = UDim2.new(1, -180, 0, 24)
 		refs.tip.Visible = false
 		refs.finish.Position = UDim2.new(0, 0, 0, 48)
 		refs.finish.Size = UDim2.new(1, 0, 0, 28)
@@ -125,7 +130,8 @@ function RookieGuide.applyLayout()
 		refs.goal.Position = UDim2.new(0, 0, 0, 50)
 		refs.goal.Size = UDim2.new(1, -96, 0, 32)
 		refs.reward.Position = UDim2.new(1, 0, 0, 50)
-		refs.reward.Size = UDim2.new(0, 88, 0, 32)
+		refs.reward.Size = UDim2.new(0, 72, 0, 32)
+		refs.rewardCoin.Position = UDim2.new(1, -74, 0, 58)
 		refs.tip.Visible = true
 		refs.finish.Position = UDim2.new(0, 0, 0, 140)
 		refs.finish.Size = UDim2.new(1, 0, 0, 36)
@@ -277,7 +283,8 @@ function RookieGuide.update(s: any)
 	refs.count.Text = string.format("%d/%d", st.step, st.total)
 	refs.goal.Text = (def and def.icon or "") .. " " .. (st.label or "")
 	local rw = st.reward or {}
-	refs.reward.Text = (rw.coins and ("+" .. rw.coins .. " 🪙") or "") .. (rw.cosmetic and " 🎁" or "")
+	refs.reward.Text = (rw.coins and ("+" .. rw.coins) or "") .. (rw.cosmetic and " 🎁" or "")
+	refs.rewardCoin.Visible = rw.coins ~= nil
 	refs.fill.Size = UDim2.fromScale(st.amount > 0 and st.progress / st.amount or 0, 1)
 	refs.prog.Text = string.format("%d/%d", st.progress, st.amount)
 	refs.tip.Text = def and def.tip or ""

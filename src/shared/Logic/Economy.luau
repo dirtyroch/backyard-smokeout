@@ -65,6 +65,33 @@ function Economy.rawCost(meat: any, rankMult: number): number
 	return math.floor(meat.cost * (1 + (rankMult - 1) * 0.5) + 0.5)
 end
 
+export type CookAccess = { pass: boolean, tokens: number, unlocked: boolean }
+export type CookBill = { allowed: boolean, coins: number, usesToken: boolean }
+
+-- Premium cuts always have a coin cost. The pass (or a token, or the Tomahawk
+-- path unlock) is access, not a free cook. A token is spent only when that is
+-- the thing granting access.
+function Economy.cookBill(meat: any, rank: number, rankStep: number, access: CookAccess): CookBill
+	local coins = Economy.rawCost(meat, Economy.rankMult(rank, rankStep))
+	if meat.premium then
+		local pass = access.pass == true
+		local unlocked = access.unlocked == true
+		local tokens = math.max(0, math.floor(access.tokens or 0))
+		local allowed = pass or unlocked or tokens > 0
+		return {
+			allowed = allowed,
+			coins = coins,
+			usesToken = allowed and not pass and not unlocked,
+		}
+	end
+	return { allowed = true, coins = coins, usesToken = false }
+end
+
+function Economy.comboMult(combo: number, step: number, maxCombo: number): number
+	local n = math.clamp(math.floor(combo or 0), 0, maxCombo)
+	return 1 + n * step
+end
+
 -- Rough coins-per-minute for a steady loop (used by balance tests and the README table).
 function Economy.coinsPerMinute(meat: any, slots: number, speed: number, avgRarityMult: number, rankMult: number): number
 	local cycleMinutes = (meat.cookTime / speed) / 60

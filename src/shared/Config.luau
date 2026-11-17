@@ -73,8 +73,11 @@ Config.Meats = {
 	porkbutt = { id = "porkbutt", name = "Pork Butt", station = "smoker", cookTime = 7200, cost = 150, price = 1500, unlockPit = 3, maxRarity = 5, color = "#6B3A20", icon = "🐖", size = { 1.8, 1.4, 1.8 } },
 	turkeyleg = { id = "turkeyleg", name = "Harvest Turkey Leg", station = "smoker", cookTime = 900, cost = 30, price = 260, unlockPit = 1, maxRarity = 5, color = "#A0522D", icon = "🦃", season = "harvest", size = { 1, 1, 2.2 } },
 	holidayham = { id = "holidayham", name = "Holiday Glazed Ham", station = "smoker", cookTime = 1200, cost = 40, price = 340, unlockPit = 1, maxRarity = 5, color = "#B8553A", icon = "🍖", season = "holiday", size = { 1.8, 1.3, 1.6 } },
-	wagyu = { id = "wagyu", name = "Wagyu Brisket", station = "smoker", cookTime = 14400, cost = 0, price = 7000, unlockPit = 1, maxRarity = 5, color = "#2B140B", icon = "🥩", premium = true, size = { 3.2, 1.1, 1.9 } },
-	tomahawk = { id = "tomahawk", name = "Tomahawk Steak", station = "grill", cookTime = 300, cost = 0, price = 700, unlockPit = 1, maxRarity = 5, color = "#5A1E12", icon = "🪓", premium = true, size = { 3, 0.6, 1.4 } },
+	-- Premium cuts still cost coins. The pass, a token pack, or the path unlock is access, not a free cook.
+	-- Wagyu sells for about 2x brisket (7000 vs 3600), so the meat costs 2x brisket too.
+	-- Tomahawk's cost is about 17% of its sale price, in line with a burger or a hot link.
+	wagyu = { id = "wagyu", name = "Wagyu Brisket", station = "smoker", cookTime = 14400, cost = 600, price = 7000, unlockPit = 1, maxRarity = 5, color = "#2B140B", icon = "🥩", premium = true, size = { 3.2, 1.1, 1.9 } },
+	tomahawk = { id = "tomahawk", name = "Tomahawk Steak", station = "grill", cookTime = 300, cost = 120, price = 700, unlockPit = 1, maxRarity = 5, color = "#5A1E12", icon = "🪓", premium = true, size = { 3, 0.6, 1.4 } },
 	firstbrisket = { id = "firstbrisket", name = "First Brisket", station = "smoker", cookTime = 75, cost = 0, price = 100, unlockPit = 1, maxRarity = 5, color = "#3E2215", icon = "🥩", hidden = true, size = { 3, 1, 1.8 } },
 }
 
