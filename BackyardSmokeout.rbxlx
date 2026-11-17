@@ -10675,9 +10675,10 @@ local function handle(player: Player, action: any, a: any, b: any, c: any): (boo
 	if acting[player] then
 		return false, "Slow down, partner!"
 	end
-	acting[player] = true
 	r.lastActive = now
 	advanceAll(player, data, T(), true)
+	-- Set after advanceAll so an error there can never leave the player locked out.
+	acting[player] = true
 	local ok, res, msg = pcall(function()
 		return (fn :: any)(player, data, a, b, c)
 	end)
