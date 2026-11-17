@@ -4,30 +4,28 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local HudMenu = require(Shared:WaitForChild("Logic"):WaitForChild("HudMenu"))
+local Numbers = require(Shared:WaitForChild("Logic"):WaitForChild("Numbers"))
 
 local UI = {}
 
 UI.Theme = {
-	-- "Porch Light" palette. Warm BBQ browns, cream type, ember actions.
-	-- Contrast vs #FFF8F0 (cream), checked as WCAG ratios:
-	--   bg #3A2418 13.8:1, panel #4A2E1E 11.7:1, card #543524 10.4:1, cardHi #5C3A24 9.6:1
-	--   dim #F3D2B4 on card 7.7:1
-	--   accent #C2410C 4.9:1, green #146B34 6.3:1, red #B42318 6.2:1, blue #1D4E89 8.0:1, gift #9D174D 7.5:1
-	-- Gold #FFD15A is a light fill: dark ink #2A140C on it is 12.1:1. Buttons pick ink or cream from the fill.
-	bg = Color3.fromHex("#3A2418"),
-	panel = Color3.fromHex("#4A2E1E"),
-	card = Color3.fromHex("#543524"),
-	cardHi = Color3.fromHex("#5C3A24"),
-	accent = Color3.fromHex("#C2410C"),
+	-- "Night Market" palette. Deep navy panels, cream type, BBQ-orange actions.
+	-- No wood-brown surfaces. Gold stays a light fill so ink is used on it.
+	bg = Color3.fromHex("#12263F"),
+	panel = Color3.fromHex("#1A3354"),
+	card = Color3.fromHex("#234268"),
+	cardHi = Color3.fromHex("#2C5282"),
+	accent = Color3.fromHex("#F26B1D"),
 	gold = Color3.fromHex("#FFD15A"),
-	green = Color3.fromHex("#146B34"),
-	red = Color3.fromHex("#B42318"),
-	blue = Color3.fromHex("#1D4E89"),
-	gift = Color3.fromHex("#9D174D"),
-	text = Color3.fromHex("#FFF8F0"),
-	dim = Color3.fromHex("#F3D2B4"),
-	ink = Color3.fromHex("#2A140C"),
-	paper = Color3.fromHex("#F6E2C4"),
+	green = Color3.fromHex("#1F9D57"),
+	red = Color3.fromHex("#E23B4A"),
+	blue = Color3.fromHex("#3D8BFF"),
+	gift = Color3.fromHex("#E23B6A"),
+	text = Color3.fromHex("#F5F9FF"),
+	dim = Color3.fromHex("#D3E2F5"),
+	ink = Color3.fromHex("#102033"),
+	paper = Color3.fromHex("#F4F7FB"),
+	stroke = Color3.fromHex("#8FB4D8"),
 	font = Enum.Font.FredokaOne,
 	body = Enum.Font.GothamMedium,
 	bold = Enum.Font.GothamBold,
@@ -97,7 +95,7 @@ function UI.corner(parent: Instance, r: number?): UICorner
 end
 
 function UI.stroke(parent: Instance, color: Color3?, thickness: number?): UIStroke
-	return UI.new("UIStroke", { Color = color or Color3.fromHex("#2A160E"), Thickness = thickness or 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = parent })
+	return UI.new("UIStroke", { Color = color or T.stroke, Thickness = thickness or 1.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = parent })
 end
 
 function UI.pad(parent: Instance, px: number)
@@ -183,8 +181,8 @@ function UI.button(text: string, color: Color3?, props: Props?, onClick: (() -> 
 	if b.Size.X.Scale == 0 and b.Size.X.Offset > 0 and b.Size.X.Offset < UI.TOUCH then
 		b.Size = UDim2.new(0, UI.TOUCH, b.Size.Y.Scale, b.Size.Y.Offset)
 	end
-	UI.corner(b, 10)
-	UI.stroke(b, Color3.fromHex("#2A160E"), 2)
+	UI.corner(b, 12)
+	UI.stroke(b, T.stroke, 1.5)
 	UI.fitText(b, math.max(b.TextSize, 16), 14)
 	if onClick then
 		-- One press must run the handler once. A ScrollingFrame can fire
@@ -217,7 +215,7 @@ function UI.button(text: string, color: Color3?, props: Props?, onClick: (() -> 
 end
 
 function UI.bar(parent: Instance, color: Color3, props: Props?): (Frame, Frame)
-	local back = UI.frame({ BackgroundColor3 = Color3.fromHex("#2A160E"), Size = UDim2.new(1, 0, 0, 12), Parent = parent })
+	local back = UI.frame({ BackgroundColor3 = Color3.fromHex("#0C1A2E"), Size = UDim2.new(1, 0, 0, 12), Parent = parent })
 	if props then
 		for k, v in pairs(props) do
 			(back :: any)[k] = v
@@ -230,20 +228,97 @@ function UI.bar(parent: Instance, color: Color3, props: Props?): (Frame, Frame)
 end
 
 function UI.fmt(n: number): string
-	n = math.floor(n)
-	if n >= 1e9 then
-		return string.format("%.2fB", n / 1e9)
-	elseif n >= 1e6 then
-		return string.format("%.2fM", n / 1e6)
-	elseif n >= 1e4 then
-		return string.format("%.1fK", n / 1e3)
+	return Numbers.abbrev(n)
+end
+
+-- A gold coin built from frames. No uploaded image.
+function UI.coin(parent: Instance, px: number?): Frame
+	local s = px or 22
+	local f = UI.new("Frame", {
+		Name = "Coin",
+		BackgroundColor3 = Color3.fromHex("#F5C518"),
+		Size = UDim2.fromOffset(s, s),
+		BorderSizePixel = 0,
+		Active = false,
+		Parent = parent,
+	})
+	UI.corner(f, s)
+	UI.new("UIStroke", { Color = Color3.fromHex("#B8860B"), Thickness = math.max(1.5, s / 9), ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = f })
+	local shine = UI.new("Frame", {
+		Name = "Shine",
+		BackgroundColor3 = Color3.fromHex("#FFF6C8"),
+		Size = UDim2.fromScale(0.42, 0.26),
+		Position = UDim2.fromScale(0.18, 0.14),
+		BorderSizePixel = 0,
+		Active = false,
+		Parent = f,
+	})
+	UI.corner(shine, s)
+	UI.new("TextLabel", {
+		Name = "Glyph",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		Text = "$",
+		Font = Enum.Font.GothamBold,
+		TextColor3 = Color3.fromHex("#8A5A00"),
+		TextScaled = true,
+		Active = false,
+		Parent = f,
+	})
+	return f
+end
+
+-- Puts a coin and an abbreviated amount inside a button. Clicks still hit the button.
+function UI.fillPrice(button: TextButton, prefix: string, amount: number)
+	local old = button:FindFirstChild("PriceRow")
+	if old then
+		old:Destroy()
 	end
-	local s = tostring(n)
-	local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
-	if out:sub(1, 1) == "," then
-		out = out:sub(2)
+	button.Text = ""
+	local row = UI.new("Frame", {
+		Name = "PriceRow",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = button.ZIndex + 1,
+		Active = false,
+		Parent = button,
+	})
+	local list = UI.list(row, Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Center)
+	list.VerticalAlignment = Enum.VerticalAlignment.Center
+	local function quiet(gui: GuiObject)
+		gui.Active = false
+		gui.Interactable = false
 	end
-	return out
+	if prefix ~= "" then
+		local word = UI.label(prefix, {
+			Size = UDim2.fromOffset(0, 24),
+			AutomaticSize = Enum.AutomaticSize.X,
+			TextSize = 18,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextColor3 = button.TextColor3,
+			Font = T.bold,
+			ZIndex = button.ZIndex + 2,
+			Parent = row,
+		})
+		quiet(word)
+	end
+	local coin = UI.coin(row, 18)
+	coin.LayoutOrder = 2
+	coin.ZIndex = button.ZIndex + 2
+	quiet(coin)
+	local amt = UI.label(Numbers.abbrev(amount), {
+		Size = UDim2.fromOffset(0, 24),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextSize = 18,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = button.TextColor3,
+		Font = T.bold,
+		LayoutOrder = 3,
+		ZIndex = button.ZIndex + 2,
+		Parent = row,
+	})
+	quiet(amt)
+	quiet(row)
 end
 
 function UI.clear(parent: Instance)

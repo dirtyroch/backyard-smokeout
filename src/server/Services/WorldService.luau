@@ -9,6 +9,7 @@ local Config = require(Shared.Config)
 local Content = require(Shared.Content)
 local WorldBuilder = require(Shared.WorldBuilder)
 local CookLogic = require(Shared.Logic.CookLogic)
+local Staff = require(Shared.Logic.Staff)
 local Rarity = require(Shared.Logic.Rarity)
 
 local WorldService = {}
@@ -43,6 +44,21 @@ type Waiter = {
 	walked: number,
 }
 local waiters: { [Player]: Waiter } = {}
+
+type CrewMate = {
+	model: Model,
+	id: string,
+	points: { Vector3 },
+	index: number,
+	from: Vector3,
+	to: Vector3,
+	dist: number,
+	walked: number,
+	line: number,
+	nextLine: number,
+}
+local crews: { [Player]: { CrewMate } } = {}
+local crewSig: { [Player]: string } = {}
 
 local function waiterDef(): any
 	for _, c in ipairs(Config.Critters) do
@@ -136,6 +152,155 @@ local function syncWaiter(player: Player)
 		dist = (points[2] - points[1]).Magnitude,
 		walked = 0,
 	}
+end
+
+local function clearCrew(player: Player, plot: Instance?)
+	local list = crews[player]
+	if list then
+		for _, c in ipairs(list) do
+			if c.model then
+				c.model:Destroy()
+			end
+		end
+	end
+	crews[player] = nil
+	crewSig[player] = nil
+	if plot then
+		local old = plot:FindFirstChild("Crew")
+		if old then
+			old:Destroy()
+		end
+	end
+end
+
+local function crewPoints(plot: Instance): { Vector3 }?
+	local pad = plot:FindFirstChild("Pad") :: BasePart?
+	local top = plot:FindFirstChild("Grill") and (plot :: any).Grill:FindFirstChild("Top") :: BasePart?
+	if not pad or not top then
+		return nil
+	end
+	local groundY = pad.Position.Y + pad.Size.Y / 2
+	local points: { Vector3 } = {}
+	local function standAt(pos: Vector3, side: Vector3)
+		table.insert(points, Vector3.new(pos.X, groundY, pos.Z) + side)
+	end
+	local firstSeat = (plot :: any).Tables:FindFirstChild("t1")
+	local seatPart = firstSeat and firstSeat:FindFirstChild("Seat") :: BasePart?
+	local toward = if seatPart then seatPart.Position - top.Position else Vector3.new(0, 0, -1)
+	local flat = Vector3.new(toward.X, 0, toward.Z)
+	if flat.Magnitude < 0.1 then
+		flat = Vector3.new(0, 0, -1)
+	end
+	local dir = flat.Unit
+	local side = Vector3.new(-dir.Z, 0, dir.X)
+	standAt(top.Position, side * 3.2)
+	local smokers = (plot :: any).Smokers
+	if smokers then
+		for _, child in ipairs(smokers:GetChildren()) do
+			local barrel = child:FindFirstChild("Barrel")
+			if barrel and barrel:IsA("BasePart") then
+				standAt(barrel.Position, side * 3.4)
+			end
+		end
+	end
+	local counter = (plot :: any).PassWindow and (plot :: any).PassWindow:FindFirstChild("Counter")
+	if counter and counter:IsA("BasePart") then
+		standAt(counter.Position, dir * 4)
+	end
+	local tables = (plot :: any).Tables
+	if tables then
+		for i = 1, Config.CUSTOMER_SPOTS do
+			local tbl = tables:FindFirstChild("t" .. i)
+			local seat = tbl and tbl:FindFirstChild("Seat") :: BasePart?
+			if seat then
+				standAt(seat.Position, side * -2.4)
+			end
+		end
+	end
+	if #points < 2 then
+		return nil
+	end
+	return points
+end
+
+local function syncStaff(player: Player)
+	local plot = WorldService.plotModel(player)
+	local data = ctx.Game.dataOf(player)
+	if not plot or not data or type(data.staff) ~= "table" then
+		return
+	end
+	local slots = Staff.slots(data.pitLevel or 1)
+	local sig = Staff.signature(data.staff.roster or {}, slots)
+	local existing = crews[player]
+	if crewSig[player] == sig and existing and existing[1] and existing[1].model.Parent then
+		return
+	end
+	if sig == "" then
+		clearCrew(player, plot)
+		return
+	end
+	clearCrew(player, plot)
+	local points = crewPoints(plot)
+	if not points then
+		return
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "Crew"
+	folder.Parent = plot
+	local list: { CrewMate } = {}
+	local n = 0
+	for i, entry in ipairs(data.staff.roster) do
+		if i > slots then
+			break
+		end
+		local def = Staff.appearance(entry, Config.Critters)
+		if def then
+			n += 1
+			local m = WorldBuilder.critter(ENV, folder, def, CFrame.new())
+			m.Name = "Staff_" .. entry.id
+			m:SetAttribute("StaffId", entry.id)
+			for _, c in ipairs(m:GetDescendants()) do
+				if c:IsA("BasePart") then
+					c.CanCollide = false
+					c.CanQuery = false
+					c.CanTouch = false
+				end
+			end
+			local head = m:FindFirstChild("Head")
+			if head and head:IsA("BasePart") then
+				WorldBuilder.billboard(head, "NameTag", entry.name, 2.2, 70, "#FFF6E0", 160, 28, { 4, 0.7, 70, 14 })
+				local bubble = WorldBuilder.billboard(head, "Chatter", Staff.line(entry.id, 1), 3.3, 36, "#1A2744", 220, 36, { 5, 0.9, 90, 16 })
+				local label = bubble:FindFirstChild("Text")
+				if label and label:IsA("TextLabel") then
+					label.TextColor3 = Color3.fromHex("#1A2744")
+					label.BackgroundColor3 = Color3.fromHex("#FFF8EE")
+					label.BackgroundTransparency = 0.05
+				end
+			end
+			local lift = m:GetPivot().Position.Y
+			local lifted = table.clone(points)
+			for pi, p in ipairs(lifted) do
+				lifted[pi] = p + Vector3.new((n - 1) * 1.4, lift, 0)
+			end
+			local start = ((n - 1) % #lifted) + 1
+			local nxt = start % #lifted + 1
+			m:PivotTo(CFrame.lookAt(lifted[start], lifted[nxt]))
+			table.insert(list, {
+				model = m,
+				id = entry.id,
+				points = lifted,
+				index = nxt,
+				from = lifted[start],
+				to = lifted[nxt],
+				dist = (lifted[nxt] - lifted[start]).Magnitude,
+				walked = 0,
+				line = 1,
+				nextLine = os.clock() + 3 + n,
+			})
+		end
+	end
+	crews[player] = list
+	crewSig[player] = sig
 end
 
 function WorldService.map(): any
@@ -394,6 +559,7 @@ function WorldService.refreshStations(player: Player)
 	end
 	ctx.Social.refreshPassWindow(player)
 	syncWaiter(player)
+	syncStaff(player)
 	local _ = t
 end
 
@@ -650,6 +816,50 @@ function WorldService.start()
 					w.to = w.points[w.index]
 					w.dist = (w.to - w.from).Magnitude
 					w.walked = 0
+				end
+			end
+			for player, list in pairs(crews) do
+				local data = ctx.Game.dataOf(player)
+				local roster = data and data.staff and data.staff.roster or {}
+				local byId: { [string]: any } = {}
+				for _, e in ipairs(roster) do
+					byId[e.id] = e
+				end
+				local jobs = ctx.Game.runtime[player] and ctx.Game.runtime[player].staffJob or {}
+				for _, c in ipairs(list) do
+					if not c.model.Parent then
+						continue
+					end
+					local entry = byId[c.id]
+					local speedLevel = entry and entry.speed or 1
+					local job = jobs[c.id] or "idle"
+					local speed = if job == "wait" then 2 else (5 + speedLevel * 1.5)
+					c.walked += speed * dt
+					local span = math.max(c.dist, 0.05)
+					local along = math.clamp(c.walked / span, 0, 1)
+					local pos = c.from:Lerp(c.to, along)
+					local bob = math.abs(math.sin(os.clock() * (10 + speedLevel))) * (if job == "idle" then 0.18 else 0.28)
+					local flat2 = Vector3.new(c.to.X - c.from.X, 0, c.to.Z - c.from.Z)
+					local face2 = if flat2.Magnitude > 0.05 then flat2.Unit else Vector3.new(0, 0, -1)
+					local sway = if job == "idle" then math.sin(os.clock() * 3) * 0.12 else math.sin(os.clock() * 12) * 0.16
+					c.model:PivotTo(CFrame.lookAt(pos + Vector3.new(0, bob, 0), pos + face2) * CFrame.Angles(0, 0, sway))
+					if along >= 1 then
+						c.index = c.index % #c.points + 1
+						c.from = c.to
+						c.to = c.points[c.index]
+						c.dist = (c.to - c.from).Magnitude
+						c.walked = 0
+					end
+					if os.clock() >= c.nextLine then
+						c.line += 1
+						c.nextLine = os.clock() + 5
+						local head = c.model:FindFirstChild("Head")
+						local bubble = head and head:FindFirstChild("Chatter")
+						local label = bubble and bubble:FindFirstChild("Text")
+						if label and label:IsA("TextLabel") then
+							label.Text = Staff.line(c.id, c.line)
+						end
+					end
 				end
 			end
 		end)

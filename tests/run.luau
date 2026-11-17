@@ -29,6 +29,12 @@ local ShopCatalog = require("../src/shared/Logic/ShopCatalog")
 local Howdy = require("../src/shared/Logic/Howdy")
 local Jimothy = require("../src/shared/Logic/Jimothy")
 local Reconcile = require("../src/shared/Logic/Reconcile")
+local Numbers = require("../src/shared/Logic/Numbers")
+local Income = require("../src/shared/Logic/Income")
+local Staff = require("../src/shared/Logic/Staff")
+local FreeGift = require("../src/shared/Logic/FreeGift")
+local Goals = require("../src/shared/Logic/Goals")
+local DefaultData = require("../src/shared/DefaultData")
 local function fs_read(path: string): string
 	return require("@lune/fs").readFile(path)
 end
@@ -1933,7 +1939,7 @@ local HUD_SRC = fs_read("src/client/Hud.luau")
 
 test("every left-menu button names a real panel, except Invite", function()
 	local seen: { [string]: boolean } = {}
-	eq(#HudMenu.entries, 9)
+	eq(#HudMenu.entries, 10)
 	for _, entry in ipairs(HudMenu.entries) do
 		truthy(not seen[entry.id], "duplicate " .. entry.id)
 		seen[entry.id] = true
@@ -2274,6 +2280,199 @@ test("Jimothy reads round and neckless; Bandit stays the slimmer raccoon", funct
 	local waiter = build("jimothy", { waiter = true })
 	truthy(waiter:FindFirstChild("Apron") ~= nil and waiter:FindFirstChild("BowKnot") ~= nil, "waiter wears a bowtie and apron")
 	truthy(bandit:FindFirstChild("Apron") == nil)
+end)
+
+print("Numbers, income, gifts, crew")
+test("big coin totals abbreviate as 1.2K and 3.4M", function()
+	eq(Numbers.abbrev(0), "0")
+	eq(Numbers.abbrev(999), "999")
+	eq(Numbers.abbrev(1000), "1K")
+	eq(Numbers.abbrev(1200), "1.2K")
+	eq(Numbers.abbrev(1500), "1.5K")
+	eq(Numbers.abbrev(3400000), "3.4M")
+	eq(Numbers.abbrev(1000000), "1M")
+	eq(Numbers.abbrev(999999), "1M")
+	eq(Numbers.abbrev(-1200), "-1.2K")
+	eq(Numbers.abbrev(0 / 0), "0")
+end)
+test("income rate is the real trailing window, not a scripted number", function()
+	local events = {}
+	Income.record(events, 100, 0, 30)
+	eq(#events, 0)
+	Income.record(events, 100, 60, 30)
+	Income.record(events, 110, 90, 30)
+	near(Income.perSecond(events, 120, 30), 5) -- 150 coins over 30s
+	eq(Income.format(0), "+0/s")
+	eq(Income.format(0.41), "+0.4/s")
+	eq(Income.format(125), "+125/s")
+	eq(Income.format(1200), "+1.2K/s")
+	Income.record(events, 200, 10, 30)
+	eq(#events, 1, "events older than the window drop off")
+	eq(events[1].n, 10)
+end)
+test("daily streak payout and the timed gift use the same floors the server pays", function()
+	eq(Streak.payout(100, 1, 1), 100)
+	eq(Streak.payout(100, 8, 1), 150) -- week 2 is 1.5x
+	eq(Streak.payout(100, 8, 2), 300) -- then rank
+	eq(Economy.comboMult(0, Config.Flip.comboStep, Config.Flip.comboMax), 1)
+	eq(Economy.comboMult(3, Config.Flip.comboStep, Config.Flip.comboMax), 1.3)
+	eq(Economy.comboMult(99, Config.Flip.comboStep, Config.Flip.comboMax), 2)
+	local gift = FreeGift.new()
+	eq(FreeGift.ready(gift.nextAt, 0), true)
+	truthy(FreeGift.claim(gift, 10))
+	eq(gift.nextAt, 10 + FreeGift.PERIOD)
+	truthy(not FreeGift.claim(gift, 10 + FreeGift.PERIOD - 1))
+	truthy(FreeGift.claim(gift, 10 + FreeGift.PERIOD))
+	eq(FreeGift.payout(1), FreeGift.BASE)
+	eq(FreeGift.payout(2), FreeGift.BASE * 2)
+end)
+test("crew hire costs, upgrades and income climb, and old saves gain empty defaults", function()
+	eq(Staff.slots(1), 1)
+	eq(Staff.slots(5), 5)
+	eq(Staff.slots(9), 5)
+	eq(Staff.hireCost(0), 250)
+	truthy(Staff.hireCost(1) > Staff.hireCost(0))
+	truthy(Staff.hireCost(4) > Staff.hireCost(3))
+	eq(Staff.hireCost(5), nil)
+	local pip = Staff.template(0)
+	eq(pip.id, "pip")
+	eq(pip.role, "grill")
+	eq(pip.speed, 1)
+	eq(Staff.upgradeCost("speed", 1), 180)
+	truthy(Staff.upgradeCost("speed", 2) > Staff.upgradeCost("speed", 1))
+	eq(Staff.upgradeCost("speed", Staff.MAX), nil)
+	eq(Staff.upgradeCost("nope", 1), nil)
+	truthy(Staff.interval(5, false) < Staff.interval(1, false))
+	truthy(Staff.interval(1, true) < Staff.interval(1, false))
+	truthy(Staff.interval(Staff.MAX, true) > 1)
+	eq(Staff.carry(3), 3)
+	near(Staff.qualityTip(1), 1)
+	near(Staff.qualityTip(5), 1.2)
+	near(Staff.qualityLuck(5), 1.24)
+	local meat = Config.Meats.burger
+	local slow = Staff.cookProfitPerSecond(pip, meat, 1, 1.2, 1, false)
+	pip.speed = 5
+	local fast = Staff.cookProfitPerSecond(pip, meat, 1, 1.2, 1, false)
+	truthy(fast > slow)
+	pip.quality = 5
+	local tasty = Staff.cookProfitPerSecond(pip, meat, 1, 1.2, 1, false)
+	truthy(tasty > fast)
+	local withPass = Staff.cookProfitPerSecond(pip, meat, 1, 1.2, 1, true)
+	truthy(withPass > tasty)
+	local floor = Staff.template(2)
+	eq(floor.role, "floor")
+	eq(Staff.cookProfitPerSecond(floor, meat, 1, 1.2, 1, false), 0)
+	truthy(Staff.serveRate(pip, true) > Staff.serveRate(pip, false))
+	local world = { coins = 100, cooler = 2, coolerMax = 40, customers = 1, openGrill = 2, openSmoker = 2, done = 1, burgerCost = 2, linkCost = 6 }
+	local cook = Staff.decide(Staff.template(0), world)
+	eq(cook.kind, "cook")
+	eq(cook.meat, "burger")
+	local pit = Staff.decide(Staff.template(1), world)
+	eq(pit.meat, "hotlink")
+	local served = Staff.decide(floor, world)
+	eq(served.kind, "serve")
+	world.customers = 0
+	world.cooler = 0
+	eq(Staff.decide(floor, world).kind, "collect")
+	world.coins = 1
+	eq(Staff.decide(Staff.template(0), world).kind, "collect")
+	world.done = 0
+	eq(Staff.decide(Staff.template(0), world), nil)
+	local old = { coins = 3 }
+	local filled = Reconcile.fill(old, DefaultData)
+	eq(#filled.staff.roster, 0)
+	eq(filled.freeGift.nextAt, 0)
+	eq(filled.coins, 3)
+	filled.staff.roster = { { id = "nope", speed = 1 }, { id = "pip", speed = 99, capacity = 0 } }
+	Staff.normalize(filled)
+	eq(#filled.staff.roster, 1)
+	eq(filled.staff.roster[1].speed, Staff.MAX)
+	eq(filled.staff.roster[1].capacity, 1)
+	eq(filled.staff.roster[1].name, "Pip")
+	local goal = Goals.next({ rookieActive = false, giftReady = false, coins = 100, hireCost = 250, hireName = "Pip", pitCost = 500, pitName = "Rochin' the Smoker", crew = 0, crewSlots = 1 })
+	eq(goal.id, "hire")
+	eq(goal.goal, 250)
+	eq(Goals.next({ rookieActive = true, giftReady = true, coins = 0, crew = 0, crewSlots = 1 }).id, "gift")
+	eq(Goals.next({ rookieActive = true, giftReady = false, coins = 0, crew = 0, crewSlots = 1 }), nil)
+end)
+test("premium cuts cost coins even when the creator owns every pass", function()
+	for id, m in pairs(Config.Meats) do
+		if id == "firstbrisket" then
+			eq(m.cost, 0, "the tutorial brisket stays free")
+			truthy(m.hidden)
+		else
+			truthy(m.cost > 0, id .. " has a coin cost")
+		end
+	end
+	eq(Config.Meats.wagyu.cost, Config.Meats.brisket.cost * 2)
+	eq(Config.Meats.tomahawk.cost, 120)
+	local none = { pass = false, tokens = 0, unlocked = false }
+	local creator = { pass = true, tokens = 0, unlocked = false }
+	local wagyu = Config.Meats.wagyu
+	local asCreator = Economy.cookBill(wagyu, 1, Config.RANK_STEP, creator)
+	truthy(asCreator.allowed)
+	eq(asCreator.usesToken, false)
+	eq(asCreator.coins, Economy.rawCost(wagyu, 1))
+	truthy(asCreator.coins > 0)
+	local fresh = Economy.cookBill(wagyu, 1, Config.RANK_STEP, none)
+	eq(fresh.allowed, false)
+	eq(fresh.coins, asCreator.coins, "the price is the same; the pass is access")
+	local tokens = Economy.cookBill(wagyu, 1, Config.RANK_STEP, { pass = false, tokens = 3, unlocked = false })
+	eq(tokens.allowed, true)
+	eq(tokens.usesToken, true)
+	eq(tokens.coins, asCreator.coins)
+	local path = Economy.cookBill(Config.Meats.tomahawk, 1, Config.RANK_STEP, { pass = false, tokens = 2, unlocked = true })
+	eq(path.allowed, true)
+	eq(path.usesToken, false)
+	truthy(path.coins > 0)
+	local burger = Economy.cookBill(Config.Meats.burger, 1, Config.RANK_STEP, none)
+	eq(burger.allowed, true)
+	eq(burger.usesToken, false)
+	truthy(burger.coins > 0 and burger.coins <= Config.START_COINS)
+	local panels = fs_read("src/client/Panels.luau")
+	local game = fs_read("src/server/Services/GameService.luau")
+	truthy(string.find(panels, "Cook (free)", 1, true) == nil, "the cook button never says free")
+	truthy(string.find(panels, "cookBill", 1, true) ~= nil)
+	truthy(string.find(game, "cookBill", 1, true) ~= nil)
+	truthy(string.find(game, "spentToken", 1, true) ~= nil)
+	truthy(string.find(Monetization.Passes.PremiumCuts.desc, "meat cost", 1, true) ~= nil)
+	truthy(string.find(Monetization.Products.WagyuPack.desc, "meat cost", 1, true) ~= nil)
+	truthy(string.find(string.lower(Monetization.Passes.PremiumCuts.desc), "free", 1, true) == nil)
+	eq(Monetization.Passes.PremiumCuts.id, 2088479585)
+	eq(Monetization.Passes.PremiumCuts.price, 349)
+	eq(Monetization.Products.WagyuPack.id, 3732457988)
+	eq(Monetization.Products.WagyuPack.price, 79)
+end)
+test("every shop grant exists, and nothing on the coin menu is accidentally free", function()
+	for key, p in pairs(Monetization.Products) do
+		truthy(p.id > 0 and p.price > 0, key)
+		if p.grants then
+			for _, id in ipairs(p.grants) do
+				truthy(Config.Cosmetics[id] ~= nil, key .. " grants missing " .. id)
+			end
+		end
+		if p.cut then
+			local meat = Config.Meats[p.cut]
+			truthy(meat ~= nil and meat.premium == true, key .. " cut")
+			truthy(meat.cost > 0, key .. " cut still costs coins to cook")
+		end
+		if p.kind == "boost" then
+			truthy((p.minutes or 0) > 0 and (p.mult or 0) > 1, key)
+		end
+	end
+	for key, pass in pairs(Monetization.Passes) do
+		truthy(pass.id > 0 and pass.price > 0, key)
+	end
+	for _, id in ipairs(Config.SauceOrder) do
+		local sauce = Config.Sauces[id]
+		truthy(sauce.price > 0 and not sauce.hidden, id .. " is a real coin purchase")
+	end
+	for _, step in ipairs(Config.PathSteps) do
+		if step.reward.cosmetic then
+			truthy(Config.Cosmetics[step.reward.cosmetic] ~= nil, step.label)
+		end
+	end
+	truthy(Config.Cosmetics.starter_hat ~= nil)
 end)
 
 print("Ranch load")

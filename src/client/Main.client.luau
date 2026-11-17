@@ -159,6 +159,16 @@ Net.on("fx", function(p)
 		Fx.pop(tostring(d.medal) .. " Cook-Off Champ!", UI.Theme.gold, 40)
 	elseif p.kind == "howdy" then
 		Fx.howdy(d)
+	elseif p.kind == "freegift" then
+		Sfx.play("coins")
+		Sfx.play("ding", 1.15)
+		Fx.coins(d.value or 0)
+	elseif p.kind == "hired" then
+		Sfx.play("fanfare", 1.05)
+		Fx.pop((d.name or "Crew") .. " clocked in!", UI.Theme.gold, 36)
+	elseif p.kind == "levelup" then
+		Sfx.play("fanfare")
+		Fx.pop(tostring(d.text or "Level up!"), UI.Theme.gold, 36)
 	end
 end)
 

@@ -22,7 +22,7 @@ local KIND_COLOR = {
 	bad = T.red,
 	warn = Color3.fromHex("#E0A030"),
 	ready = T.gold,
-	info = Color3.fromHex("#5A4030"),
+	info = Color3.fromHex("#2C4A6E"),
 }
 
 function Fx.mount(screen: GuiObject)
@@ -69,7 +69,7 @@ function Fx.announce(text: string, color: string?)
 	if not announceHolder then
 		return
 	end
-	local f = UI.frame({ BackgroundColor3 = Color3.fromHex("#1A0F0A"), BackgroundTransparency = 0.25, Size = UDim2.new(1, 0, 0, 34), ZIndex = 51, Parent = announceHolder })
+	local f = UI.frame({ BackgroundColor3 = Color3.fromHex("#12263F"), BackgroundTransparency = 0.12, Size = UDim2.new(1, 0, 0, 34), ZIndex = 51, Parent = announceHolder })
 	UI.corner(f, 17)
 	UI.label(text, { TextXAlignment = Enum.TextXAlignment.Center, TextColor3 = Color3.fromHex(color or "#FFC83C"), TextSize = 18, Size = UDim2.new(1, 0, 1, 0), ZIndex = 52, Parent = f })
 	for i, c in ipairs(announceHolder:GetChildren()) do
@@ -174,7 +174,56 @@ end
 
 function Fx.coins(amount: number)
 	Sfx.play("register", 0.95 + math.random() * 0.1, 0.12)
-	Fx.pop("+" .. UI.fmt(amount) .. " 🪙", T.gold, 34)
+	if not gui then
+		return
+	end
+	local start = UDim2.new(0.5, 0, 0, 78)
+	local finish = UDim2.new(0.5, 0, 0, 28)
+	local pill = gui:FindFirstChild("CoinPill", true)
+	if pill and pill:IsA("GuiObject") then
+		local abs = pill.AbsolutePosition
+		local size = pill.AbsoluteSize
+		local origin = gui.AbsolutePosition
+		local x = abs.X - origin.X + size.X * 0.5
+		local y = abs.Y - origin.Y + size.Y
+		start = UDim2.fromOffset(x, y)
+		finish = UDim2.fromOffset(x, y - 46)
+	end
+	local row = UI.frame({
+		Name = "CoinPop",
+		BackgroundColor3 = T.bg,
+		BackgroundTransparency = 0.05,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = start,
+		Size = UDim2.fromOffset(168, 40),
+		ZIndex = 62,
+		Parent = gui,
+	})
+	UI.corner(row, 20)
+	UI.stroke(row, T.gold, 2)
+	local list = UI.list(row, Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Center)
+	list.VerticalAlignment = Enum.VerticalAlignment.Center
+	local coin = UI.coin(row, 24)
+	coin.ZIndex = 63
+	UI.label("+" .. UI.fmt(amount), {
+		Size = UDim2.fromOffset(96, 28),
+		TextSize = 22,
+		TextColor3 = T.gold,
+		Font = T.bold,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 63,
+		Parent = row,
+	})
+	local tw = TweenService:Create(row, TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Position = finish,
+		BackgroundTransparency = 1,
+	})
+	tw:Play()
+	task.delay(0.95, function()
+		if row.Parent then
+			row:Destroy()
+		end
+	end)
 end
 
 local function shake(seconds: number, power: number)
@@ -226,7 +275,7 @@ function Fx.reveal(meatId: string, rarityId: string, aura: number, smokerPos: Ve
 		end)
 	end
 	local overlay = UI.frame({ BackgroundColor3 = color, BackgroundTransparency = 0.6, Size = UDim2.fromScale(1, 1), ZIndex = 55, Parent = gui })
-	local card = UI.frame({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 520, 0, 220), BackgroundColor3 = Color3.fromHex("#1A0F0A"), ZIndex = 56, Parent = overlay })
+	local card = UI.frame({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 520, 0, 220), BackgroundColor3 = Color3.fromHex("#12263F"), ZIndex = 56, Parent = overlay })
 	UI.corner(card, 20)
 	UI.stroke(card, color, 4)
 	UI.label(string.upper(rar.name) .. "!", { Position = UDim2.new(0, 0, 0, 24), Size = UDim2.new(1, 0, 0, 60), TextSize = 50, TextColor3 = color, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 57, Parent = card })
@@ -332,7 +381,7 @@ local function speechBubble(part: BasePart, text: string, color: Color3)
 	bb.AlwaysOnTop = true
 	bb.Parent = part
 	local label = Instance.new("TextLabel")
-	label.BackgroundColor3 = Color3.fromHex("#3A2418")
+	label.BackgroundColor3 = Color3.fromHex("#12263F")
 	label.BackgroundTransparency = 0.1
 	label.TextColor3 = color
 	label.Font = Enum.Font.FredokaOne

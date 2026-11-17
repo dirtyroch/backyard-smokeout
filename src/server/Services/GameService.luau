@@ -28,6 +28,9 @@ local Holiday = require(Shared.Logic.Holiday)
 local Rookie = require(Shared.Logic.Rookie)
 local MusicPrefs = require(Shared.Logic.MusicPrefs)
 local Jimothy = require(Shared.Logic.Jimothy)
+local Staff = require(Shared.Logic.Staff)
+local Income = require(Shared.Logic.Income)
+local FreeGift = require(Shared.Logic.FreeGift)
 
 local GameService = {}
 local ctx: any = nil
@@ -53,6 +56,9 @@ type Runtime = {
 	cookoffReadyAt: number,
 	announcedDone: { [string]: boolean },
 	rush: any,
+	earns: { any },
+	staffNext: { [string]: number },
+	staffJob: { [string]: string },
 }
 
 GameService.runtime = {} :: { [Player]: Runtime }
@@ -258,6 +264,10 @@ function GameService.addCoins(player: Player, data: any, amount: number, earned:
 	if earned and amount > 0 then
 		data.runCoins += amount
 		data.lifetimeCoins += amount
+		local r = rt(player)
+		if r then
+			Income.record(r.earns, T(), amount, Income.WINDOW)
+		end
 	end
 	GameService.markDirty(player)
 end
@@ -344,7 +354,7 @@ local function advanceAll(player: Player, data: any, t: number, online: boolean)
 end
 GameService.advanceAll = advanceAll
 
-local function plateValue(player: Player, data: any, plate: any, critter: any?, orderMatch: boolean, consumeTip: boolean): number
+local function plateValue(player: Player, data: any, plate: any, critter: any?, orderMatch: boolean, consumeTip: boolean, tipExtra: number?): number
 	local meat = Config.Meats[plate.m]
 	local rar = Rarity.get(Config.Rarities, plate.r)
 	local flipMult = 1
@@ -359,16 +369,15 @@ local function plateValue(player: Player, data: any, plate: any, critter: any?, 
 			flipMult = Config.Flip.unflippedMult
 		end
 	end
-	local combo = math.min(data.combo or 0, Config.Flip.comboMax)
 	local r = rt(player)
 	return Economy.plateValue(meat.price, {
 		rarityMult = rar.mult,
 		rankMult = rankMult(data),
 		crewMult = Economy.crewMult(r and r.crew or 0, Config.Crew.perFriend, Config.Crew.maxFriends),
-		tipMult = critter and critter.tip or 1,
+		tipMult = (critter and critter.tip or 1) * (tipExtra or 1),
 		sauceTip = (consumeTip and useSauce(data, "tip") or 0) + GameService.dinnerBonus(),
 		flipMult = flipMult,
-		comboMult = 1 + combo * Config.Flip.comboStep,
+		comboMult = Economy.comboMult(data.combo or 0, Config.Flip.comboStep, Config.Flip.comboMax),
 		orderBonus = orderMatch and Config.MATCH_ORDER_BONUS or 1,
 		doubleTips = GameService.hasPass(player, "DoubleTips"),
 		passTipMult = Hype.passTip(true, Config.FairPlay.passTipMult, Config.FairPlay.passTipCap),
@@ -409,13 +418,16 @@ local function meatAvailable(player: Player, data: any, meat: any): (boolean, st
 	return true, nil
 end
 
-Actions.StartCook = function(player, data, key, meatId)
+-- opts.quiet: a ranch hand is cooking. Don't spend the player's sauce charges.
+-- opts.luckMult: that hand's quality, applied on top of the pit's luck.
+function GameService.beginCook(player: Player, data: any, key: any, meatId: any, opts: any?): (boolean, string?)
+	opts = opts or {}
 	local kind = validKey(player, data, key)
 	if not kind or type(meatId) ~= "string" then
 		return false, "Bad request."
 	end
 	local meat = Config.Meats[meatId]
-	if not meat or meat.station ~= kind then
+	if not meat or meat.station ~= kind or meat.hidden then
 		return false, "That doesn't go there."
 	end
 	if data.stations[key] then
@@ -425,19 +437,33 @@ Actions.StartCook = function(player, data, key, meatId)
 	if not ok then
 		return false, why
 	end
-	local rm = rankMult(data)
-	local cost = Economy.rawCost(meat, rm)
-	if data.coins < cost then
-		return false, string.format("You need %d coins for that.", cost)
+	local access = {
+		pass = meat.premium and GameService.hasPass(player, "PremiumCuts") or false,
+		tokens = data.cuts[meat.id] or 0,
+		unlocked = meat.id == "tomahawk" and data.unlocks.tomahawk == true or false,
+	}
+	local bill = Economy.cookBill(meat, data.rank, Config.RANK_STEP, access)
+	if not bill.allowed then
+		return false, "Premium cut: get it on the Pitmaster Path or in the Pit Shop."
 	end
-	GameService.addCoins(player, data, -cost, false, "Meat")
-	if meat.premium and not GameService.hasPass(player, "PremiumCuts") and not (meat.id == "tomahawk" and data.unlocks.tomahawk) then
-		data.cuts[meat.id] -= 1
+	if data.coins < bill.coins then
+		return false, string.format("You need %d coins for that.", bill.coins)
 	end
-	local luck = pit(data).luck * (1 + useSauce(data, "luck"))
-	local speedBonus = useSauce(data, "speed")
+	if bill.coins > 0 then
+		GameService.addCoins(player, data, -bill.coins, false, "Meat")
+	end
+	if bill.usesToken then
+		data.cuts[meat.id] = (data.cuts[meat.id] or 0) - 1
+	end
+	local luck = pit(data).luck * (opts.luckMult or 1)
+	local speedBonus = 0
+	if not opts.quiet then
+		luck *= 1 + useSauce(data, "luck")
+		speedBonus = useSauce(data, "speed")
+	end
 	local rarity = Rarity.roll(Config.Rarities, luck, meat.maxRarity, rng:NextNumber())
 	local cook = CookLogic.new(meat.id, rarity, meat.cookTime, T(), 1 + speedBonus)
+	cook.spentToken = bill.usesToken
 	data.stations[key] = cook
 	data.stats.cooks += 1
 	if kind == "smoker" then
@@ -447,8 +473,14 @@ Actions.StartCook = function(player, data, key, meatId)
 	if r then
 		r.announcedDone[key] = nil
 	end
-	ctx.World.refreshStations(player)
+	if not opts.quiet then
+		ctx.World.refreshStations(player)
+	end
 	return true, nil
+end
+
+Actions.StartCook = function(player, data, key, meatId)
+	return GameService.beginCook(player, data, key, meatId, nil)
 end
 
 -- One-button first cook: a 75-second brisket that always comes out Smoke Ring Gold.
@@ -622,7 +654,7 @@ local function removeCustomer(player: Player, customer: any)
 	GameService.markDirty(player)
 end
 
-function GameService.serveCustomer(player: Player, customer: any): (boolean, string?)
+function GameService.serveCustomer(player: Player, customer: any, tipExtra: number?): (boolean, string?)
 	local data = profileOf(player)
 	if not data then
 		return false, "Loading..."
@@ -633,7 +665,7 @@ function GameService.serveCustomer(player: Player, customer: any): (boolean, str
 	end
 	local plate = table.remove(data.cooler, i)
 	local critter = critterDef(customer.critter)
-	local value = plateValue(player, data, plate, critter, matched, true)
+	local value = plateValue(player, data, plate, critter, matched, true, tipExtra)
 	GameService.addCoins(player, data, value, true)
 	data.stats.served += 1
 	local isNew = (data.critters[critter.id] or 0) == 0
@@ -799,6 +831,7 @@ Actions.UpgradePit = function(player, data)
 	data.pitLevel += 1
 	data.stats.upgrades += 1
 	GameService.toast(player, "Pit upgraded to " .. pit(data).name .. "!", "good")
+	GameService.fx(player, "levelup", { text = "Pit upgraded to " .. pit(data).name .. "!" })
 	ctx.World.refreshStations(player)
 	return true, nil
 end
@@ -840,10 +873,13 @@ Actions.Rebirth = function(player, data)
 				addPlate(data, { m = cook.meat, r = cook.rarity, f = cook.flip })
 			elseif not CookLogic.isDone(cook) then
 				local m = Config.Meats[cook.meat]
-				if m.premium then
-					data.cuts[m.id] = (data.cuts[m.id] or 0) + 1
-				else
+				if m then
+					-- Coin cost comes back for every cut, including premium. A token
+					-- comes back only if this cook actually spent one.
 					refund += Economy.rawCost(m, rankMult(data))
+					if cook.spentToken and m.premium then
+						data.cuts[m.id] = (data.cuts[m.id] or 0) + 1
+					end
 				end
 			end
 		end
@@ -908,6 +944,7 @@ Actions.ClaimDaily = function(player, data)
 	local reward = Config.DailyRewards[res.cycleDay]
 	local scaled = table.clone(reward)
 	scaled.coins = math.floor((reward.coins or 0) * Streak.rewardScale(res.count))
+	local paid = Streak.payout(reward.coins or 0, res.count, rankMult(data))
 	GameService.applyReward(player, data, scaled)
 	local note = ""
 	if res.usedFreeMiss then
@@ -915,7 +952,72 @@ Actions.ClaimDaily = function(player, data)
 	elseif res.softReset then
 		note = " (Welcome back! You kept your week.)"
 	end
-	GameService.toast(player, string.format("Day %d streak! +%d coins%s", res.count, math.floor(scaled.coins * rankMult(data)), note), "good")
+	GameService.toast(player, string.format("Day %d streak! +%d coins%s", res.count, paid, note), "good")
+	GameService.fx(player, "levelup", { text = string.format("Day %d! +%d", res.count, paid) })
+	return true, nil
+end
+
+Actions.ClaimGift = function(player, data)
+	Staff.normalize(data)
+	if not FreeGift.claim(data.freeGift, T()) then
+		return false, "Your free gift isn't ready yet."
+	end
+	local amount = FreeGift.payout(rankMult(data))
+	GameService.addCoins(player, data, amount, true, "FreeGift")
+	GameService.toast(player, string.format("Free gift! +%d coins", amount), "good")
+	GameService.fx(player, "freegift", { value = amount })
+	return true, nil
+end
+
+Actions.HireStaff = function(player, data)
+	Staff.normalize(data)
+	local have = #data.staff.roster
+	if have >= Staff.slots(data.pitLevel) then
+		return false, "Upgrade your pit to hire another hand."
+	end
+	local cost = Staff.hireCost(have)
+	local hire = Staff.template(have)
+	if not cost or not hire then
+		return false, "The crew is full."
+	end
+	if data.coins < cost then
+		return false, string.format("You need %d coins.", cost)
+	end
+	GameService.addCoins(player, data, -cost, false, "Staff")
+	table.insert(data.staff.roster, hire)
+	local r = rt(player)
+	if r then
+		r.staffNext[hire.id] = T() + 2
+		r.staffJob[hire.id] = "idle"
+	end
+	GameService.toast(player, hire.name .. " clocked in!", "good")
+	GameService.fx(player, "hired", { name = hire.name, title = Staff.hand(hire.id) and Staff.hand(hire.id).title or "Crew" })
+	ctx.World.refreshStations(player)
+	return true, nil
+end
+
+Actions.UpgradeStaff = function(player, data, id, stat)
+	if type(id) ~= "string" or (stat ~= "speed" and stat ~= "capacity" and stat ~= "quality") then
+		return false, "Bad request."
+	end
+	Staff.normalize(data)
+	local e = Staff.find(data.staff.roster, id)
+	if not e then
+		return false, "That hand isn't on the crew."
+	end
+	local cost = Staff.upgradeCost(stat, e[stat])
+	if not cost then
+		return false, "That's as high as it goes."
+	end
+	if data.coins < cost then
+		return false, string.format("You need %d coins.", cost)
+	end
+	GameService.addCoins(player, data, -cost, false, "Staff")
+	e[stat] += 1
+	local label = if stat == "speed" then "Speed" elseif stat == "capacity" then "Carry" else "Quality"
+	GameService.toast(player, string.format("%s's %s is now %d.", e.name, label, e[stat]), "good")
+	GameService.fx(player, "levelup", { text = e.name .. " " .. label .. " " .. e[stat] })
+	ctx.World.refreshStations(player)
 	return true, nil
 end
 
@@ -1149,6 +1251,17 @@ local function snapshot(player: Player, data: any): any
 		passes = r.passes,
 		customers = customers,
 		combo = data.combo,
+		income = Income.perSecond(r.earns, t, Income.WINDOW),
+		staff = {
+			slots = Staff.slots(data.pitLevel),
+			roster = data.staff.roster,
+			waiter = r.passes.AutoServe == true,
+		},
+		freeGift = {
+			ready = FreeGift.ready(data.freeGift.nextAt, t),
+			nextAt = data.freeGift.nextAt,
+			coins = FreeGift.payout(rankMult(data)),
+		},
 		crew = r.crew,
 		rush = (function()
 			local w = Hype.rushWindow(T(), Config.Rush.period)
@@ -1289,6 +1402,9 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 		resting = false,
 		cookoffReadyAt = 0,
 		announcedDone = {},
+		earns = {},
+		staffNext = {},
+		staffJob = {},
 	}
 	-- Runtime goes in before any yielding call. Until it exists, every action
 	-- returns "Still loading your ranch..." and prompts no-op.
@@ -1500,6 +1616,118 @@ function GameService.init(c: any)
 	ctx = c
 end
 
+local function emptyTended(data: any, prefix: string, slots: number): string?
+	for i = 2, slots do
+		local key = prefix .. i
+		if data.stations[key] == nil then
+			return key
+		end
+	end
+	return nil
+end
+
+local function doneKeys(data: any): { string }
+	local keys = {}
+	for key, cook in pairs(data.stations) do
+		if type(cook) == "table" and CookLogic.isDone(cook) and not cook.burnt and cook.meat ~= "firstbrisket" then
+			table.insert(keys, key)
+		end
+	end
+	return keys
+end
+
+local function countOpen(data: any, prefix: string, slots: number): number
+	local n = 0
+	for i = 2, slots do
+		if data.stations[prefix .. i] == nil then
+			n += 1
+		end
+	end
+	return n
+end
+
+-- Crew tick. The player's first grill and first smoker are never used here.
+local function runStaff(player: Player, data: any, r: any, t: number)
+	if type(data.staff) ~= "table" then
+		return
+	end
+	Staff.normalize(data)
+	local slots = Staff.slots(data.pitLevel)
+	local waiter = GameService.hasPass(player, "AutoServe")
+	local grillSlots = GameService.slotCount(player, data, "grill")
+	local smokerSlots = GameService.slotCount(player, data, "smoker")
+	local rm = rankMult(data)
+	for i, e in ipairs(data.staff.roster) do
+		if i > slots then
+			r.staffJob[e.id] = "wait"
+			continue
+		end
+		if r.staffNext[e.id] == nil then
+			r.staffNext[e.id] = t + 1.5 + i * 0.35
+		end
+		if t < r.staffNext[e.id] then
+			continue
+		end
+		local finished = doneKeys(data)
+		local world = {
+			coins = data.coins,
+			cooler = #data.cooler,
+			coolerMax = Config.COOLER_MAX,
+			customers = #r.customers,
+			openGrill = countOpen(data, "g", grillSlots),
+			openSmoker = countOpen(data, "s", smokerSlots),
+			done = #finished,
+			burgerCost = Economy.rawCost(Config.Meats.burger, rm),
+			linkCost = Economy.rawCost(Config.Meats.hotlink, rm),
+		}
+		local decision = Staff.decide(e, world)
+		r.staffNext[e.id] = t + Staff.interval(e.speed, waiter)
+		if not decision then
+			r.staffJob[e.id] = "idle"
+			continue
+		end
+		if decision.kind == "serve" then
+			r.staffJob[e.id] = "serve"
+			local tip = Staff.qualityTip(e.quality)
+			for _ = 1, decision.count do
+				if #r.customers == 0 or #data.cooler == 0 then
+					break
+				end
+				GameService.serveCustomer(player, r.customers[1], tip)
+			end
+		elseif decision.kind == "collect" then
+			r.staffJob[e.id] = "carry"
+			local n = 0
+			for _, key in ipairs(finished) do
+				if n >= decision.count then
+					break
+				end
+				if collect(player, data, key) then
+					n += 1
+				end
+			end
+		elseif decision.kind == "cook" and decision.meat then
+			r.staffJob[e.id] = "cook"
+			local prefix = if decision.meat == "burger" then "g" else "s"
+			local slotN = if decision.meat == "burger" then grillSlots else smokerSlots
+			for _ = 1, decision.count do
+				local key = emptyTended(data, prefix, slotN)
+				if not key then
+					break
+				end
+				local cooked = GameService.beginCook(player, data, key, decision.meat, {
+					quiet = true,
+					luckMult = Staff.qualityLuck(e.quality),
+				})
+				if not cooked then
+					break
+				end
+			end
+			ctx.World.refreshStations(player)
+		end
+	end
+end
+
 function GameService.start()
 	ctx.Remotes.Action.OnServerInvoke = function(player: Player, action: any, a: any, b: any, c: any)
 		local ok, msg = handle(player, action, a, b, c)
@@ -1552,7 +1780,9 @@ function GameService.start()
 						r.nextSpawn = t + Config.CUSTOMER_SPAWN_SECONDS * (0.7 + rng:NextNumber() * 0.6)
 						spawnCustomer(player, data, r)
 					end
-					-- Jimothy the Waiter auto-serve pass
+					runStaff(player, data, r, t)
+					-- Jimothy the Waiter stays his own pass: he serves plates you already cooked.
+					-- The crew cooks and serves too. Owning the pass also shortens their interval.
 					if GameService.hasPass(player, "AutoServe") and t - r.lastAutoServe >= 4 and #r.customers > 0 and #data.cooler > 0 then
 						r.lastAutoServe = t
 						GameService.serveCustomer(player, r.customers[1])

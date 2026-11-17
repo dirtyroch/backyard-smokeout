@@ -57,4 +57,10 @@ function Streak.rewardScale(count: number): number
 	return 1 + 0.5 * (tier - 1)
 end
 
+-- Matches GameService: streak scale is floored, then the rank multiplier is floored again.
+function Streak.payout(base: number, count: number, rankMult: number): number
+	local scaled = math.floor((base or 0) * Streak.rewardScale(count))
+	return math.floor(scaled * rankMult)
+end
+
 return Streak
