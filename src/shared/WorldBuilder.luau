@@ -867,11 +867,12 @@ local function buildPlot(root, i, cfg)
 
 	-- sign
 	local sign = model(m, "Sign")
-	part(sign, "PostL", V(0.6, 7, 0.6), cf * E.CFrame.new(-6, 3.5, -S / 2 - 1), "#6B4226", E.Enum.Material.Wood)
-	part(sign, "PostR", V(0.6, 7, 0.6), cf * E.CFrame.new(6, 3.5, -S / 2 - 1), "#6B4226", E.Enum.Material.Wood)
+	part(sign, "PostL", V(0.6, 9, 0.6), cf * E.CFrame.new(-6, 4.5, -S / 2 - 1), "#6B4226", E.Enum.Material.Wood)
+	part(sign, "PostR", V(0.6, 9, 0.6), cf * E.CFrame.new(6, 4.5, -S / 2 - 1), "#6B4226", E.Enum.Material.Wood)
 	-- The plot looks toward the hub, so the board's front (its LookVector) already
 	-- points out the path. A 180 degree yaw used to turn that face into the yard.
-	local board = part(sign, "Board", V(12.5, 2.6, 0.4), cf * E.CFrame.new(0, 6.2, -S / 2 - 1), "#F4E1C1", E.Enum.Material.Wood)
+	-- Raised well above head height and non-solid so players (and big avatars) can walk under it.
+	local board = part(sign, "Board", V(12.5, 2.6, 0.4), cf * E.CFrame.new(0, 8.2, -S / 2 - 1), "#F4E1C1", E.Enum.Material.Wood, { CanCollide = false })
 	surfaceText(board, E.Enum.NormalId.Front, "Open Ranch", "#5A2E1E", nil).Name = "OwnerText"
 	surfaceText(board, E.Enum.NormalId.Back, "Open Ranch", "#5A2E1E", nil).Name = "OwnerText"
 

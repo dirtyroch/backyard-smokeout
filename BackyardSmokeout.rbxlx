@@ -4424,11 +4424,12 @@ local function buildPlot(root, i, cfg)
 
 	-- sign
 	local sign = model(m, "Sign")
-	part(sign, "PostL", V(0.6, 7, 0.6), cf * E.CFrame.new(-6, 3.5, -S / 2 - 1), "#6B4226", E.Enum.Material.Wood)
-	part(sign, "PostR", V(0.6, 7, 0.6), cf * E.CFrame.new(6, 3.5, -S / 2 - 1), "#6B4226", E.Enum.Material.Wood)
+	part(sign, "PostL", V(0.6, 9, 0.6), cf * E.CFrame.new(-6, 4.5, -S / 2 - 1), "#6B4226", E.Enum.Material.Wood)
+	part(sign, "PostR", V(0.6, 9, 0.6), cf * E.CFrame.new(6, 4.5, -S / 2 - 1), "#6B4226", E.Enum.Material.Wood)
 	-- The plot looks toward the hub, so the board's front (its LookVector) already
 	-- points out the path. A 180 degree yaw used to turn that face into the yard.
-	local board = part(sign, "Board", V(12.5, 2.6, 0.4), cf * E.CFrame.new(0, 6.2, -S / 2 - 1), "#F4E1C1", E.Enum.Material.Wood)
+	-- Raised well above head height and non-solid so players (and big avatars) can walk under it.
+	local board = part(sign, "Board", V(12.5, 2.6, 0.4), cf * E.CFrame.new(0, 8.2, -S / 2 - 1), "#F4E1C1", E.Enum.Material.Wood, { CanCollide = false })
 	surfaceText(board, E.Enum.NormalId.Front, "Open Ranch", "#5A2E1E", nil).Name = "OwnerText"
 	surfaceText(board, E.Enum.NormalId.Back, "Open Ranch", "#5A2E1E", nil).Name = "OwnerText"
 
@@ -16498,7 +16499,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>117</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>6</Z>
                   <R00>0</R00>
                   <R01>0</R01>
@@ -16514,7 +16515,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -16527,7 +16528,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>117</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>-6</Z>
                   <R00>0</R00>
                   <R01>0</R01>
@@ -16543,7 +16544,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -16556,7 +16557,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>117</X>
-                  <Y>6.199997</Y>
+                  <Y>8.199997</Y>
                   <Z>0</Z>
                   <R00>0</R00>
                   <R01>0</R01>
@@ -16568,6 +16569,7 @@ return WorldClient
                   <R21>0</R21>
                   <R22>0</R22>
                 </CoordinateFrame>
+                <bool name="CanCollide">false</bool>
                 <Color3uint8 name="Color3uint8">16048577</Color3uint8>
                 <token name="Material">512</token>
                 <Vector3 name="size">
@@ -25399,7 +25401,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>78.48886</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>86.97414</Z>
                   <R00>0.70710754</R00>
                   <R01>0</R01>
@@ -25415,7 +25417,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -25428,7 +25430,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>86.97414</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>78.48886</Z>
                   <R00>0.70710754</R00>
                   <R01>0</R01>
@@ -25444,7 +25446,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -25457,7 +25459,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>82.73149</X>
-                  <Y>6.199997</Y>
+                  <Y>8.199997</Y>
                   <Z>82.73149</Z>
                   <R00>0.70710754</R00>
                   <R01>0</R01>
@@ -25469,6 +25471,7 @@ return WorldClient
                   <R21>0</R21>
                   <R22>0.70710754</R22>
                 </CoordinateFrame>
+                <bool name="CanCollide">false</bool>
                 <Color3uint8 name="Color3uint8">16048577</Color3uint8>
                 <token name="Material">512</token>
                 <Vector3 name="size">
@@ -34365,7 +34368,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>-6</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>117</Z>
                   <R00>1</R00>
                   <R01>0</R01>
@@ -34381,7 +34384,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -34394,7 +34397,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>6</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>117</Z>
                   <R00>1</R00>
                   <R01>0</R01>
@@ -34410,7 +34413,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -34423,7 +34426,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>0</X>
-                  <Y>6.199997</Y>
+                  <Y>8.199997</Y>
                   <Z>117</Z>
                   <R00>1</R00>
                   <R01>0</R01>
@@ -34435,6 +34438,7 @@ return WorldClient
                   <R21>0</R21>
                   <R22>1</R22>
                 </CoordinateFrame>
+                <bool name="CanCollide">false</bool>
                 <Color3uint8 name="Color3uint8">16048577</Color3uint8>
                 <token name="Material">512</token>
                 <Vector3 name="size">
@@ -43300,7 +43304,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>-86.97414</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>78.48886</Z>
                   <R00>0.70710754</R00>
                   <R01>0</R01>
@@ -43316,7 +43320,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -43329,7 +43333,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>-78.48886</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>86.97414</Z>
                   <R00>0.70710754</R00>
                   <R01>0</R01>
@@ -43345,7 +43349,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -43358,7 +43362,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>-82.73149</X>
-                  <Y>6.199997</Y>
+                  <Y>8.199997</Y>
                   <Z>82.73149</Z>
                   <R00>0.70710754</R00>
                   <R01>0</R01>
@@ -43370,6 +43374,7 @@ return WorldClient
                   <R21>0</R21>
                   <R22>0.70710754</R22>
                 </CoordinateFrame>
+                <bool name="CanCollide">false</bool>
                 <Color3uint8 name="Color3uint8">16048577</Color3uint8>
                 <token name="Material">512</token>
                 <Vector3 name="size">
@@ -52367,7 +52372,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>-117</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>-6</Z>
                   <R00>0</R00>
                   <R01>0</R01>
@@ -52383,7 +52388,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -52396,7 +52401,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>-117</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>6</Z>
                   <R00>0</R00>
                   <R01>0</R01>
@@ -52412,7 +52417,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -52425,7 +52430,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>-117</X>
-                  <Y>6.199997</Y>
+                  <Y>8.199997</Y>
                   <Z>0</Z>
                   <R00>0</R00>
                   <R01>0</R01>
@@ -52437,6 +52442,7 @@ return WorldClient
                   <R21>0</R21>
                   <R22>0</R22>
                 </CoordinateFrame>
+                <bool name="CanCollide">false</bool>
                 <Color3uint8 name="Color3uint8">16048577</Color3uint8>
                 <token name="Material">512</token>
                 <Vector3 name="size">
@@ -61336,7 +61342,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>-78.48886</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>-86.97414</Z>
                   <R00>-0.70710754</R00>
                   <R01>0</R01>
@@ -61352,7 +61358,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -61365,7 +61371,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>-86.97414</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>-78.48886</Z>
                   <R00>-0.70710754</R00>
                   <R01>0</R01>
@@ -61381,7 +61387,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -61394,7 +61400,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>-82.73149</X>
-                  <Y>6.199997</Y>
+                  <Y>8.199997</Y>
                   <Z>-82.73149</Z>
                   <R00>-0.70710754</R00>
                   <R01>0</R01>
@@ -61406,6 +61412,7 @@ return WorldClient
                   <R21>0</R21>
                   <R22>-0.70710754</R22>
                 </CoordinateFrame>
+                <bool name="CanCollide">false</bool>
                 <Color3uint8 name="Color3uint8">16048577</Color3uint8>
                 <token name="Material">512</token>
                 <Vector3 name="size">
@@ -70339,7 +70346,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>6</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>-117</Z>
                   <R00>-1</R00>
                   <R01>0</R01>
@@ -70355,7 +70362,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -70368,7 +70375,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>-6</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>-117</Z>
                   <R00>-1</R00>
                   <R01>0</R01>
@@ -70384,7 +70391,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -70397,7 +70404,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>-0</X>
-                  <Y>6.199997</Y>
+                  <Y>8.199997</Y>
                   <Z>-117</Z>
                   <R00>-1</R00>
                   <R01>0</R01>
@@ -70409,6 +70416,7 @@ return WorldClient
                   <R21>0</R21>
                   <R22>-1</R22>
                 </CoordinateFrame>
+                <bool name="CanCollide">false</bool>
                 <Color3uint8 name="Color3uint8">16048577</Color3uint8>
                 <token name="Material">512</token>
                 <Vector3 name="size">
@@ -79274,7 +79282,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>86.97414</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>-78.48886</Z>
                   <R00>-0.70710754</R00>
                   <R01>0</R01>
@@ -79290,7 +79298,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -79303,7 +79311,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>78.48886</X>
-                  <Y>3.5</Y>
+                  <Y>4.5</Y>
                   <Z>-86.97414</Z>
                   <R00>-0.70710754</R00>
                   <R01>0</R01>
@@ -79319,7 +79327,7 @@ return WorldClient
                 <token name="Material">512</token>
                 <Vector3 name="size">
                   <X>0.6000061</X>
-                  <Y>7</Y>
+                  <Y>9</Y>
                   <Z>0.6000061</Z>
                 </Vector3>
                 <token name="TopSurface">0</token>
@@ -79332,7 +79340,7 @@ return WorldClient
                 <token name="BottomSurface">0</token>
                 <CoordinateFrame name="CFrame">
                   <X>82.73149</X>
-                  <Y>6.199997</Y>
+                  <Y>8.199997</Y>
                   <Z>-82.73149</Z>
                   <R00>-0.70710754</R00>
                   <R01>0</R01>
@@ -79344,6 +79352,7 @@ return WorldClient
                   <R21>0</R21>
                   <R22>-0.70710754</R22>
                 </CoordinateFrame>
+                <bool name="CanCollide">false</bool>
                 <Color3uint8 name="Color3uint8">16048577</Color3uint8>
                 <token name="Material">512</token>
                 <Vector3 name="size">
