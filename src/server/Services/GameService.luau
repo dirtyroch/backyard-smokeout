@@ -458,13 +458,19 @@ function GameService.beginCook(player: Player, data: any, key: any, meatId: any,
 	if bill.usesToken then
 		data.cuts[meat.id] = (data.cuts[meat.id] or 0) - 1
 	end
+	-- Pass and token cooks are a shown purchase, so the rarity is fixed.
+	-- Luck cannot change it, and a luck sauce stays in the bottle.
+	local paidFixed = Economy.paidCut(meat, access, bill.usesToken)
 	local luck = pit(data).luck * (opts.luckMult or 1)
 	local speedBonus = 0
 	if not opts.quiet then
-		luck *= 1 + useSauce(data, "luck")
+		if not paidFixed then
+			luck *= 1 + useSauce(data, "luck")
+		end
 		speedBonus = useSauce(data, "speed")
 	end
-	local rarity = Rarity.roll(Config.Rarities, luck, meat.maxRarity, rng:NextNumber())
+	local rolled = if paidFixed then "smokering" else Rarity.roll(Config.Rarities, luck, meat.maxRarity, rng:NextNumber())
+	local rarity = Economy.cookRarity(meat, access, bill.usesToken, rolled)
 	local cook = CookLogic.new(meat.id, rarity, meat.cookTime, T(), 1 + speedBonus)
 	cook.spentToken = bill.usesToken
 	if type(opts.hand) == "string" then

@@ -62,7 +62,7 @@ Monetization.Passes = {
 	ExtraSmokers = { id = 2089577508, name = "Extra Smoker Slots", price = 249, icon = "🔥", desc = "+2 cooking pit slots on your ranch, forever." },
 	AutoServe = { id = 2089955594, name = "Jimothy the Waiter", price = 299, icon = "🦝", desc = "Jimothy scurries your waiting customers their food while you're in the game." },
 	DoubleTips = { id = 2088839581, name = "Big Tipper", price = 299, icon = "💰", desc = "Every plate you serve earns +50% coins, forever. Capped for Fair Play; does not affect the Cook-Off or snagging." },
-	PremiumCuts = { id = 2088479585, name = "Premium Cuts", price = 349, icon = "🥩", desc = "Cook Wagyu Brisket and Tomahawk Steaks any time. You still pay the meat cost. (Both can also be earned on the Pitmaster Path.)" },
+	PremiumCuts = { id = 2088479585, name = "Premium Cuts", price = 349, icon = "🥩", desc = "Cook Wagyu Brisket and Tomahawk Steaks any time. Each cook comes out Smoke Ring Gold. You still pay the meat cost. (Both can also be earned on the Pitmaster Path.)" },
 	VIPPatio = { id = 2089979602, name = "VIP Patio", price = 149, icon = "✨", desc = "String lights over your ranch, a VIP sign and a gold name tag. Looks only." },
 } :: { [string]: Pass }
 
@@ -72,8 +72,8 @@ Monetization.Products = {
 	Boost30 = { id = 3732456848, name = "Smoke Speed x2 (30 min)", price = 49, icon = "⏩", kind = "boost", category = "Boosts", minutes = 30, mult = 2, desc = "Everything on your smokers and grill cooks twice as fast for 30 minutes, even while you're offline." },
 	Boost120 = { id = 3732456801, name = "Smoke Speed x2 (2 hours)", price = 149, icon = "⏩", kind = "boost", category = "Boosts", minutes = 120, mult = 2, desc = "Twice as fast for 2 hours, online or offline." },
 	FinishSmokers = { id = 3732456991, name = "Finish All Smokers", price = 39, icon = "✅", kind = "finish", category = "Boosts", desc = "Everything currently cooking finishes instantly. The rarity is already set and doesn't change." },
-	WagyuPack = { id = 3732457988, name = "Wagyu Brisket x3", price = 79, icon = "🥩", kind = "cut", category = "Boosts", cut = "wagyu", count = 3, desc = "3 Wagyu Briskets to smoke. You still pay the meat cost to start each one. Each sells for about 2x a regular brisket and smokes in 4 hours instead of 6." },
-	TomahawkPack = { id = 3732457837, name = "Tomahawk Steak x3", price = 59, icon = "🪓", kind = "cut", category = "Boosts", cut = "tomahawk", count = 3, desc = "3 Tomahawk Steaks for the grill (5 minute cook). You still pay the meat cost to start each one." },
+	WagyuPack = { id = 3732457988, name = "Wagyu Brisket x3", price = 79, icon = "🥩", kind = "cut", category = "Boosts", cut = "wagyu", count = 3, desc = "3 Wagyu Briskets to smoke. Each one comes out Smoke Ring Gold. You still pay the meat cost to start each one. Each sells for about 2x a regular brisket and smokes in 4 hours instead of 6." },
+	TomahawkPack = { id = 3732457837, name = "Tomahawk Steak x3", price = 59, icon = "🪓", kind = "cut", category = "Boosts", cut = "tomahawk", count = 3, desc = "3 Tomahawk Steaks for the grill (5 minute cook). Each one comes out Smoke Ring Gold. You still pay the meat cost to start each one." },
 
 	-- Cosmetics (looks only)
 	ApronGrillMaster = { id = 3732456775, name = "Grill Master Apron", price = 75, icon = "🦺", kind = "cosmetic", category = "Fits", grants = { "apron_grillmaster" }, desc = "The classic. Red apron, big GRILL MASTER letters." },
@@ -94,7 +94,7 @@ Monetization.Products = {
 	BundleGoldRush = { id = 3732456884, name = "Gold Rush Bundle", price = 349, icon = "💛", kind = "bundle", category = "Bundles", grants = { "tool_goldenspatula", "skin_golden" }, valueNote = "R$ 398 if bought separately", desc = "Golden Spatula and Solid Gold Smoker skin." },
 	BundleWholeHog = { id = 3732456962, name = "Whole Hog Collection", price = 499, icon = "🐖", kind = "bundle", category = "Bundles", grants = { "skin_golden", "tool_goldenspatula", "hat_pitmaster", "apron_grillmaster", "smoke_sherbet", "trail_sparkler" }, valueNote = "R$ 730 separately. Costs less as a set.", desc = "Six looks, including the Solid Gold Smoker, Golden Spatula and Sparkler Trail." },
 	-- First-time Pit Pack: one per account, shown first in Bundles until you've bought anything.
-	StarterPitPack = { id = 3732457626, name = "First-Time Pit Pack", price = 49, icon = "🧢", kind = "starter", category = "Bundles", once = true, grants = { "starter_hat" }, minutes = 30, mult = 2, cut = "tomahawk", count = 3, valueNote = "R$ 108 of boost and steaks, plus a hat only found here", desc = "One per account: Rookie Pitmaster Hat, a 30-minute x2 speed boost and 3 Tomahawk Steaks. You still pay the meat cost to cook the steaks." },
+	StarterPitPack = { id = 3732457626, name = "First-Time Pit Pack", price = 49, icon = "🧢", kind = "starter", category = "Bundles", once = true, grants = { "starter_hat" }, minutes = 30, mult = 2, cut = "tomahawk", count = 3, valueNote = "R$ 108 of boost and steaks, plus a hat only found here", desc = "One per account: Rookie Pitmaster Hat, a 30-minute x2 speed boost and 3 Tomahawk Steaks. Each steak comes out Smoke Ring Gold. You still pay the meat cost to cook the steaks." },
 
 	-- Turkey Day look set (on sale only during the Turkey Day Smokeout, back next year; the free
 	-- Thankful & Full Apron stays free for everyone who shares a dish)

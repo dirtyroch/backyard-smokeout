@@ -15,6 +15,25 @@ WorldBuilder.PLOT_SIZE = 64
 WorldBuilder.SMOKER_X = { -24, -16, -8, 0, 8, 16, 24 }
 WorldBuilder.GRILL_X = { -27, -22, -17, -12 }
 
+-- Midpoint, in degrees, of the gap after ranch `index` (1 sits between plot 1 and plot 2).
+function WorldBuilder.gapDegrees(plots: number, index: number): number
+	return (index - 0.5) / plots * 360
+end
+
+-- The neighborhood scenes were laid out on the 8-ranch gaps. Snap an old angle onto the
+-- nearest gap so two extra ranches don't land on a tailgate, an oak, or a pasture.
+function WorldBuilder.nearestGap(plots: number, degrees: number): number
+	local best, bestD = degrees, 1e9
+	for i = 1, plots do
+		local g = WorldBuilder.gapDegrees(plots, i)
+		local d = math.abs((degrees - g + 180) % 360 - 180)
+		if d < bestD then
+			best, bestD = g, d
+		end
+	end
+	return best
+end
+
 local E -- env (Roblox globals: Instance, Vector3, CFrame, Color3, Enum, UDim2)
 
 function WorldBuilder.setEnv(env)
@@ -1195,7 +1214,7 @@ local function buildHub(root, cfg, content)
 end
 
 local function buildCreek(root, content)
-	-- Secret creek "behind" the map, through a gap in the hedge north of plot 7.
+	-- Secret creek behind the map, through the hedge gap due north of the ranches.
 	local creek = model(root, "Creek")
 	local z = -260
 	for i = -8, 8 do
@@ -2035,8 +2054,16 @@ local function buildScenery(map, cfg, content)
 	-- in the gaps between ranches.
 	local hood = model(scenery, "Neighborhood")
 	streaming(hood, "Atomic")
+	local nPlots = cfg.MAX_PLOTS
+	local function sceneAngle(legacy: number): number
+		return WorldBuilder.nearestGap(nPlots, legacy)
+	end
+	local function nearAngle(a: number, b: number): boolean
+		return math.abs((a - b + 180) % 360 - 180) < 0.05
+	end
 	local walls = { "#F2E6CF", "#D7E8F0", "#F6D7C3", "#E3EED2" }
-	for k, a in ipairs({ 22.5, 112.5, 202.5, 337.5 }) do
+	local houseAngles = { sceneAngle(22.5), sceneAngle(112.5), sceneAngle(202.5), sceneAngle(337.5) }
+	for k, a in ipairs(houseAngles) do
 		local pos = polar(a, 290)
 		houseBack(hood, lookAt(pos, V(0, 0, 0)), walls[k], k % 2 == 0 and "#2F7BD8" or PAL.barnRed)
 	end
@@ -2044,10 +2071,10 @@ local function buildScenery(map, cfg, content)
 		local pos = polar(a, r)
 		return lookAt(pos, V(0, 0, 0))
 	end
-	-- 67.5: tailgate party
+	-- tailgate party, in the gap that used to be 67.5 degrees
 	do
 		local g = model(hood, "Tailgate")
-		local cf = gap(67.5, 176)
+		local cf = gap(sceneAngle(67.5), 176)
 		pickupTruck(g, cf * yaw(math.rad(100)), "#C8433A")
 		lawnChair(g, cf * E.CFrame.new(-6, 0, -6) * yaw(0.5), "#1E9E4A")
 		lawnChair(g, cf * E.CFrame.new(-2, 0, -8) * yaw(-0.2), "#E8590C")
@@ -2055,10 +2082,10 @@ local function buildScenery(map, cfg, content)
 		cornhole(g, cf * E.CFrame.new(6, 0, -12), "#2F7BD8")
 		cornhole(g, cf * E.CFrame.new(6, 0, 2) * yaw(math.pi), "#D93636")
 	end
-	-- 112.5: the big oak with a tire swing and a picnic
+	-- the big oak with a tire swing and a picnic, in the gap that used to be 112.5 degrees
 	do
 		local g = model(hood, "TireSwingOak")
-		local cf = gap(112.5, 182)
+		local cf = gap(sceneAngle(112.5), 182)
 		local oak = liveOak(g, cf.Position, 1.7, { shadow = true })
 		leaves(oak:FindFirstChild("Canopy"))
 		local branch = cf * E.CFrame.new(7, 0, 0)
@@ -2066,24 +2093,28 @@ local function buildScenery(map, cfg, content)
 		dcyl(g, "Tire", 1.1, 3.6, branch * E.CFrame.new(0, 5, 0) * yaw(math.pi / 2), "#1C1A1F", E.Enum.Material.SmoothPlastic, false)
 		picnicBlanket(g, cf * E.CFrame.new(-6, 0, -8) * yaw(-0.3))
 	end
-	-- haybales & wildflowers in the other gaps
-	for _, a in ipairs({ 22.5, 157.5, 202.5, 247.5, 292.5, 337.5 }) do
+	-- haybales & wildflowers in the other gaps. The two that flank the north creek
+	-- stay a single layer of hay so the walk out back stays open.
+	local northA, northB = sceneAngle(247.5), sceneAngle(292.5)
+	local firstPasture = sceneAngle(22.5)
+	for _, legacy in ipairs({ 22.5, 157.5, 202.5, 247.5, 292.5, 337.5 }) do
+		local a = sceneAngle(legacy)
 		local g = model(hood, "Pasture")
 		local cf = gap(a, 170)
 		hayBale(g, (cf * E.CFrame.new(-4, 0, 3)).Position, a)
 		hayBale(g, (cf * E.CFrame.new(1, 0, 6)).Position, a + 1)
-		if a ~= 247.5 and a ~= 292.5 then
+		if not nearAngle(a, northA) and not nearAngle(a, northB) then
 			hayBale(g, (cf * E.CFrame.new(-1.5, 4.4, 4.5)).Position, a + 2)
 		end
-		flowerPatch(g, (cf * E.CFrame.new(6, 0, -4)).Position, 4, 12, a % 45 == 22.5 and "bluebonnet" or "mix")
+		flowerPatch(g, (cf * E.CFrame.new(6, 0, -4)).Position, 4, 12, nearAngle(a, firstPasture) and "bluebonnet" or "mix")
 		grassClump(g, (cf * E.CFrame.new(-8, 0, -6)).Position, 1.2)
 		grassClump(g, (cf * E.CFrame.new(9, 0, 8)).Position, 1.1)
 	end
-	do -- backyard kiddie pool + lawn chairs at 337.5 house
-		local cf = lookAt(polar(337.5, 290), V(0, 0, 0))
+	do -- backyard kiddie pool + lawn chairs by the house that used to sit at 337.5
+		local cf = lookAt(polar(sceneAngle(337.5), 290), V(0, 0, 0))
 		kiddiePool(hood, cf * E.CFrame.new(-10, 0, -12))
 		lawnChair(hood, cf * E.CFrame.new(-2, 0, -12) * yaw(1.2), "#FFC83C")
-		local cf2 = lookAt(polar(112.5, 290), V(0, 0, 0))
+		local cf2 = lookAt(polar(sceneAngle(112.5), 290), V(0, 0, 0))
 		cooler(hood, cf2 * E.CFrame.new(8, 0, -10), "#1E9E4A")
 		lawnChair(hood, cf2 * E.CFrame.new(4, 0, -12) * yaw(0.4), "#2F7BD8")
 	end
@@ -2154,7 +2185,8 @@ local function buildScenery(map, cfg, content)
 	-- Ambient critters (moved around by the Ambient client script; purely cosmetic).
 	local critters = folder(scenery, "Critters")
 	local spots = {
-		{ "armadillo", polar(45, 186), 16, 3 },
+		-- Just outside ranch 2, on its outward axis. 45 degrees was that axis when there were 8 ranches.
+		{ "armadillo", polar((2 - 1) / cfg.MAX_PLOTS * 360, 186), 16, 3 },
 		{ "roadrunner", polar(200, 192), 24, 9 },
 		{ "hornedtoad", V(30, 0, -244), 10, 2 },
 		{ "jimothy", polar(150, 200), 14, 3 },
@@ -2313,14 +2345,14 @@ local function buildJimothy(map, cfg)
 	end
 
 	-- Outside the pads: angular midpoint of plot 1 and plot 2, past the outward edge.
-	local gapPos = polar(22.5, 188)
+	local gapPos = polar(WorldBuilder.nearestGap(cfg.MAX_PLOTS, 22.5), 188)
 	local gapParent = scenery or map
 	placeJimothy(gapParent, "Sighting_plots", E.CFrame.new(gapPos + V(0, 0.55, 0)), sized(0.58), { sighting = "plots" })
 
 	local creek = map:FindFirstChild("Creek")
 	placeJimothy(creek or map, "Sighting_creek", E.CFrame.new(-72, 0.55, -270), sized(0.5), { sighting = "creek" })
 
-	local oakPos = polar(112.5, 182)
+	local oakPos = polar(WorldBuilder.nearestGap(cfg.MAX_PLOTS, 112.5), 182)
 	local oakParent = scenery or map
 	placeJimothy(oakParent, "Sighting_oak", E.CFrame.new(oakPos + oakPos.Unit * 7 + V(0, 0.55, 0)), sized(0.55), { sighting = "oak" })
 end

@@ -15,7 +15,7 @@ Record in Studio with **View > Video Record**, or use the Roblox client's record
 | 7 | 0:18–0:21 | Saturday Cook-Off. Granny Pecan: "Child, you COOKED." The cat claps. | "YOU COOKED." | Crowd cheer (original) |
 | 8 | 0:21–0:24 | The mosquito swarm at dusk: 4 players swat, and the purple Queen pops. | "SQUAD UP AT DUSK" | Swat pops |
 | 9 | 0:24–0:27 | Time-lapse from log-out to log-in: Unc Hank says "Welcome back! You were gone 8h and 4 meats finished smoking" (UI on). | "SMOKE IT WHILE YOU SLEEP" | A calm pad |
-| 10 | 0:27–0:30 | Aerial over the hub and 8 ranches at golden hour, with the logo. | "BACKYARD COOKOUT" / "Play free" | Final hit |
+| 10 | 0:27–0:30 | Aerial over the hub and 10 ranches at golden hour, with the logo. | "BACKYARD COOKOUT" / "Play free" | Final hit |
 
 Rules: use only original or Roblox-licensed audio from the Creator Store, no real songs and no real people. Don't show Robux prices, and avoid "FREE" or "LIMITED" pressure copy.
 
