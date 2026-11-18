@@ -1651,6 +1651,37 @@ function WorldBuilder.turkeyDay(pot, content)
 	return m
 end
 
+-- A few pumpkins and a corn bundle by the welcome arch, only while Turkey Day is on.
+-- Built at runtime and removed with the potluck decor. No collision, so the path stays clear.
+-- Original shapes only: pumpkins and a corn bundle, nothing borrowed.
+function WorldBuilder.autumnRanch(hub)
+	if not hub then
+		return nil
+	end
+	local old = hub:FindFirstChild("AutumnRanch")
+	if old then
+		old:Destroy()
+	end
+	local m = model(hub, "AutumnRanch")
+	local spots = {
+		{ -16.2, 0.85, -46.5, 1.7 },
+		{ -18.4, 0.55, -48.2, 1.15 },
+		{ 16.4, 0.8, -47.2, 1.55 },
+		{ 18.2, 0.5, -44.8, 1.05 },
+	}
+	for i, pk in ipairs(spots) do
+		local p = deco(m, "Pumpkin" .. i, V(pk[4] * 1.2, pk[4], pk[4] * 1.2), E.CFrame.new(pk[1], pk[2], pk[3]), "#E8761E", E.Enum.Material.SmoothPlastic, true)
+		local mesh = E.Instance.new("SpecialMesh")
+		mesh.MeshType = E.Enum.MeshType.Sphere
+		mesh.Parent = p
+		deco(m, "Stem" .. i, V(0.18, 0.4, 0.18), E.CFrame.new(pk[1], pk[2] + pk[4] * 0.55, pk[3]), "#4E6B2A", E.Enum.Material.Wood, false)
+	end
+	for k = 0, 3 do
+		deco(m, "Corn", V(0.16, 2.8, 0.42), E.CFrame.new(-14.4, 1.4, -47.2 + k * 0.28) * E.CFrame.Angles(0, 0, math.rad((k - 1.5) * 8)), k % 2 == 0 and "#C9A44C" or "#B08838", E.Enum.Material.Grass, false)
+	end
+	return m
+end
+
 -- Holiday Smokeout decor for the hub potluck table (built at runtime only Dec 19 - Jan 1, then
 -- destroyed). Same layout rules as Turkey Day: everything hangs off the Potluck's Table part.
 -- Adds a glazed holiday ham (the "Share a dish" prompt), a tray of tamales, sugar cookies, a little

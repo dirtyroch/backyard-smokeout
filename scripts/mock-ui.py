@@ -195,6 +195,90 @@ def settings(w, h, compact):
     return img
 
 
+# Current HUD colors (navy panels, orange actions), used for the Turkey Day preview.
+NAVY = (18, 38, 63)
+NAVY_2 = (26, 51, 84)
+CREAM_N = (245, 249, 255)
+DIM_N = (211, 226, 245)
+ORANGE = (242, 107, 29)
+GOLD_N = (255, 209, 90)
+GREEN_N = (31, 157, 87)
+SKY_N = (186, 214, 236)
+GRASS_N = (92, 148, 62)
+
+
+def event_hud(w, h, compact, fixed_toast):
+    """Phone or desktop HUD with the Turkey Day login note.
+
+    fixed_toast=True is the old spot (y=120), which sits on the guide.
+    fixed_toast=False is the spot under the guide and the goals bar.
+    """
+    img = Image.new("RGB", (w, h), GRASS_N)
+    d = ImageDraw.Draw(img)
+    d.rectangle((0, 0, w, int(h * 0.42)), fill=SKY_N)
+    # welcome arch and the pumpkins that only show during Turkey Day week
+    arch_y = int(h * 0.28)
+    d.rectangle((w // 2 - 70, arch_y, w // 2 - 58, arch_y + 70), fill=(107, 66, 38))
+    d.rectangle((w // 2 + 58, arch_y, w // 2 + 70, arch_y + 70), fill=(107, 66, 38))
+    d.rectangle((w // 2 - 78, arch_y - 16, w // 2 + 78, arch_y), fill=(139, 69, 19))
+    d.text((w // 2 - 62, arch_y - 14), "BACKYARD COOKOUT", font=font(11, True), fill=GOLD_N)
+    for px, py, r in ((w // 2 - 110, arch_y + 48, 16), (w // 2 - 132, arch_y + 58, 11), (w // 2 + 100, arch_y + 50, 15), (w // 2 + 124, arch_y + 60, 10)):
+        d.ellipse((px, py, px + r * 2, py + r * 2), fill=ORANGE)
+        d.rectangle((px + r - 2, py - 6, px + r + 2, py + 2), fill=(78, 107, 42))
+    label = ("phone before" if fixed_toast else "phone after") if compact else ("desktop before" if fixed_toast else "desktop after")
+    banner(img, "MOCK  ·  Turkey Day  ·  " + label)
+    y0 = 44
+    if compact:
+        rr(d, (8, y0, w - 8, y0 + 44), 14, NAVY, GOLD_N, 2)
+        d.text((18, y0 + 12), "1,250 coins    aura 80    Rookie", font=font(14, True), fill=GOLD_N)
+        mx = 8
+        for label in ("Shop", "Season", "Crew", "Gift"):
+            button(d, (mx, 96, mx + 78, 140), label, NAVY)
+            mx += 84
+        guide = (8, 148, w - 8, 196)
+        rr(d, guide, 12, NAVY, GOLD_N, 3)
+        d.text((18, 156), "1/4   Claim your ranch", font=font(15, True), fill=GOLD_N)
+        d.text((18, 176), "Tap the orange button to start your first brisket.", font=font(12), fill=DIM_N)
+        button(d, (12, h - 168, w // 3 - 4, h - 124), "Serve All", GREEN_N)
+        button(d, (w // 3 + 4, h - 168, 2 * w // 3 - 4, h - 124), "Collect", (61, 139, 255))
+        button(d, (2 * w // 3 + 4, h - 168, w - 12, h - 124), "Home", NAVY_2)
+        station(d, 12, h - 116, "Smoker 1", "Empty", "Cook", ORANGE, True)
+        toast_y = 112 if fixed_toast else 204
+    else:
+        pill(d, (w // 2 - 360, y0), 160, 48, "coin", "1,250", GOLD_N)
+        pill(d, (w // 2 - 190, y0), 140, 48, "aura", "80", (212, 194, 255))
+        pill(d, (w // 2 - 40, y0), 180, 48, "rank", "Rookie", CREAM_N)
+        my = 110
+        for label in ("Shop", "Season", "Crew", "Daily", "Gift"):
+            button(d, (16, my, 120, my + 52), label, NAVY)
+            my += 58
+        guide = (150, 112, 150 + 520, 164)
+        rr(d, guide, 12, NAVY, GOLD_N, 3)
+        d.text((164, 122), "1/4   Claim your ranch", font=font(16, True), fill=GOLD_N)
+        d.text((164, 142), "Tap the orange button. Pip cooks burgers, not the turkey.", font=font(13), fill=DIM_N)
+        button(d, (w - 220, h - 200, w - 24, h - 148), "Serve All", GREEN_N)
+        station(d, 150, h - 140, "Smoker 1", "Harvest Turkey Leg", "15 min", ORANGE, False)
+        toast_y = 64 if fixed_toast else 176
+    note = "It's Turkey Day Cookout week! Smoke a Harvest Turkey Leg and share it at the potluck table."
+    tw = min(460, w - 24)
+    tx = (w - tw) // 2
+    rr(d, (tx, toast_y, tx + tw, toast_y + 64), 10, GREEN_N)
+    d.text((tx + 12, toast_y + 8), "Turkey Day", font=font(14, True), fill=NAVY)
+    # wrap the note roughly
+    words = note.split()
+    line, y = "", toast_y + 28
+    for word in words:
+        trial = (line + " " + word).strip()
+        if d.textlength(trial, font=font(13)) > tw - 24:
+            d.text((tx + 12, y), line, font=font(13), fill=CREAM_N)
+            line, y = word, y + 16
+        else:
+            line = trial
+    if line:
+        d.text((tx + 12, y), line, font=font(13), fill=CREAM_N)
+    return img
+
+
 def main():
     import os
     os.makedirs(OUT, exist_ok=True)
@@ -205,11 +289,26 @@ def main():
         "mock-mobile-hud.png": hud(844, 390, True),
         "mock-mobile-shop.png": shop(844, 390, True),
         "mock-mobile-settings.png": settings(844, 390, True),
+        "mock-turkey-phone-before.png": event_hud(390, 844, True, True),
+        "mock-turkey-phone-after.png": event_hud(390, 844, True, False),
+        "mock-turkey-desktop-before.png": event_hud(1280, 720, False, True),
+        "mock-turkey-desktop-after.png": event_hud(1280, 720, False, False),
     }
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo_out = os.path.normpath(os.path.join(here, "..", "marketing", "ui-mocks"))
+    os.makedirs(repo_out, exist_ok=True)
+    os.makedirs("/opt/cursor/artifacts", exist_ok=True)
     for name, img in pairs.items():
         path = f"{OUT}/{name}"
-        img.save(path)
-        print(path, img.size)
+        try:
+            img.save(path)
+            print(path, img.size)
+        except OSError as err:
+            print("skip", path, err)
+        if name.startswith("mock-turkey-"):
+            img.save(os.path.join(repo_out, name))
+            img.save(os.path.join("/opt/cursor/artifacts", name))
+            print(os.path.join(repo_out, name), img.size)
 
 
 if __name__ == "__main__":

@@ -41,6 +41,8 @@ UI.stationReserve = 188
 UI.topChrome = 68
 
 UI.onClick = nil :: (() -> ())?
+-- Hud.applyLayout calls this after the boxes move, so toasts can follow the guide.
+UI.onLayout = nil :: (() -> ())?
 
 type Props = { [string]: any }
 

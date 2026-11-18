@@ -2719,6 +2719,210 @@ local function assertHud(label: string, width: number, height: number, insets: a
 	end
 end
 
+print("Turkey Day week")
+test("a full Turkey Day week: before, during, after, the share, and Holiday Smokeout the same way", function()
+	local TD, HS = Config.TurkeyDay, Config.HolidaySmokeout
+	local idx = function(id: string): number
+		return Rarity.indexOf(Config.Rarities, id)
+	end
+	local function dayOf(y: number, m: number, d: number): number
+		return Holiday.daysFromCivil(y, m, d)
+	end
+	local function turkey(day: number)
+		return Holiday.turkeyWeek(day, TD.daysBefore, TD.daysAfter)
+	end
+	local function request(active: boolean, day: number, sharedOn: number, plates: { any }, meatId: string, price: number, mult: number, owns: boolean)
+		return {
+			active = active,
+			day = day,
+			sharedOn = sharedOn,
+			cooler = plates,
+			meatId = meatId,
+			ownsReward = owns,
+			price = price,
+			shareMult = mult,
+			rankMult = 1,
+			rarityIndex = idx,
+		}
+	end
+	-- Wed Nov 18 2026 is inside the teaser week (opens Mon Nov 23), not the event itself.
+	local today = dayOf(2026, 11, 18)
+	local wToday = turkey(today)
+	eq(wToday.active, false, "Nov 18 is before the window")
+	eq(Holiday.soon(today, wToday, Config.EventTeaserDays), 5, "five days out")
+	eq(Holiday.longLabel(wToday.startDay), "Mon, Nov 23")
+	local soonByDay = { [15] = nil, [16] = 7, [18] = 5, [22] = 1, [23] = nil, [26] = nil, [29] = nil, [30] = nil }
+	local openByDay = { [15] = false, [16] = false, [18] = false, [22] = false, [23] = true, [26] = true, [29] = true, [30] = false }
+	for d, active in pairs(openByDay) do
+		local day = dayOf(2026, 11, d)
+		local w = turkey(day)
+		eq(w.active, active, "Nov " .. d)
+		eq(Holiday.soon(day, w, Config.EventTeaserDays), soonByDay[d], "teaser Nov " .. d)
+		if active then
+			eq(Holiday.label(w.startDay), "Nov 23")
+			eq(Holiday.label(w.endDay), "Nov 29")
+		end
+	end
+	eq(turkey(dayOf(2026, 11, 26)).isDay, true, "Thanksgiving")
+	local openDays = 0
+	for d = 15, 30 do
+		if turkey(dayOf(2026, 11, d)).active then
+			openDays += 1
+		end
+	end
+	eq(openDays, 7, "Mon through Sun, then it is packed up")
+
+	local open = dayOf(2026, 11, 26)
+	local leg = Config.Meats.turkeyleg
+	local cooler = {
+		{ m = "turkeyleg", r = "juicy", by = "crew" },
+		{ m = "burger", r = "common" },
+		{ m = "turkeyleg", r = "smokering" },
+		{ m = "turkeyleg", r = "common" },
+	}
+	local before = Holiday.tryShare(request(false, today, -1, cooler, TD.meat, leg.price, TD.shareMult, false))
+	eq(before.reason, "closed")
+	eq(before.ok, false)
+	eq(#cooler, 4, "a closed table doesn't take the plate")
+	local first = Holiday.tryShare(request(true, open, -1, cooler, TD.meat, leg.price, TD.shareMult, false))
+	eq(first.ok, true)
+	eq(first.index, 4, "plainest leg the player cooked, never the crew leg")
+	eq(first.first, true, "first share earns the apron")
+	eq(first.coins, math.floor(leg.price * TD.shareMult))
+	local taken = table.remove(cooler, first.index :: number)
+	eq(taken.by, nil)
+	eq(taken.r, "common")
+	local sameDay = Holiday.tryShare(request(true, open, open, cooler, TD.meat, leg.price, TD.shareMult, true))
+	eq(sameDay.reason, "already")
+	eq(#cooler, 3, "the second visit doesn't take another plate")
+	local tomorrow = Holiday.tryShare(request(true, open + 1, open, cooler, TD.meat, leg.price, TD.shareMult, true))
+	eq(tomorrow.ok, true)
+	eq(tomorrow.first, false, "the apron is already earned")
+	eq(tomorrow.index, 3, "the rare player leg is still shareable the next day")
+	local onlyCrew = { { m = "turkeyleg", r = "common", by = "crew" }, { m = "turkeyleg", r = "juicy", by = "crew" } }
+	local farm = Holiday.tryShare(request(true, open, -1, onlyCrew, TD.meat, leg.price, TD.shareMult, false))
+	eq(farm.reason, "need", "crew legs cannot cash the daily reward or the apron")
+	eq(#onlyCrew, 2)
+	local after = Holiday.tryShare(request(turkey(dayOf(2026, 11, 30)).active, dayOf(2026, 11, 30), -1, cooler, TD.meat, leg.price, TD.shareMult, true))
+	eq(after.reason, "closed", "Nov 30 the table is packed up")
+
+	-- three different pitmasters fill the table; one pitmaster twice is still one dish
+	local shares: { [number]: number } = {}
+	local last = -1e9
+	local filled = false
+	local filledN = 0
+	for uid = 1, TD.need do
+		shares[uid] = 5000
+		local n, go = Hype.pileOn(shares, 5000, TD.window, TD.need, last, TD.cooldown)
+		filled = go
+		filledN = n
+	end
+	eq(filledN, TD.need)
+	eq(filled, true)
+	local solo: { [number]: number } = { [7] = 5000 }
+	solo[7] = 5010
+	local soloN = Hype.pileOn(solo, 5010, TD.window, TD.need, -1e9, TD.cooldown)
+	eq(soloN, 1, "the same pitmaster cannot fill a seat twice")
+
+	-- Holiday Smokeout: same share rules, its own dates
+	local function holiday(day: number)
+		return Holiday.dateWindow(day, HS.start, HS.finish, HS.peak)
+	end
+	local dec18 = dayOf(2026, 12, 18)
+	eq(holiday(dec18).active, false)
+	eq(Holiday.soon(dec18, holiday(dec18), Config.EventTeaserDays), 1)
+	local christmas = dayOf(2026, 12, 25)
+	eq(holiday(christmas).active, true)
+	eq(holiday(christmas).isDay, true)
+	eq(holiday(dayOf(2027, 1, 1)).active, true)
+	eq(holiday(dayOf(2027, 1, 2)).active, false)
+	local ham = Config.Meats.holidayham
+	local hCooler = { { m = "holidayham", r = "common", by = "crew" }, { m = "holidayham", r = "juicy" } }
+	local hShare = Holiday.tryShare(request(true, christmas, -1, hCooler, HS.meat, ham.price, HS.shareMult, false))
+	eq(hShare.index, 2, "player ham, not the crew ham")
+	eq(hShare.first, true)
+	eq(hShare.coins, math.floor(ham.price * HS.shareMult))
+	local hClosed = Holiday.tryShare(request(false, dayOf(2027, 1, 2), -1, hCooler, HS.meat, ham.price, HS.shareMult, false))
+	eq(hClosed.reason, "closed")
+	for _, p in pairs(Monetization.Products) do
+		if p.event == "turkeyday" or p.event == "holiday" then
+			truthy(p.kind == "cosmetic" or p.kind == "bundle", "event Robux buys a look, not a roll")
+			truthy(p.grants ~= nil and #p.grants > 0)
+			local low = string.lower(p.name .. " " .. p.desc .. " " .. (p.valueNote or ""))
+			for _, word in ipairs({ "last chance", "hurry", "don't miss", "only today", "loot", "random" }) do
+				truthy(string.find(low, word, 1, true) == nil, p.name .. " " .. word)
+			end
+		end
+	end
+	local bill = Economy.cookBill(leg, 1, Config.RANK_STEP, { pass = false, tokens = 0, unlocked = false })
+	eq(bill.allowed, true)
+	eq(bill.coins, Economy.rawCost(leg, Economy.rankMult(1, Config.RANK_STEP)))
+	truthy(bill.coins > 0 and bill.coins <= 100, "a new pitmaster can afford a turkey leg")
+end)
+
+test("crew cooks burgers and hot links, and automatic serving leaves the potluck dish", function()
+	local world = { coins = 100000, cooler = 0, coolerMax = 40, customers = 0, openGrill = 3, openSmoker = 3, done = 0, burgerCost = 2, linkCost = 6 }
+	for _, hand in ipairs(Staff.HANDS) do
+		local meat = Staff.stationMeat(hand.role)
+		truthy(meat ~= "turkeyleg" and meat ~= "holidayham", hand.name .. " does not start an event cut")
+		local e = { id = hand.id, name = hand.name, species = hand.species, role = hand.role, speed = 1, capacity = 2, quality = 1 }
+		local decision = Staff.decide(e, world)
+		if decision and decision.kind == "cook" then
+			truthy(decision.meat == "burger" or decision.meat == "hotlink", hand.name)
+		end
+	end
+	eq(Staff.stationMeat("floor"), nil)
+	local idx = function(id: string): number
+		return Rarity.indexOf(Config.Rarities, id)
+	end
+	local cooler = {
+		{ m = "turkeyleg", r = "juicy", by = "crew" },
+		{ m = "burger", r = "common" },
+		{ m = "turkeyleg", r = "common" },
+	}
+	eq(Holiday.holdPlate(cooler, "turkeyleg", false, idx), 3)
+	eq(Holiday.holdPlate(cooler, "turkeyleg", true, idx), nil, "after the share, nothing is held")
+	eq(Holiday.servable(#cooler, true), 2)
+	eq(Holiday.servable(1, true), 0, "the last dish stays for the table")
+	local held = cooler[3]
+	local function score(plate): number
+		return if plate.m == "turkeyleg" then 260 else 12
+	end
+	eq(Holiday.autoPlate(cooler, held, score), 1, "a crew leg can be sold; the held leg cannot")
+	eq(Holiday.autoPlate(cooler, nil, score), 1, "with nothing held, the valuable crew leg sells first")
+	eq(Holiday.autoPlate({ held }, held, score), nil, "Jimothy does not take the last potluck dish")
+	-- a customer who ordered turkey still doesn't get the held one when a burger is there
+	eq(Holiday.autoPlate(cooler, held, function(plate): number
+		local match = plate.m == "turkeyleg"
+		return (if plate.m == "turkeyleg" then 260 else 12) + (if match then 1e9 else 0)
+	end), 1, "the order match on a crew leg still skips the player's dish")
+end)
+
+test("potluck notes and autumn decor are wired, and the share is not behind the action lock", function()
+	local gs = fs_read("src/server/Services/GameService.luau")
+	local ev = fs_read("src/server/Services/EventService.luau")
+	local egg = fs_read("src/server/Services/EggService.luau")
+	local wb = fs_read("src/shared/WorldBuilder.luau")
+	truthy(string.find(egg, "Holiday.tryShare", 1, true) ~= nil, "the prompt uses the shared rules")
+	truthy(string.find(egg, "Slow down", 1, true) == nil, "sharing is a prompt, not the action lock")
+	truthy(string.find(gs, "event:potluck", 1, true) == nil, "sharing is not a remote action")
+	truthy(string.find(gs, "serveCustomer(player, r.customers[1], tip, true)", 1, true) ~= nil, "crew serve is automatic")
+	truthy(string.find(gs, "serveCustomer(player, r.customers[1], nil, true)", 1, true) ~= nil, "Jimothy serve is automatic")
+	truthy(string.find(gs, 'plate.by = "crew"', 1, true) ~= nil, "a hand's plate is marked")
+	truthy(string.find(gs, 'GetAttribute("ForceTurkeyDay")', 1, true) ~= nil)
+	truthy(string.find(gs, 'GetAttribute("ForceHolidaySmokeout")', 1, true) ~= nil)
+	truthy(string.find(gs, "RunService:IsStudio()", 1, true) ~= nil, "the force switch is Studio-only")
+	truthy(string.find(ev, "Guide.view(data.guide).active", 1, true) ~= nil, "the login note waits for the guide")
+	truthy(string.find(ev, "eventNoteDue", 1, true) ~= nil)
+	truthy(string.find(gs, "r.eventNoteDue = true", 1, true) ~= nil, "midnight retries the note")
+	truthy(string.find(ev, "WorldBuilder.autumnRanch", 1, true) ~= nil)
+	truthy(string.find(ev, 'FindFirstChild("AutumnRanch")', 1, true) ~= nil, "decor is removed when the week ends")
+	local defAt = string.find(wb, "function WorldBuilder.autumnRanch", 1, true)
+	truthy(defAt ~= nil)
+	eq(string.find(wb, "WorldBuilder.autumnRanch(", defAt :: number + 10, true), nil, "the baked map does not include the pumpkins")
+	truthy(string.find(wb, "Big Biscuit", 1, true) == nil and string.find(wb, "dog statue", 1, true) == nil)
+end)
+
 print("Phone HUD")
 test("currency, menu, goals, stations and the guide card do not overlap on small phones", function()
 	local phones = {
@@ -2745,6 +2949,47 @@ test("currency, menu, goals, stations and the guide card do not overlap on small
 	local crowded = HudLayout.compute(844, 390, { left = 47, top = 0, right = 47, bottom = 21 }, { guide = true, first = true, rookie = true, hint = true, goals = false })
 	truthy(crowded.guide.h >= 36, "the hint banner stays on a landscape phone")
 	truthy(crowded.safe.x >= 47 and crowded.safe.y + crowded.safe.h <= 390 - 21)
+end)
+
+test("Turkey Day toasts and the potluck announcement stay off the guide, goals and buttons", function()
+	local phones = {
+		{ 1280, 720, nil },
+		{ 1920, 1080, nil },
+		{ 844, 390, { left = 47, top = 0, right = 47, bottom = 21 } },
+		{ 390, 844, { left = 0, top = 0, right = 0, bottom = 34 } },
+		{ 360, 640, { left = 0, top = 0, right = 0, bottom = 24 } },
+	}
+	local modes = {
+		{ guide = true, rookie = false, goals = false, hint = true, first = true },
+		{ guide = true, rookie = true, goals = false, hint = false, first = false },
+		{ guide = false, rookie = true, goals = true, hint = true, first = true },
+		{ guide = false, rookie = false, goals = true, hint = false, first = false },
+	}
+	local hard = { "currencies", "menu", "goals", "guide", "actions", "first", "hint" }
+	for _, phone in ipairs(phones) do
+		for _, mode in ipairs(modes) do
+			local label = string.format("%dx%d", phone[1], phone[2])
+			local lay = HudLayout.compute(phone[1], phone[2], phone[3], mode)
+			local n = HudLayout.notices(phone[1], phone[2], phone[3], mode)
+			truthy(n.toast.h > 0 and n.announce.h > 0, label .. " has a spot for the note")
+			truthy(not HudLayout.overlaps(n.toast, n.announce), label .. " toast covers the announcement")
+			for _, box in ipairs({ n.toast, n.announce }) do
+				truthy(HudLayout.inside(box, lay.safe), label .. " note leaves the safe area")
+				for _, name in ipairs(hard) do
+					if HudLayout.overlaps(box, lay[name]) then
+						error(string.format("%s note overlaps %s", label, name))
+					end
+				end
+			end
+		end
+	end
+	local desk = HudLayout.compute(1280, 720, nil, { guide = true, goals = false, first = true, hint = true })
+	local notes = HudLayout.notices(1280, 720, nil, { guide = true, goals = false, first = true, hint = true })
+	truthy(notes.announce.y >= desk.guide.y + desk.guide.h, "desktop announcement starts below the guide")
+	truthy(notes.toast.y > notes.announce.y, "the toast follows the announcement")
+	local phoneLay = HudLayout.compute(390, 844, { left = 0, top = 0, right = 0, bottom = 34 }, { guide = true, goals = false, first = true })
+	local phoneNotes = HudLayout.notices(390, 844, { left = 0, top = 0, right = 0, bottom = 34 }, { guide = true, goals = false, first = true })
+	truthy(phoneNotes.toast.y >= phoneLay.guide.y + phoneLay.guide.h, "phone toast starts below the guide")
 end)
 
 print("Ranch load")

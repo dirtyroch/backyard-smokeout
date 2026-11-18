@@ -352,6 +352,18 @@ function Staff.line(id: string, index: number): string
 	return lines[i]
 end
 
+-- What a hand starts on their own. Grill hands make burgers, pit hands make hot links.
+-- Event cuts (turkey leg, holiday ham) stay the player's to smoke and carry to the potluck.
+-- A hand never starts one, so they can't auto-share it or cash the daily reward.
+function Staff.stationMeat(role: string): string?
+	if role == "grill" then
+		return "burger"
+	elseif role == "pit" then
+		return "hotlink"
+	end
+	return nil
+end
+
 -- Cooks fill open extra stations first. Floor serves first. Nobody spends coins they don't have.
 function Staff.decide(e: Employee, w: World): Decision?
 	local cap = Staff.carry(e.capacity)
@@ -370,9 +382,12 @@ function Staff.decide(e: Employee, w: World): Decision?
 	if e.role == "floor" then
 		return serve() or collect()
 	end
-	local meat = if e.role == "grill" then "burger" else "hotlink"
-	local open = if e.role == "grill" then w.openGrill else w.openSmoker
-	local cost = if e.role == "grill" then w.burgerCost else w.linkCost
+	local meat = Staff.stationMeat(e.role)
+	if not meat then
+		return collect() or serve()
+	end
+	local open = if meat == "burger" then w.openGrill else w.openSmoker
+	local cost = if meat == "burger" then w.burgerCost else w.linkCost
 	if open > 0 and cost > 0 and w.coins >= cost then
 		local n = math.min(cap, open, math.floor(w.coins / cost))
 		if n > 0 then

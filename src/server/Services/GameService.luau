@@ -60,6 +60,7 @@ type Runtime = {
 	earns: { any },
 	staffNext: { [string]: number },
 	staffJob: { [string]: string },
+	eventNoteDue: boolean,
 }
 
 GameService.runtime = {} :: { [Player]: Runtime }
@@ -466,6 +467,11 @@ function GameService.beginCook(player: Player, data: any, key: any, meatId: any,
 	local rarity = Rarity.roll(Config.Rarities, luck, meat.maxRarity, rng:NextNumber())
 	local cook = CookLogic.new(meat.id, rarity, meat.cookTime, T(), 1 + speedBonus)
 	cook.spentToken = bill.usesToken
+	if type(opts.hand) == "string" then
+		cook.hand = opts.hand
+	elseif opts.quiet then
+		cook.hand = "crew"
+	end
 	data.stations[key] = cook
 	data.stats.cooks += 1
 	if kind == "smoker" then
@@ -524,6 +530,9 @@ local function collect(player: Player, data: any, key: string): (boolean, string
 	end
 	local meatId = cook.meat == "firstbrisket" and "brisket" or cook.meat
 	local plate = { m = cook.meat, r = cook.rarity, f = cook.flip }
+	if type(cook.hand) == "string" then
+		plate.by = "crew"
+	end
 	addPlate(data, plate)
 	data.stations[key] = nil
 	local meat = Config.Meats[cook.meat]
@@ -616,18 +625,35 @@ Actions.Peek = function(player, data, key)
 	return true, nil
 end
 
+-- The player-cooked event plate we leave in the cooler until they've shared today.
+-- Crew and Jimothy sell around it. A hand-cooked plate is never the one we hold,
+-- and it can't be shared (Holiday.pickPlate).
+local function rarityIndex(id: string): number
+	return Rarity.indexOf(Config.Rarities, id)
+end
+
+local function potluckHeld(data: any): any?
+	local EV = GameService.potluckEvent()
+	if not EV or type(data.daily) ~= "table" or type(data.cooler) ~= "table" then
+		return nil
+	end
+	local i = Holiday.holdPlate(data.cooler, EV.meat, data.daily[EV.dailyKey] == today(), rarityIndex)
+	return if i then data.cooler[i] else nil
+end
+
 -- Serving
-local function bestPlateIndex(player: Player, data: any, order: string?): (number?, boolean)
-	local bestI, bestV, matched = nil, -1, false
-	for i, plate in ipairs(data.cooler) do
+local function bestPlateIndex(player: Player, data: any, order: string?, held: any?): (number?, boolean)
+	local bestI = Holiday.autoPlate(data.cooler, held, function(plate)
 		local isMatch = order ~= nil and order ~= "any" and (plate.m == order or (order == "brisket" and plate.m == "firstbrisket"))
 		local v = plateValue(player, data, plate, nil, isMatch, false)
 		-- prefer matching orders, then highest value
-		local score = v + (isMatch and 1e9 or 0)
-		if score > bestV then
-			bestV, bestI, matched = score, i, isMatch
-		end
+		return v + (if isMatch then 1e9 else 0)
+	end)
+	if not bestI then
+		return nil, false
 	end
+	local plate = data.cooler[bestI]
+	local matched = order ~= nil and order ~= "any" and (plate.m == order or (order == "brisket" and plate.m == "firstbrisket"))
 	return bestI, matched
 end
 
@@ -656,12 +682,14 @@ local function removeCustomer(player: Player, customer: any)
 	GameService.markDirty(player)
 end
 
-function GameService.serveCustomer(player: Player, customer: any, tipExtra: number?): (boolean, string?)
+function GameService.serveCustomer(player: Player, customer: any, tipExtra: number?, auto: boolean?): (boolean, string?)
 	local data = profileOf(player)
 	if not data then
 		return false, "Loading..."
 	end
-	local i, matched = bestPlateIndex(player, data, customer.order)
+	-- Automatic servers (crew, Jimothy) leave today's potluck dish. The player's own Serve does not.
+	local held = if auto then potluckHeld(data) else nil
+	local i, matched = bestPlateIndex(player, data, customer.order, held)
 	if not i then
 		return false, "Your cooler's empty. Cook something first!"
 	end
@@ -1429,6 +1457,7 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 		earns = {},
 		staffNext = {},
 		staffJob = {},
+		eventNoteDue = false,
 	}
 	-- Runtime goes in before any yielding call. Until it exists, every action
 	-- returns "Still loading your ranch..." and prompts no-op.
@@ -1721,9 +1750,10 @@ local function runStaff(player: Player, data: any, r: any, t: number)
 			continue
 		end
 		local finished = doneKeys(data)
+		local held = potluckHeld(data)
 		local world = {
 			coins = data.coins,
-			cooler = #data.cooler,
+			cooler = Holiday.servable(#data.cooler, held ~= nil),
 			coolerMax = Config.COOLER_MAX,
 			customers = #r.customers,
 			openGrill = countOpen(data, "g", grillSlots),
@@ -1742,10 +1772,13 @@ local function runStaff(player: Player, data: any, r: any, t: number)
 			r.staffJob[e.id] = "serve"
 			local tip = Staff.qualityTip(e.quality)
 			for _ = 1, decision.count do
-				if #r.customers == 0 or #data.cooler == 0 then
+				if #r.customers == 0 or Holiday.servable(#data.cooler, potluckHeld(data) ~= nil) <= 0 then
 					break
 				end
-				GameService.serveCustomer(player, r.customers[1], tip)
+				local served = GameService.serveCustomer(player, r.customers[1], tip, true)
+				if not served then
+					break
+				end
 			end
 		elseif decision.kind == "collect" then
 			r.staffJob[e.id] = "carry"
@@ -1770,6 +1803,7 @@ local function runStaff(player: Player, data: any, r: any, t: number)
 				local cooked = GameService.beginCook(player, data, key, decision.meat, {
 					quiet = true,
 					luckMult = Staff.qualityLuck(e.quality),
+					hand = e.id,
 				})
 				if not cooked then
 					break
@@ -1829,10 +1863,11 @@ function GameService.start()
 						ctx.Season.sync(player, data)
 						ctx.Membership.onNewDay(player, data)
 						GameService.toast(player, "A new day at the ranch! Daily reward and a new Path step are ready.", "good")
-						if ctx.Event and ctx.Event.eventNote then
-							ctx.Event.eventNote(player) -- an event (or its teaser week) may start today
-						end
+						r.eventNoteDue = true -- an event (or its teaser week) may start today
 						r.dirty = true
+					end
+					if r.eventNoteDue and ctx.Event and ctx.Event.eventNote and ctx.Event.eventNote(player) then
+						r.eventNoteDue = false
 					end
 					-- customers
 					for i = #r.customers, 1, -1 do
@@ -1848,9 +1883,10 @@ function GameService.start()
 					runStaff(player, data, r, t)
 					-- Jimothy the Waiter stays his own pass: he serves plates you already cooked.
 					-- The crew cooks and serves too. Owning the pass also shortens their interval.
-					if GameService.hasPass(player, "AutoServe") and t - r.lastAutoServe >= 4 and #r.customers > 0 and #data.cooler > 0 then
+					local servable = Holiday.servable(#data.cooler, potluckHeld(data) ~= nil)
+					if GameService.hasPass(player, "AutoServe") and t - r.lastAutoServe >= 4 and #r.customers > 0 and servable > 0 then
 						r.lastAutoServe = t
-						GameService.serveCustomer(player, r.customers[1])
+						GameService.serveCustomer(player, r.customers[1], nil, true)
 					end
 					-- healthy-play nudge after an hour
 					if not r.nudged and (os.clock() - r.sessionStart) > Config.PLAYTIME_NUDGE_MINUTES * 60 then
