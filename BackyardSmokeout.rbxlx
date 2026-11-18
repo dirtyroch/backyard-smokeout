@@ -1000,6 +1000,7 @@ export type Cook = {
 	flip: string?, -- nil | "perfect" | "good" | "miss"
 	burnt: boolean?,
 	spentToken: boolean?, -- true when this cook spent a premium token, so a rebirth can give it back
+	hand: string?, -- set when a ranch hand started it; the plate is marked crew and can't be shared
 }
 
 function CookLogic.new(meat: string, rarity: string, duration: number, now: number, rateMult: number?): Cook
@@ -2184,12 +2185,19 @@ function Holiday.meatOpen(meat: any, seasonId: string, eventMeats: { [string]: b
 	return eventMeats[meat.id] == true
 end
 
--- Which cooler plate to share at the potluck: the plainest one of `meatId` (lowest rarity index,
--- earliest on ties), so nobody hands over a rare cut by accident. nil if there isn't one.
+-- A plate a ranch hand cooked. It can be sold like any other plate, but it is not the
+-- player's dish: the potluck won't take it, and it can't cash the once-a-day share.
+function Holiday.isCrewPlate(plate: any): boolean
+	return type(plate) == "table" and plate.by == "crew"
+end
+
+-- Which cooler plate to share at the potluck: the plainest one of `meatId` the player cooked
+-- (lowest rarity index, earliest on ties), so nobody hands over a rare cut by accident.
+-- Crew-cooked plates are skipped. nil if there isn't a player-cooked one.
 function Holiday.pickPlate(cooler: { any }, meatId: string, rarityIndex: (string) -> number): number?
 	local bestI, bestR = nil, math.huge
 	for i, plate in ipairs(cooler) do
-		if plate.m == meatId then
+		if plate.m == meatId and not Holiday.isCrewPlate(plate) then
 			local ri = rarityIndex(plate.r)
 			if ri < bestR then
 				bestI, bestR = i, ri
@@ -2197,6 +2205,79 @@ function Holiday.pickPlate(cooler: { any }, meatId: string, rarityIndex: (string
 		end
 	end
 	return bestI
+end
+
+-- The one plate automatic servers (crew, Jimothy) must leave in the cooler until today's
+-- share is done. nil once they've shared, or when they have no player-cooked dish.
+function Holiday.holdPlate(cooler: { any }, meatId: string, sharedToday: boolean, rarityIndex: (string) -> number): number?
+	if sharedToday then
+		return nil
+	end
+	return Holiday.pickPlate(cooler, meatId, rarityIndex)
+end
+
+-- How many plates an automatic server may take. One is held back for the potluck when `holding`.
+function Holiday.servable(coolerCount: number, holding: boolean): number
+	local n = math.max(0, math.floor(coolerCount))
+	if holding then
+		return math.max(0, n - 1)
+	end
+	return n
+end
+
+-- Highest-scoring plate an automatic server may take. `held` (the table itself, not an index)
+-- is left for the player. nil when every remaining plate is the held one.
+function Holiday.autoPlate(cooler: { any }, held: any?, scoreOf: (any) -> number): number?
+	local bestI: number? = nil
+	local bestS = 0
+	for i, plate in ipairs(cooler) do
+		if plate ~= held then
+			local s = scoreOf(plate)
+			if bestI == nil or s > bestS then
+				bestI = i
+				bestS = s
+			end
+		end
+	end
+	return bestI
+end
+
+export type ShareRequest = {
+	active: boolean,
+	day: number,
+	sharedOn: number,
+	cooler: { any },
+	meatId: string,
+	ownsReward: boolean,
+	price: number,
+	shareMult: number,
+	rankMult: number,
+	rarityIndex: (string) -> number,
+}
+
+export type ShareOutcome = {
+	ok: boolean,
+	reason: string, -- "closed" | "already" | "need" | "shared"
+	index: number?,
+	coins: number,
+	first: boolean,
+}
+
+-- One potluck share. Does not mutate the cooler. Crew plates never count, so a hand
+-- can't walk a dish up and farm the daily coins or the apron.
+function Holiday.tryShare(req: ShareRequest): ShareOutcome
+	if not req.active then
+		return { ok = false, reason = "closed", coins = 0, first = false }
+	end
+	if req.sharedOn == req.day then
+		return { ok = false, reason = "already", coins = 0, first = false }
+	end
+	local index = Holiday.pickPlate(req.cooler, req.meatId, req.rarityIndex)
+	if not index then
+		return { ok = false, reason = "need", coins = 0, first = false }
+	end
+	local coins = math.floor(req.price * req.shareMult * req.rankMult)
+	return { ok = true, reason = "shared", index = index, coins = coins, first = not req.ownsReward }
 end
 
 -- Days until a window opens, if it opens within the next `lookahead` days (1..lookahead), else nil.
@@ -2538,6 +2619,70 @@ function HudLayout.compute(width: number, height: number, insets: Insets?, opts:
 		return phone(width, height, inset, flags)
 	end
 	return desktop(width, height, inset, flags)
+end
+
+export type Notices = { toast: Box, announce: Box }
+
+-- Where login toasts and the potluck announcement sit. They stay under the currency
+-- row, the menu, the goals bar and the guide, and off the action buttons. On a short
+-- phone where that gap is only a few pixels, they rest on the station row instead of
+-- covering the guide.
+function HudLayout.notices(width: number, height: number, insets: Insets?, opts: Options?): Notices
+	local lay = HudLayout.compute(width, height, insets, opts)
+	local function horiz(a: Box, b: Box): boolean
+		return a.w > 0 and b.w > 0 and a.x < b.x + b.w and b.x < a.x + a.w
+	end
+	local function nextTop(names: { string }, x: number, w: number, y: number): number
+		local probe = box(x, y, w, 1)
+		local lim = lay.safe.y + lay.safe.h
+		for _, name in ipairs(names) do
+			local b = (lay :: any)[name] :: Box
+			if b and b.h > 0 and b.y >= y - 0.5 and horiz(probe, b) then
+				lim = math.min(lim, b.y)
+			end
+		end
+		return lim
+	end
+	local y0 = lay.safe.y
+	for _, name in ipairs({ "currencies", "menu", "goals", "guide" }) do
+		local b = (lay :: any)[name] :: Box
+		if b and b.h > 0 then
+			y0 = math.max(y0, b.y + b.h)
+		end
+	end
+	y0 += 8
+	local maxW = math.max(0, lay.safe.w - 16)
+	local annW = math.min(520, maxW)
+	local toastW = math.min(420, maxW)
+	local xA = lay.safe.x + math.floor((lay.safe.w - annW) / 2)
+	local xT = lay.safe.x + math.floor((lay.safe.w - toastW) / 2)
+	local spanX = math.min(xA, xT)
+	local spanW = math.max(xA + annW, xT + toastW) - spanX
+	local hard = { "currencies", "menu", "goals", "guide", "actions", "first", "hint" }
+	local room = nextTop(hard, spanX, spanW, y0) - y0
+	local annH = 34
+	local toastH = 72
+	if room >= annH + 6 + 40 then
+		toastH = math.min(120, room - annH - 6)
+		return {
+			announce = box(xA, y0, annW, annH),
+			toast = box(xT, y0 + annH + 6, toastW, toastH),
+		}
+	end
+	local st = lay.stations
+	if st.h >= 36 and st.w > 0 then
+		local y = st.y + 4
+		local aw = math.min(annW, st.w)
+		local tw = math.min(toastW, st.w)
+		local ax = math.max(lay.safe.x, math.min(xA, st.x + st.w - aw))
+		local tx = math.max(lay.safe.x, math.min(xT, st.x + st.w - tw))
+		local th = math.max(28, math.min(64, st.h - 40))
+		if y + 36 + th > lay.safe.y + lay.safe.h then
+			th = math.max(0, lay.safe.y + lay.safe.h - (y + 36))
+		end
+		return { announce = box(ax, y, aw, 32), toast = box(tx, y + 36, tw, th) }
+	end
+	return { announce = box(xA, y0, annW, 0), toast = box(xT, y0, toastW, 0) }
 end
 
 return HudLayout
@@ -4153,6 +4298,18 @@ function Staff.line(id: string, index: number): string
 	return lines[i]
 end
 
+-- What a hand starts on their own. Grill hands make burgers, pit hands make hot links.
+-- Event cuts (turkey leg, holiday ham) stay the player's to smoke and carry to the potluck.
+-- A hand never starts one, so they can't auto-share it or cash the daily reward.
+function Staff.stationMeat(role: string): string?
+	if role == "grill" then
+		return "burger"
+	elseif role == "pit" then
+		return "hotlink"
+	end
+	return nil
+end
+
 -- Cooks fill open extra stations first. Floor serves first. Nobody spends coins they don't have.
 function Staff.decide(e: Employee, w: World): Decision?
 	local cap = Staff.carry(e.capacity)
@@ -4171,9 +4328,12 @@ function Staff.decide(e: Employee, w: World): Decision?
 	if e.role == "floor" then
 		return serve() or collect()
 	end
-	local meat = if e.role == "grill" then "burger" else "hotlink"
-	local open = if e.role == "grill" then w.openGrill else w.openSmoker
-	local cost = if e.role == "grill" then w.burgerCost else w.linkCost
+	local meat = Staff.stationMeat(e.role)
+	if not meat then
+		return collect() or serve()
+	end
+	local open = if meat == "burger" then w.openGrill else w.openSmoker
+	local cost = if meat == "burger" then w.burgerCost else w.linkCost
 	if open > 0 and cost > 0 and w.coins >= cost then
 		local n = math.min(cap, open, math.floor(w.coins / cost))
 		if n > 0 then
@@ -6479,6 +6639,37 @@ function WorldBuilder.turkeyDay(pot, content)
 	return m
 end
 
+-- A few pumpkins and a corn bundle by the welcome arch, only while Turkey Day is on.
+-- Built at runtime and removed with the potluck decor. No collision, so the path stays clear.
+-- Original shapes only: pumpkins and a corn bundle, nothing borrowed.
+function WorldBuilder.autumnRanch(hub)
+	if not hub then
+		return nil
+	end
+	local old = hub:FindFirstChild("AutumnRanch")
+	if old then
+		old:Destroy()
+	end
+	local m = model(hub, "AutumnRanch")
+	local spots = {
+		{ -16.2, 0.85, -46.5, 1.7 },
+		{ -18.4, 0.55, -48.2, 1.15 },
+		{ 16.4, 0.8, -47.2, 1.55 },
+		{ 18.2, 0.5, -44.8, 1.05 },
+	}
+	for i, pk in ipairs(spots) do
+		local p = deco(m, "Pumpkin" .. i, V(pk[4] * 1.2, pk[4], pk[4] * 1.2), E.CFrame.new(pk[1], pk[2], pk[3]), "#E8761E", E.Enum.Material.SmoothPlastic, true)
+		local mesh = E.Instance.new("SpecialMesh")
+		mesh.MeshType = E.Enum.MeshType.Sphere
+		mesh.Parent = p
+		deco(m, "Stem" .. i, V(0.18, 0.4, 0.18), E.CFrame.new(pk[1], pk[2] + pk[4] * 0.55, pk[3]), "#4E6B2A", E.Enum.Material.Wood, false)
+	end
+	for k = 0, 3 do
+		deco(m, "Corn", V(0.16, 2.8, 0.42), E.CFrame.new(-14.4, 1.4, -47.2 + k * 0.28) * E.CFrame.Angles(0, 0, math.rad((k - 1.5) * 8)), k % 2 == 0 and "#C9A44C" or "#B08838", E.Enum.Material.Grass, false)
+	end
+	return m
+end
+
 -- Holiday Smokeout decor for the hub potluck table (built at runtime only Dec 19 - Jan 1, then
 -- destroyed). Same layout rules as Turkey Day: everything hangs off the Potluck's Table part.
 -- Adds a glazed holiday ham (the "Share a dish" prompt), a tray of tamales, sugar cookies, a little
@@ -8323,26 +8514,39 @@ end
 
 handlers["event:potluck"] = function(player, data)
 	local EV, EC = ctx.Game.potluckEvent()
-	if not EV or not EC then
-		dialog(player, "Granny Pecan", Content.PotluckTable.closed)
-		return
-	end
 	local d = today()
-	if data.daily[EV.dailyKey] == d then
-		dialog(player, EC.host, EC.already)
+	local sharedOn = -1
+	if EV and type(data.daily[EV.dailyKey]) == "number" then
+		sharedOn = data.daily[EV.dailyKey]
+	end
+	local outcome = Holiday.tryShare({
+		active = EV ~= nil,
+		day = d,
+		sharedOn = sharedOn,
+		cooler = data.cooler,
+		meatId = if EV then EV.meat else "",
+		ownsReward = if EV then data.owned[EV.reward] == true else false,
+		price = if EV then Config.Meats[EV.meat].price else 0,
+		shareMult = if EV then EV.shareMult else 0,
+		rankMult = Economy.rankMult(data.rank, Config.RANK_STEP),
+		rarityIndex = function(id: string): number
+			return Rarity.indexOf(Config.Rarities, id)
+		end,
+	})
+	if not EV or not EC or not outcome.ok or not outcome.index then
+		if outcome.reason == "already" and EC then
+			dialog(player, EC.host, EC.already)
+		elseif outcome.reason == "need" and EC then
+			dialog(player, EC.host, EC.needDish)
+		else
+			dialog(player, "Granny Pecan", Content.PotluckTable.closed)
+		end
 		return
 	end
-	local i = Holiday.pickPlate(data.cooler, EV.meat, function(id: string): number
-		return Rarity.indexOf(Config.Rarities, id)
-	end)
-	if not i then
-		dialog(player, EC.host, EC.needDish)
-		return
-	end
-	local plate = table.remove(data.cooler, i)
+	local plate = table.remove(data.cooler, outcome.index)
 	data.daily[EV.dailyKey] = d
 	local meat = Config.Meats[plate.m]
-	local coins = math.floor(meat.price * EV.shareMult * Economy.rankMult(data.rank, Config.RANK_STEP))
+	local coins = outcome.coins
 	ctx.Game.addCoins(player, data, coins, true)
 	local label = Rarity.get(Config.Rarities, plate.r).name .. " " .. meat.name
 	local thanks = EC.thanks[rng:NextInteger(1, #EC.thanks)]
@@ -8520,6 +8724,7 @@ local Economy = require(Shared.Logic.Economy)
 local CookOff = require(Shared.Logic.CookOff)
 local TimeUtil = require(Shared.Logic.TimeUtil)
 local Holiday = require(Shared.Logic.Holiday)
+local Guide = require(Shared.Logic.Guide)
 local WorldBuilder = require(Shared.WorldBuilder)
 
 local EventService = {}
@@ -8900,9 +9105,17 @@ local function refreshTurkey()
 			decor:Destroy()
 		end
 	end
+	local hub = pot.Parent
+	local autumn = hub and hub:FindFirstChild("AutumnRanch")
+	if autumn then
+		autumn:Destroy()
+	end
 	local text = soonText or Content.Signs.potluck
 	if id == "turkeyday" then
 		WorldBuilder.turkeyDay(pot, Content)
+		if hub then
+			WorldBuilder.autumnRanch(hub)
+		end
 		text = Content.Signs.turkeyPotluck
 	elseif id == "holiday" then
 		WorldBuilder.holidaySmokeout(pot, Content)
@@ -8943,19 +9156,27 @@ local function refreshTable()
 end
 EventService.refreshTable = refreshTable
 
--- The event's one-line note: "It's Turkey Day Smokeout week!" while it's on, or the calm
+-- The event's one-line note: "It's Turkey Day Cookout week!" while it's on, or the calm
 -- "Coming up: ... opens Mon, Nov 23" the week before. Sent when a player joins and again at
 -- Texas midnight to players already in the server (so nobody misses the day it opens).
-function EventService.eventNote(player: Player)
+-- Returns false while the first-visit guide is on screen, so the note waits until that
+-- card is done instead of covering it. Returns true once the note was shown, or when
+-- there is nothing to say.
+function EventService.eventNote(player: Player): boolean
+	local data = ctx.Game.dataOf(player)
+	if data and type(data.guide) == "table" and Guide.view(data.guide).active then
+		return false
+	end
 	local _, EC = ctx.Game.potluckEvent()
 	if EC then
 		ctx.Game.toast(player, EC.login, "good")
-		return
+		return true
 	end
 	local _, SC, sw = ctx.Game.upcomingPotluck()
 	if SC and sw then
 		ctx.Game.toast(player, string.format(SC.soon, Holiday.longLabel(sw.startDay)), "info")
 	end
+	return true
 end
 
 function EventService.init(c: any)
@@ -9015,7 +9236,12 @@ function EventService.start()
 			if ctx.Game.isSudsWeekend() then
 				ctx.Game.toast(player, "🫧 Suds Saturday & Sunday! Muddy pups need a bath. Wash one for a free bandana.", "good")
 			end
-			EventService.eventNote(player)
+			if not EventService.eventNote(player) then
+				local r = ctx.Game.runtime[player]
+				if r then
+					r.eventNoteDue = true
+				end
+			end
 			task.spawn(EventService.champCheck, player)
 			if ctx.Game.isSaturday() then
 				ctx.Game.toast(player, "🏆 It's Cook-Off Saturday! Bring your best plate to Granny Pecan for 3x prizes.", "good")
@@ -9093,6 +9319,7 @@ type Runtime = {
 	earns: { any },
 	staffNext: { [string]: number },
 	staffJob: { [string]: string },
+	eventNoteDue: boolean,
 }
 
 GameService.runtime = {} :: { [Player]: Runtime }
@@ -9499,6 +9726,11 @@ function GameService.beginCook(player: Player, data: any, key: any, meatId: any,
 	local rarity = Rarity.roll(Config.Rarities, luck, meat.maxRarity, rng:NextNumber())
 	local cook = CookLogic.new(meat.id, rarity, meat.cookTime, T(), 1 + speedBonus)
 	cook.spentToken = bill.usesToken
+	if type(opts.hand) == "string" then
+		cook.hand = opts.hand
+	elseif opts.quiet then
+		cook.hand = "crew"
+	end
 	data.stations[key] = cook
 	data.stats.cooks += 1
 	if kind == "smoker" then
@@ -9557,6 +9789,9 @@ local function collect(player: Player, data: any, key: string): (boolean, string
 	end
 	local meatId = cook.meat == "firstbrisket" and "brisket" or cook.meat
 	local plate = { m = cook.meat, r = cook.rarity, f = cook.flip }
+	if type(cook.hand) == "string" then
+		plate.by = "crew"
+	end
 	addPlate(data, plate)
 	data.stations[key] = nil
 	local meat = Config.Meats[cook.meat]
@@ -9649,18 +9884,35 @@ Actions.Peek = function(player, data, key)
 	return true, nil
 end
 
+-- The player-cooked event plate we leave in the cooler until they've shared today.
+-- Crew and Jimothy sell around it. A hand-cooked plate is never the one we hold,
+-- and it can't be shared (Holiday.pickPlate).
+local function rarityIndex(id: string): number
+	return Rarity.indexOf(Config.Rarities, id)
+end
+
+local function potluckHeld(data: any): any?
+	local EV = GameService.potluckEvent()
+	if not EV or type(data.daily) ~= "table" or type(data.cooler) ~= "table" then
+		return nil
+	end
+	local i = Holiday.holdPlate(data.cooler, EV.meat, data.daily[EV.dailyKey] == today(), rarityIndex)
+	return if i then data.cooler[i] else nil
+end
+
 -- Serving
-local function bestPlateIndex(player: Player, data: any, order: string?): (number?, boolean)
-	local bestI, bestV, matched = nil, -1, false
-	for i, plate in ipairs(data.cooler) do
+local function bestPlateIndex(player: Player, data: any, order: string?, held: any?): (number?, boolean)
+	local bestI = Holiday.autoPlate(data.cooler, held, function(plate)
 		local isMatch = order ~= nil and order ~= "any" and (plate.m == order or (order == "brisket" and plate.m == "firstbrisket"))
 		local v = plateValue(player, data, plate, nil, isMatch, false)
 		-- prefer matching orders, then highest value
-		local score = v + (isMatch and 1e9 or 0)
-		if score > bestV then
-			bestV, bestI, matched = score, i, isMatch
-		end
+		return v + (if isMatch then 1e9 else 0)
+	end)
+	if not bestI then
+		return nil, false
 	end
+	local plate = data.cooler[bestI]
+	local matched = order ~= nil and order ~= "any" and (plate.m == order or (order == "brisket" and plate.m == "firstbrisket"))
 	return bestI, matched
 end
 
@@ -9689,12 +9941,14 @@ local function removeCustomer(player: Player, customer: any)
 	GameService.markDirty(player)
 end
 
-function GameService.serveCustomer(player: Player, customer: any, tipExtra: number?): (boolean, string?)
+function GameService.serveCustomer(player: Player, customer: any, tipExtra: number?, auto: boolean?): (boolean, string?)
 	local data = profileOf(player)
 	if not data then
 		return false, "Loading..."
 	end
-	local i, matched = bestPlateIndex(player, data, customer.order)
+	-- Automatic servers (crew, Jimothy) leave today's potluck dish. The player's own Serve does not.
+	local held = if auto then potluckHeld(data) else nil
+	local i, matched = bestPlateIndex(player, data, customer.order, held)
 	if not i then
 		return false, "Your cooler's empty. Cook something first!"
 	end
@@ -10462,6 +10716,7 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 		earns = {},
 		staffNext = {},
 		staffJob = {},
+		eventNoteDue = false,
 	}
 	-- Runtime goes in before any yielding call. Until it exists, every action
 	-- returns "Still loading your ranch..." and prompts no-op.
@@ -10754,9 +11009,10 @@ local function runStaff(player: Player, data: any, r: any, t: number)
 			continue
 		end
 		local finished = doneKeys(data)
+		local held = potluckHeld(data)
 		local world = {
 			coins = data.coins,
-			cooler = #data.cooler,
+			cooler = Holiday.servable(#data.cooler, held ~= nil),
 			coolerMax = Config.COOLER_MAX,
 			customers = #r.customers,
 			openGrill = countOpen(data, "g", grillSlots),
@@ -10775,10 +11031,13 @@ local function runStaff(player: Player, data: any, r: any, t: number)
 			r.staffJob[e.id] = "serve"
 			local tip = Staff.qualityTip(e.quality)
 			for _ = 1, decision.count do
-				if #r.customers == 0 or #data.cooler == 0 then
+				if #r.customers == 0 or Holiday.servable(#data.cooler, potluckHeld(data) ~= nil) <= 0 then
 					break
 				end
-				GameService.serveCustomer(player, r.customers[1], tip)
+				local served = GameService.serveCustomer(player, r.customers[1], tip, true)
+				if not served then
+					break
+				end
 			end
 		elseif decision.kind == "collect" then
 			r.staffJob[e.id] = "carry"
@@ -10803,6 +11062,7 @@ local function runStaff(player: Player, data: any, r: any, t: number)
 				local cooked = GameService.beginCook(player, data, key, decision.meat, {
 					quiet = true,
 					luckMult = Staff.qualityLuck(e.quality),
+					hand = e.id,
 				})
 				if not cooked then
 					break
@@ -10862,10 +11122,11 @@ function GameService.start()
 						ctx.Season.sync(player, data)
 						ctx.Membership.onNewDay(player, data)
 						GameService.toast(player, "A new day at the ranch! Daily reward and a new Path step are ready.", "good")
-						if ctx.Event and ctx.Event.eventNote then
-							ctx.Event.eventNote(player) -- an event (or its teaser week) may start today
-						end
+						r.eventNoteDue = true -- an event (or its teaser week) may start today
 						r.dirty = true
+					end
+					if r.eventNoteDue and ctx.Event and ctx.Event.eventNote and ctx.Event.eventNote(player) then
+						r.eventNoteDue = false
 					end
 					-- customers
 					for i = #r.customers, 1, -1 do
@@ -10881,9 +11142,10 @@ function GameService.start()
 					runStaff(player, data, r, t)
 					-- Jimothy the Waiter stays his own pass: he serves plates you already cooked.
 					-- The crew cooks and serves too. Owning the pass also shortens their interval.
-					if GameService.hasPass(player, "AutoServe") and t - r.lastAutoServe >= 4 and #r.customers > 0 and #data.cooler > 0 then
+					local servable = Holiday.servable(#data.cooler, potluckHeld(data) ~= nil)
+					if GameService.hasPass(player, "AutoServe") and t - r.lastAutoServe >= 4 and #r.customers > 0 and servable > 0 then
 						r.lastAutoServe = t
-						GameService.serveCustomer(player, r.customers[1])
+						GameService.serveCustomer(player, r.customers[1], nil, true)
 					end
 					-- healthy-play nudge after an hour
 					if not r.nudged and (os.clock() - r.sessionStart) > Config.PLAYTIME_NUDGE_MINUTES * 60 then
@@ -13390,6 +13652,7 @@ local Sfx = require(script.Parent.Sfx)
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Content = require(Shared.Content)
+local HudLayout = require(Shared.Logic.HudLayout)
 local T = UI.Theme
 
 local Fx = {}
@@ -13405,12 +13668,39 @@ local KIND_COLOR = {
 	info = Color3.fromHex("#2C4A6E"),
 }
 
+local function placeNotice(guiObject: GuiObject, b: HudLayout.Box)
+	local w = math.max(1, UI.viewport.X)
+	local h = math.max(1, UI.viewport.Y)
+	guiObject.AnchorPoint = Vector2.new(0, 0)
+	if b.w <= 0 or b.h <= 0 then
+		guiObject.Visible = false
+		return
+	end
+	guiObject.Visible = true
+	guiObject.Position = UDim2.fromScale(b.x / w, b.y / h)
+	guiObject.Size = UDim2.fromScale(b.w / w, b.h / h)
+end
+
+-- Follows the HUD. The Turkey Day note and the potluck call-out sit under the
+-- guide and the goals bar instead of on top of them.
+function Fx.applyLayout()
+	if not toastHolder or not announceHolder then
+		return
+	end
+	local Hud = require(script.Parent.Hud)
+	local n = HudLayout.notices(UI.viewport.X, UI.viewport.Y, UI.insets, Hud.layoutOptions())
+	placeNotice(announceHolder, n.announce)
+	placeNotice(toastHolder, n.toast)
+end
+
 function Fx.mount(screen: GuiObject)
 	gui = screen
-	toastHolder = UI.frame({ Name = "Toasts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 120), Size = UDim2.new(0, 460, 0, 300), Parent = screen, ZIndex = 50 })
+	toastHolder = UI.frame({ Name = "Toasts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0), Position = UDim2.fromOffset(0, 0), Size = UDim2.fromOffset(420, 72), Parent = screen, ZIndex = 50 })
 	UI.list(toastHolder, nil, 6, Enum.HorizontalAlignment.Center)
-	announceHolder = UI.frame({ Name = "Announce", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 64), Size = UDim2.new(0, 640, 0, 50), Parent = screen, ZIndex = 50 })
+	announceHolder = UI.frame({ Name = "Announce", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0), Position = UDim2.fromOffset(0, 0), Size = UDim2.fromOffset(520, 34), Parent = screen, ZIndex = 50 })
 	UI.list(announceHolder, nil, 4, Enum.HorizontalAlignment.Center)
+	UI.onLayout = Fx.applyLayout
+	Fx.applyLayout()
 end
 
 function Fx.toast(text: string, kind: string?)
@@ -14408,6 +14698,9 @@ function Hud.applyLayout()
 	end
 	for _, c in pairs(cards) do
 		styleCard(c)
+	end
+	if UI.onLayout then
+		UI.onLayout()
 	end
 end
 
@@ -17061,6 +17354,8 @@ UI.stationReserve = 188
 UI.topChrome = 68
 
 UI.onClick = nil :: (() -> ())?
+-- Hud.applyLayout calls this after the boxes move, so toasts can follow the guide.
+UI.onLayout = nil :: (() -> ())?
 
 type Props = { [string]: any }
 

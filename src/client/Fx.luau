@@ -10,6 +10,7 @@ local Sfx = require(script.Parent.Sfx)
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Content = require(Shared.Content)
+local HudLayout = require(Shared.Logic.HudLayout)
 local T = UI.Theme
 
 local Fx = {}
@@ -25,12 +26,39 @@ local KIND_COLOR = {
 	info = Color3.fromHex("#2C4A6E"),
 }
 
+local function placeNotice(guiObject: GuiObject, b: HudLayout.Box)
+	local w = math.max(1, UI.viewport.X)
+	local h = math.max(1, UI.viewport.Y)
+	guiObject.AnchorPoint = Vector2.new(0, 0)
+	if b.w <= 0 or b.h <= 0 then
+		guiObject.Visible = false
+		return
+	end
+	guiObject.Visible = true
+	guiObject.Position = UDim2.fromScale(b.x / w, b.y / h)
+	guiObject.Size = UDim2.fromScale(b.w / w, b.h / h)
+end
+
+-- Follows the HUD. The Turkey Day note and the potluck call-out sit under the
+-- guide and the goals bar instead of on top of them.
+function Fx.applyLayout()
+	if not toastHolder or not announceHolder then
+		return
+	end
+	local Hud = require(script.Parent.Hud)
+	local n = HudLayout.notices(UI.viewport.X, UI.viewport.Y, UI.insets, Hud.layoutOptions())
+	placeNotice(announceHolder, n.announce)
+	placeNotice(toastHolder, n.toast)
+end
+
 function Fx.mount(screen: GuiObject)
 	gui = screen
-	toastHolder = UI.frame({ Name = "Toasts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 120), Size = UDim2.new(0, 460, 0, 300), Parent = screen, ZIndex = 50 })
+	toastHolder = UI.frame({ Name = "Toasts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0), Position = UDim2.fromOffset(0, 0), Size = UDim2.fromOffset(420, 72), Parent = screen, ZIndex = 50 })
 	UI.list(toastHolder, nil, 6, Enum.HorizontalAlignment.Center)
-	announceHolder = UI.frame({ Name = "Announce", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 64), Size = UDim2.new(0, 640, 0, 50), Parent = screen, ZIndex = 50 })
+	announceHolder = UI.frame({ Name = "Announce", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0), Position = UDim2.fromOffset(0, 0), Size = UDim2.fromOffset(520, 34), Parent = screen, ZIndex = 50 })
 	UI.list(announceHolder, nil, 4, Enum.HorizontalAlignment.Center)
+	UI.onLayout = Fx.applyLayout
+	Fx.applyLayout()
 end
 
 function Fx.toast(text: string, kind: string?)

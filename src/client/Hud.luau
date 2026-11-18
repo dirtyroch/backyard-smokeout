@@ -408,6 +408,9 @@ function Hud.applyLayout()
 	for _, c in pairs(cards) do
 		styleCard(c)
 	end
+	if UI.onLayout then
+		UI.onLayout()
+	end
 end
 
 function Hud.box(name: string): any

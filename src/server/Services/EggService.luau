@@ -331,26 +331,39 @@ end
 
 handlers["event:potluck"] = function(player, data)
 	local EV, EC = ctx.Game.potluckEvent()
-	if not EV or not EC then
-		dialog(player, "Granny Pecan", Content.PotluckTable.closed)
-		return
-	end
 	local d = today()
-	if data.daily[EV.dailyKey] == d then
-		dialog(player, EC.host, EC.already)
+	local sharedOn = -1
+	if EV and type(data.daily[EV.dailyKey]) == "number" then
+		sharedOn = data.daily[EV.dailyKey]
+	end
+	local outcome = Holiday.tryShare({
+		active = EV ~= nil,
+		day = d,
+		sharedOn = sharedOn,
+		cooler = data.cooler,
+		meatId = if EV then EV.meat else "",
+		ownsReward = if EV then data.owned[EV.reward] == true else false,
+		price = if EV then Config.Meats[EV.meat].price else 0,
+		shareMult = if EV then EV.shareMult else 0,
+		rankMult = Economy.rankMult(data.rank, Config.RANK_STEP),
+		rarityIndex = function(id: string): number
+			return Rarity.indexOf(Config.Rarities, id)
+		end,
+	})
+	if not EV or not EC or not outcome.ok or not outcome.index then
+		if outcome.reason == "already" and EC then
+			dialog(player, EC.host, EC.already)
+		elseif outcome.reason == "need" and EC then
+			dialog(player, EC.host, EC.needDish)
+		else
+			dialog(player, "Granny Pecan", Content.PotluckTable.closed)
+		end
 		return
 	end
-	local i = Holiday.pickPlate(data.cooler, EV.meat, function(id: string): number
-		return Rarity.indexOf(Config.Rarities, id)
-	end)
-	if not i then
-		dialog(player, EC.host, EC.needDish)
-		return
-	end
-	local plate = table.remove(data.cooler, i)
+	local plate = table.remove(data.cooler, outcome.index)
 	data.daily[EV.dailyKey] = d
 	local meat = Config.Meats[plate.m]
-	local coins = math.floor(meat.price * EV.shareMult * Economy.rankMult(data.rank, Config.RANK_STEP))
+	local coins = outcome.coins
 	ctx.Game.addCoins(player, data, coins, true)
 	local label = Rarity.get(Config.Rarities, plate.r).name .. " " .. meat.name
 	local thanks = EC.thanks[rng:NextInteger(1, #EC.thanks)]

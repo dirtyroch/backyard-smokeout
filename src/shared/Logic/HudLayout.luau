@@ -249,4 +249,68 @@ function HudLayout.compute(width: number, height: number, insets: Insets?, opts:
 	return desktop(width, height, inset, flags)
 end
 
+export type Notices = { toast: Box, announce: Box }
+
+-- Where login toasts and the potluck announcement sit. They stay under the currency
+-- row, the menu, the goals bar and the guide, and off the action buttons. On a short
+-- phone where that gap is only a few pixels, they rest on the station row instead of
+-- covering the guide.
+function HudLayout.notices(width: number, height: number, insets: Insets?, opts: Options?): Notices
+	local lay = HudLayout.compute(width, height, insets, opts)
+	local function horiz(a: Box, b: Box): boolean
+		return a.w > 0 and b.w > 0 and a.x < b.x + b.w and b.x < a.x + a.w
+	end
+	local function nextTop(names: { string }, x: number, w: number, y: number): number
+		local probe = box(x, y, w, 1)
+		local lim = lay.safe.y + lay.safe.h
+		for _, name in ipairs(names) do
+			local b = (lay :: any)[name] :: Box
+			if b and b.h > 0 and b.y >= y - 0.5 and horiz(probe, b) then
+				lim = math.min(lim, b.y)
+			end
+		end
+		return lim
+	end
+	local y0 = lay.safe.y
+	for _, name in ipairs({ "currencies", "menu", "goals", "guide" }) do
+		local b = (lay :: any)[name] :: Box
+		if b and b.h > 0 then
+			y0 = math.max(y0, b.y + b.h)
+		end
+	end
+	y0 += 8
+	local maxW = math.max(0, lay.safe.w - 16)
+	local annW = math.min(520, maxW)
+	local toastW = math.min(420, maxW)
+	local xA = lay.safe.x + math.floor((lay.safe.w - annW) / 2)
+	local xT = lay.safe.x + math.floor((lay.safe.w - toastW) / 2)
+	local spanX = math.min(xA, xT)
+	local spanW = math.max(xA + annW, xT + toastW) - spanX
+	local hard = { "currencies", "menu", "goals", "guide", "actions", "first", "hint" }
+	local room = nextTop(hard, spanX, spanW, y0) - y0
+	local annH = 34
+	local toastH = 72
+	if room >= annH + 6 + 40 then
+		toastH = math.min(120, room - annH - 6)
+		return {
+			announce = box(xA, y0, annW, annH),
+			toast = box(xT, y0 + annH + 6, toastW, toastH),
+		}
+	end
+	local st = lay.stations
+	if st.h >= 36 and st.w > 0 then
+		local y = st.y + 4
+		local aw = math.min(annW, st.w)
+		local tw = math.min(toastW, st.w)
+		local ax = math.max(lay.safe.x, math.min(xA, st.x + st.w - aw))
+		local tx = math.max(lay.safe.x, math.min(xT, st.x + st.w - tw))
+		local th = math.max(28, math.min(64, st.h - 40))
+		if y + 36 + th > lay.safe.y + lay.safe.h then
+			th = math.max(0, lay.safe.y + lay.safe.h - (y + 36))
+		end
+		return { announce = box(ax, y, aw, 32), toast = box(tx, y + 36, tw, th) }
+	end
+	return { announce = box(xA, y0, annW, 0), toast = box(xT, y0, toastW, 0) }
+end
+
 return HudLayout

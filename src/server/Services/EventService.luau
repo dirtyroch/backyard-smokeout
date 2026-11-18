@@ -23,6 +23,7 @@ local Economy = require(Shared.Logic.Economy)
 local CookOff = require(Shared.Logic.CookOff)
 local TimeUtil = require(Shared.Logic.TimeUtil)
 local Holiday = require(Shared.Logic.Holiday)
+local Guide = require(Shared.Logic.Guide)
 local WorldBuilder = require(Shared.WorldBuilder)
 
 local EventService = {}
@@ -403,9 +404,17 @@ local function refreshTurkey()
 			decor:Destroy()
 		end
 	end
+	local hub = pot.Parent
+	local autumn = hub and hub:FindFirstChild("AutumnRanch")
+	if autumn then
+		autumn:Destroy()
+	end
 	local text = soonText or Content.Signs.potluck
 	if id == "turkeyday" then
 		WorldBuilder.turkeyDay(pot, Content)
+		if hub then
+			WorldBuilder.autumnRanch(hub)
+		end
 		text = Content.Signs.turkeyPotluck
 	elseif id == "holiday" then
 		WorldBuilder.holidaySmokeout(pot, Content)
@@ -446,19 +455,27 @@ local function refreshTable()
 end
 EventService.refreshTable = refreshTable
 
--- The event's one-line note: "It's Turkey Day Smokeout week!" while it's on, or the calm
+-- The event's one-line note: "It's Turkey Day Cookout week!" while it's on, or the calm
 -- "Coming up: ... opens Mon, Nov 23" the week before. Sent when a player joins and again at
 -- Texas midnight to players already in the server (so nobody misses the day it opens).
-function EventService.eventNote(player: Player)
+-- Returns false while the first-visit guide is on screen, so the note waits until that
+-- card is done instead of covering it. Returns true once the note was shown, or when
+-- there is nothing to say.
+function EventService.eventNote(player: Player): boolean
+	local data = ctx.Game.dataOf(player)
+	if data and type(data.guide) == "table" and Guide.view(data.guide).active then
+		return false
+	end
 	local _, EC = ctx.Game.potluckEvent()
 	if EC then
 		ctx.Game.toast(player, EC.login, "good")
-		return
+		return true
 	end
 	local _, SC, sw = ctx.Game.upcomingPotluck()
 	if SC and sw then
 		ctx.Game.toast(player, string.format(SC.soon, Holiday.longLabel(sw.startDay)), "info")
 	end
+	return true
 end
 
 function EventService.init(c: any)
@@ -518,7 +535,12 @@ function EventService.start()
 			if ctx.Game.isSudsWeekend() then
 				ctx.Game.toast(player, "🫧 Suds Saturday & Sunday! Muddy pups need a bath. Wash one for a free bandana.", "good")
 			end
-			EventService.eventNote(player)
+			if not EventService.eventNote(player) then
+				local r = ctx.Game.runtime[player]
+				if r then
+					r.eventNoteDue = true
+				end
+			end
 			task.spawn(EventService.champCheck, player)
 			if ctx.Game.isSaturday() then
 				ctx.Game.toast(player, "🏆 It's Cook-Off Saturday! Bring your best plate to Granny Pecan for 3x prizes.", "good")

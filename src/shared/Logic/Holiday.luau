@@ -107,12 +107,19 @@ function Holiday.meatOpen(meat: any, seasonId: string, eventMeats: { [string]: b
 	return eventMeats[meat.id] == true
 end
 
--- Which cooler plate to share at the potluck: the plainest one of `meatId` (lowest rarity index,
--- earliest on ties), so nobody hands over a rare cut by accident. nil if there isn't one.
+-- A plate a ranch hand cooked. It can be sold like any other plate, but it is not the
+-- player's dish: the potluck won't take it, and it can't cash the once-a-day share.
+function Holiday.isCrewPlate(plate: any): boolean
+	return type(plate) == "table" and plate.by == "crew"
+end
+
+-- Which cooler plate to share at the potluck: the plainest one of `meatId` the player cooked
+-- (lowest rarity index, earliest on ties), so nobody hands over a rare cut by accident.
+-- Crew-cooked plates are skipped. nil if there isn't a player-cooked one.
 function Holiday.pickPlate(cooler: { any }, meatId: string, rarityIndex: (string) -> number): number?
 	local bestI, bestR = nil, math.huge
 	for i, plate in ipairs(cooler) do
-		if plate.m == meatId then
+		if plate.m == meatId and not Holiday.isCrewPlate(plate) then
 			local ri = rarityIndex(plate.r)
 			if ri < bestR then
 				bestI, bestR = i, ri
@@ -120,6 +127,79 @@ function Holiday.pickPlate(cooler: { any }, meatId: string, rarityIndex: (string
 		end
 	end
 	return bestI
+end
+
+-- The one plate automatic servers (crew, Jimothy) must leave in the cooler until today's
+-- share is done. nil once they've shared, or when they have no player-cooked dish.
+function Holiday.holdPlate(cooler: { any }, meatId: string, sharedToday: boolean, rarityIndex: (string) -> number): number?
+	if sharedToday then
+		return nil
+	end
+	return Holiday.pickPlate(cooler, meatId, rarityIndex)
+end
+
+-- How many plates an automatic server may take. One is held back for the potluck when `holding`.
+function Holiday.servable(coolerCount: number, holding: boolean): number
+	local n = math.max(0, math.floor(coolerCount))
+	if holding then
+		return math.max(0, n - 1)
+	end
+	return n
+end
+
+-- Highest-scoring plate an automatic server may take. `held` (the table itself, not an index)
+-- is left for the player. nil when every remaining plate is the held one.
+function Holiday.autoPlate(cooler: { any }, held: any?, scoreOf: (any) -> number): number?
+	local bestI: number? = nil
+	local bestS = 0
+	for i, plate in ipairs(cooler) do
+		if plate ~= held then
+			local s = scoreOf(plate)
+			if bestI == nil or s > bestS then
+				bestI = i
+				bestS = s
+			end
+		end
+	end
+	return bestI
+end
+
+export type ShareRequest = {
+	active: boolean,
+	day: number,
+	sharedOn: number,
+	cooler: { any },
+	meatId: string,
+	ownsReward: boolean,
+	price: number,
+	shareMult: number,
+	rankMult: number,
+	rarityIndex: (string) -> number,
+}
+
+export type ShareOutcome = {
+	ok: boolean,
+	reason: string, -- "closed" | "already" | "need" | "shared"
+	index: number?,
+	coins: number,
+	first: boolean,
+}
+
+-- One potluck share. Does not mutate the cooler. Crew plates never count, so a hand
+-- can't walk a dish up and farm the daily coins or the apron.
+function Holiday.tryShare(req: ShareRequest): ShareOutcome
+	if not req.active then
+		return { ok = false, reason = "closed", coins = 0, first = false }
+	end
+	if req.sharedOn == req.day then
+		return { ok = false, reason = "already", coins = 0, first = false }
+	end
+	local index = Holiday.pickPlate(req.cooler, req.meatId, req.rarityIndex)
+	if not index then
+		return { ok = false, reason = "need", coins = 0, first = false }
+	end
+	local coins = math.floor(req.price * req.shareMult * req.rankMult)
+	return { ok = true, reason = "shared", index = index, coins = coins, first = not req.ownsReward }
 end
 
 -- Days until a window opens, if it opens within the next `lookahead` days (1..lookahead), else nil.
