@@ -60,6 +60,21 @@ function Economy.canRebirth(ranks: { any }, rank: number, runCoins: number): (bo
 	return runCoins >= nextRank.need, nextRank.need
 end
 
+-- Burgers can still be flipped for a bonus. When the flip is not required, an unflipped
+-- burger pays full price. A perfect, good, or missed flip still uses its own multiplier.
+function Economy.flipFactor(flip: string?, required: boolean, perfect: number, good: number, miss: number, unflipped: number): number
+	if flip == "perfect" then
+		return perfect
+	elseif flip == "good" then
+		return good
+	elseif flip == "miss" then
+		return miss
+	elseif not required then
+		return 1
+	end
+	return unflipped
+end
+
 function Economy.rawCost(meat: any, rankMult: number): number
 	-- Raw meat gets a bit pricier as you rank up so rebirths stay meaningful but not grindy.
 	return math.floor(meat.cost * (1 + (rankMult - 1) * 0.5) + 0.5)

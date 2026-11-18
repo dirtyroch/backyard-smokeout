@@ -24,6 +24,7 @@ local Config = require(Shared.Config)
 local DefaultData = require(Shared.DefaultData)
 local SessionLock = require(Shared.Logic.SessionLock)
 local Reconcile = require(Shared.Logic.Reconcile)
+local Migrate = require(Shared.Logic.Migrate)
 local Jimothy = require(Shared.Logic.Jimothy)
 local Staff = require(Shared.Logic.Staff)
 local Signal = require(Shared.Signal)
@@ -140,10 +141,20 @@ local function publish(player: Player, key: string, data: any, memoryOnly: boole
 		return nil
 	end
 	local isNew = data == nil
+	-- Reconcile keeps an existing schema and fills a missing one from the template.
+	-- A save with no schema is still a v1 ranch, so remember that before the fill.
+	local priorSchema = 2
+	if not isNew then
+		priorSchema = if type(data) == "table" and type(data.schema) == "number" then data.schema else 1
+	end
 	data = Reconcile.fill(data or freshData(), DefaultData)
+	if priorSchema < 2 then
+		data.schema = priorSchema
+	end
 	local migrated, migrateErr = pcall(function()
 		Jimothy.migrate(data)
 		Staff.normalize(data)
+		Migrate.apply(data, os.time())
 	end)
 	if not migrated then
 		warn("[DataService] Jimothy migrate failed for " .. player.Name .. ": " .. tostring(migrateErr))

@@ -3,7 +3,7 @@
 local Config = if script ~= nil and script.Parent ~= nil then require(script.Parent.Config) else require("./Config")
 
 return {
-	schema = 1,
+	schema = 2,
 	coins = Config.START_COINS,
 	runCoins = 0,
 	lifetimeCoins = 0,
@@ -59,7 +59,15 @@ return {
 	guide = { step = 1, done = false, skipped = false, introduced = false }, -- first-visit hints (Logic/Guide)
 	forceCritter = "",
 	jimothy = { seen = {}, lastAt = 0, rewarded = false }, -- sighting hunt (Logic/Jimothy)
-	staff = { roster = {} }, -- hired ranch hands (Logic/Staff). Empty for old saves.
+	staff = { roster = {} }, -- old named hands. Logic/Migrate copies hired founders into crew.owned.
+	crew = { owned = {}, slots = 3, nextUid = 1, extra = 0 }, -- critters on the ranch (Logic/Crew)
+	ranch = { tier = 1 },
+	index = { traits = {} }, -- species traits discovered; filled in by a later update
+	codes = {},
+	offline = { lastTick = 0 }, -- 0 means "never ticked", so the first join pays nothing
+	partners = {},
+	events = { smokeShowWeek = -1 },
+	onboard = { done = false, rookieReward = false },
 	freeGift = { nextAt = 0 }, -- timed free gift (Logic/FreeGift). 0 means one is ready.
 	combo = 0,
 	receipts = {},

@@ -13,7 +13,6 @@ local CookLogic = require(Shared.Logic.CookLogic)
 local HudMenu = require(Shared.Logic.HudMenu)
 local TimeUtil = require(Shared.Logic.TimeUtil)
 local Income = require(Shared.Logic.Income)
-local Staff = require(Shared.Logic.Staff)
 local Economy = require(Shared.Logic.Economy)
 local Goals = require(Shared.Logic.Goals)
 local HudLayout = require(Shared.Logic.HudLayout)
@@ -148,15 +147,16 @@ function Hud.mount(screen: GuiObject, panels: any)
 	local topList = UI.list(top, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Center)
 	topList.VerticalAlignment = Enum.VerticalAlignment.Center
 	refs.top = top
-	local coinPill = UI.frame({ Name = "CoinPill", BackgroundColor3 = T.bg, BackgroundTransparency = 0.05, Size = UDim2.new(0, 188, 0, 48), LayoutOrder = 1, Parent = top })
+	local coinPill = UI.frame({ Name = "CoinPill", BackgroundColor3 = T.bg, BackgroundTransparency = 0.05, Size = UDim2.new(0, 220, 0, 48), LayoutOrder = 1, Parent = top })
 	UI.corner(coinPill, 16)
 	UI.stroke(coinPill, T.gold, 2)
 	local coinIcon = UI.coin(coinPill, 28)
 	coinIcon.Position = UDim2.new(0, 8, 0.5, -14)
-	refs.coins = UI.label("0", { Name = "Value", Size = UDim2.new(1, -48, 0, 26), Position = UDim2.new(0, 42, 0, 2), TextSize = 22, TextColor3 = T.gold, Font = T.bold, Parent = coinPill })
-	refs.income = UI.label("+0/s", { Name = "Rate", Size = UDim2.new(1, -48, 0, 16), Position = UDim2.new(0, 42, 0, 28), TextSize = 14, TextColor3 = T.green, Font = T.bold, Parent = coinPill })
-	UI.fitText(refs.coins, 22, 14)
-	UI.fitText(refs.income, 14, 11)
+	refs.income = UI.label("+0/s", { Name = "Rate", Size = UDim2.new(1, -48, 0, 26), Position = UDim2.new(0, 42, 0, 1), TextSize = 22, TextColor3 = T.green, Font = T.bold, Parent = coinPill })
+	refs.coins = UI.label("0", { Name = "Value", Size = UDim2.new(1, -48, 0, 16), Position = UDim2.new(0, 42, 0, 28), TextSize = 14, TextColor3 = T.gold, Font = T.bold, Parent = coinPill })
+	refs.rateScale = UI.new("UIScale", { Name = "Pulse", Scale = 1, Parent = refs.income })
+	UI.fitText(refs.income, 26, 16)
+	UI.fitText(refs.coins, 16, 12)
 	refs.coinPill = coinPill
 	refs.shownCoins = 0
 	refs.aura = topPill(top, "✨", 2, Color3.fromHex("#D4C2FF"))
@@ -191,6 +191,8 @@ function Hud.mount(screen: GuiObject, panels: any)
 		local action = refs.goalAction
 		if action == "gift" then
 			Net.act("ClaimGift")
+		elseif refs.goalId == "hire" then
+			Panels.open("hire")
 		elseif action == "crew" or action == "upgrades" then
 			Panels.open(action)
 		end
@@ -348,7 +350,7 @@ function Hud.applyLayout()
 	place(refs.first, lay.first)
 	place(refs.hint, lay.hint)
 	local pillH = math.max(40, math.min(48, lay.currencies.h))
-	refs.coinPill.Size = UDim2.fromOffset(188, pillH)
+	refs.coinPill.Size = UDim2.fromOffset(if compact then 176 else 228, pillH)
 	for _, child in ipairs(refs.top:GetChildren()) do
 		if child:IsA("GuiObject") and child ~= refs.coinPill and not child:IsA("UIListLayout") then
 			local wide = child.Size.X.Offset
@@ -592,22 +594,49 @@ function Hud.update()
 	else
 		refs.shownCoins += diff * 0.35
 	end
-	refs.coins.Text = UI.fmt(math.floor(refs.shownCoins + 0.5))
-	local rate = s.income or 0
+	local shownNow = math.floor(refs.shownCoins + 0.5)
+	local coinPop = refs.lastCoin ~= nil and shownNow > refs.lastCoin
+	refs.lastCoin = shownNow
+	refs.coins.Text = UI.fmt(shownNow)
+	local trailing = s.income or 0
 	if type(s.earns) == "table" then
-		rate = Income.perSecond(s.earns, workspace:GetServerTimeNow(), Income.WINDOW)
+		trailing = Income.perSecond(s.earns, workspace:GetServerTimeNow(), Income.WINDOW)
 	end
+	local crewRate = s.ranchCrew and s.ranchCrew.rate or 0
+	local rate = if crewRate > 0 then crewRate else trailing
+	refs.income.TextSize = if refs.layout and refs.layout.compact then 18 else 24
 	refs.income.Text = Income.format(rate)
+	if crewRate > 0 and not refs.pulsing and refs.rateScale then
+		refs.pulsing = true
+		refs.rateTween = TweenService:Create(refs.rateScale, TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.12 })
+		refs.rateTween:Play()
+	elseif crewRate <= 0 and refs.pulsing and refs.rateScale then
+		refs.pulsing = false
+		if refs.rateTween then
+			refs.rateTween:Cancel()
+		end
+		refs.rateScale.Scale = 1
+	end
+	if coinPop and refs.rateScale then
+		refs.rateScale.Scale = 1.2
+	end
 	refs.aura.Text = UI.fmt(s.aura)
 	local gift = s.freeGift
 	refs.gift.Visible = gift ~= nil and gift.ready == true
 	if gift and gift.ready then
 		refs.gift.Text = "Gift " .. UI.fmt(gift.coins or 0)
 	end
-	local roster = s.staff and s.staff.roster or {}
-	local slots = s.staff and s.staff.slots or 1
-	local nextHand = if #roster < slots then Staff.nextHand(roster) else nil
-	local hireCost = if nextHand then Staff.hireCost(#roster) else nil
+	local ranch = s.ranchCrew or {}
+	local hireCost, hireName = nil, nil
+	local hiring = s.hiring
+	if hiring and type(hiring.applicants) == "table" and (ranch.used or 0) < (ranch.slots or 0) then
+		for _, applicant in ipairs(hiring.applicants) do
+			if not applicant.taken and applicant.price and (hireCost == nil or applicant.price < hireCost) then
+				hireCost = applicant.price
+				hireName = applicant.name
+			end
+		end
+	end
 	local pitCost = Economy.nextPitCost(Config.PitLevels, s.pitLevel)
 	local nextPit = pitCost and Config.PitLevels[s.pitLevel + 1] or nil
 	local rookieActive = s.rookie ~= nil and s.rookie.finished ~= true
@@ -617,11 +646,11 @@ function Hud.update()
 		giftReady = gift ~= nil and gift.ready == true,
 		coins = s.coins or 0,
 		hireCost = hireCost,
-		hireName = nextHand and nextHand.name or nil,
+		hireName = hireName,
 		pitCost = pitCost,
 		pitName = nextPit and nextPit.name or nil,
-		crew = #roster,
-		crewSlots = slots,
+		crew = ranch.used or 0,
+		crewSlots = ranch.slots or 3,
 	})
 	refs.goals.Visible = goal ~= nil and not guideOn
 	local opts = Hud.layoutOptions()
@@ -631,11 +660,12 @@ function Hud.update()
 		Hud.applyLayout()
 	end
 	if goal then
+		refs.goalId = goal.id
 		refs.goalAction = goal.action
 		refs.goalTitle.Text = goal.title
 		refs.goalDetail.Text = goal.detail
 		refs.goalFill.Size = UDim2.fromScale(if goal.goal > 0 then math.clamp(goal.current / goal.goal, 0, 1) else 0, 1)
-		refs.goalBtn.Text = if goal.action == "gift" then "Claim" elseif goal.action == "crew" then "Crew" else "Upgrade"
+		refs.goalBtn.Text = if goal.action == "gift" then "Claim" elseif goal.id == "hire" then "Hire" elseif goal.action == "crew" then "Crew" else "Upgrade"
 	end
 	local rank = Config.Ranks[s.rank]
 	refs.rank.Text = (s.title ~= "" and s.title or (rank and rank.name or ""))
@@ -652,7 +682,7 @@ function Hud.update()
 	refs.btnShop.Dot.Visible = rookieDone and not s.boughtAny and s.onceBought ~= nil and not s.onceBought.StarterPitPack and s.productIds.products.StarterPitPack == true
 	refs.serveAll.Text = "🍽️ Serve All" .. (#s.customers > 0 and (" (" .. #s.customers .. ")") or "")
 	showStatus(refs.customers, #s.customers > 0 and (#s.customers .. " hungry critter" .. (#s.customers == 1 and "" or "s") .. " waiting") or "")
-	if s.rush then
+	if Config.Chores.lunchRush and s.rush then
 		local ends, n, done = s.rush.ends, s.rush.n, s.rush.done
 		if now >= ends then
 			local P = Config.Rush.period
@@ -661,6 +691,10 @@ function Hud.update()
 		local left = math.max(0, math.floor(ends - now))
 		local zoom = (s.dinnerUntil or 0) > now and "  🔔 Dinner Bell +25% tips" or ((s.potluckUntil or 0) > now and ("  " .. (s.potluckHud ~= nil and s.potluckHud ~= "" and s.potluckHud or "🦃 Potluck's full: +25% tips")) or "")
 		showStatus(refs.rush, (done and "🍽️ Rush cleared! Next in " or string.format("🍽️ Lunch Rush %d/%d · ", n, s.rush.need)) .. TimeUtil.formatDuration(left) .. zoom)
+	else
+		local nowBell = workspace:GetServerTimeNow()
+		local bell = (s.dinnerUntil or 0) > nowBell and "🔔 Dinner Bell +25% tips" or ((s.potluckUntil or 0) > nowBell and (s.potluckHud ~= nil and s.potluckHud ~= "" and s.potluckHud or "🦃 Potluck's full: +25% tips") or "")
+		showStatus(refs.rush, bell)
 	end
 	showStatus(refs.combo, s.combo >= Config.Flip.lockedInAt and ("LOCKED IN 🔒 x" .. s.combo) or (s.combo > 0 and ("Flip combo x" .. s.combo) or ""))
 
@@ -749,7 +783,7 @@ function Hud.update()
 				local isBurger = st.meat == "burger"
 				c.good.Visible = isBurger and not st.flip and not done
 				c.perfect.Visible = isBurger and not st.flip and not done
-				c.peek.Visible = kind == "smoker" and not done and st.rarity == nil
+				c.peek.Visible = Config.Chores.peekPenalty and kind == "smoker" and not done and st.rarity == nil
 				if st.burnt then
 					c.name.Text = "Burnt " .. meat.name
 					c.time.Text = "Skill issue"

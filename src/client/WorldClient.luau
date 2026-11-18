@@ -88,6 +88,8 @@ function WorldClient.start(Panels: any)
 			Net.act("HearJoke")
 		elseif kind == "ui:photo" then
 			WorldClient.photo()
+		elseif kind == "ui:hire" then
+			Panels.open("hire")
 		end
 	end)
 

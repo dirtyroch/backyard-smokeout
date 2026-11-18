@@ -30,6 +30,7 @@ local ctx = {
 	Season = require(Services.SeasonService),
 	Membership = require(Services.MembershipService),
 	Insights = require(Services.InsightsService),
+	Crew = require(Services.CrewService),
 	Remotes = { Action = action, Push = push },
 }
 
@@ -37,7 +38,7 @@ local ctx = {
 -- Every init runs before any start, so actions are registered and the map exists
 -- before Game.start connects PlayerAdded. Game.start is first among starts:
 -- a throw in chat, analytics, or a shop API must not leave joins unwired.
-local initOrder = { "World", "Game", "Social", "Event", "Egg", "Cosmetics", "Purchase", "Season", "Membership", "Insights" }
-local startOrder = { "World", "Social", "Event", "Egg", "Cosmetics", "Purchase", "Season", "Membership", "Insights" }
+local initOrder = { "World", "Game", "Social", "Event", "Egg", "Cosmetics", "Purchase", "Season", "Membership", "Insights", "Crew" }
+local startOrder = { "World", "Crew", "Social", "Event", "Egg", "Cosmetics", "Purchase", "Season", "Membership", "Insights" }
 Boot.run(ctx, initOrder, { "Game" }, startOrder)
 print("[Backyard Smokeout] server ready")

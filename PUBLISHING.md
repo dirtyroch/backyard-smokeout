@@ -98,7 +98,7 @@ The manual steps below still work if you'd rather click through the dashboard.
 | `ExtraSmokers` | Extra Smoker Slots | R$ 249 |
 | `AutoServe` | Jimothy the Waiter | R$ 299 |
 | `PremiumCuts` | Premium Cuts | R$ 349 |
-| `DoubleTips` | Big Tipper (+50% tips, Fair Play cap) | R$ 299 |
+| `DoubleTips` | Big Tipper (+50% tips and crew income, Fair Play cap) | R$ 299 |
 
 ### Developer Products (can be bought more than once, or one-time cosmetics)
 

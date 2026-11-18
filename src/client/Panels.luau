@@ -23,7 +23,7 @@ local HudMenu = require(Shared.Logic.HudMenu)
 local ShopCatalog = require(Shared.Logic.ShopCatalog)
 local Storefront = require(Shared.Logic.Storefront)
 local Rookie = require(Shared.Logic.Rookie)
-local Staff = require(Shared.Logic.Staff)
+local Income = require(Shared.Logic.Income)
 local Streak = require(Shared.Logic.Streak)
 local T = UI.Theme
 
@@ -1169,71 +1169,100 @@ end
 function Panels.welcome(payload: any)
 	if payload.isNew then
 		Panels.dialog({ npc = "Unc Hank", text = "Hi Hungry, I'm Unc! Welcome to Backyard Cookout.\n\nHere's how it works: brisket and ribs smoke for real hours (even while you're offline), burgers take 30 seconds on the grill. Serve the critters, upgrade your pit, find the secrets.\n\nHit the big orange button to smoke your first brisket. It only takes a minute this time. 😉" })
-	elseif payload.away and payload.ready and payload.ready > 0 then
-		Panels.dialog({ npc = "Unc Hank", text = string.format("Welcome back! You were gone %s and %d meat%s finished smoking. They're resting in the smoker, ready to collect.", TimeUtil.formatDuration(payload.away), payload.ready, payload.ready == 1 and "" or "s") })
+	elseif payload.away and ((payload.ready and payload.ready > 0) or (payload.crewCoins and payload.crewCoins > 0)) then
+		local meat = ""
+		if payload.ready and payload.ready > 0 then
+			meat = string.format(" %d meat%s finished smoking.", payload.ready, payload.ready == 1 and "" or "s")
+		end
+		local crew = ""
+		if payload.crewCoins and payload.crewCoins > 0 then
+			crew = string.format(" Your crew earned %s coins while you were away (up to 4 hours).", UI.fmt(payload.crewCoins))
+		end
+		Panels.dialog({ npc = "Unc Hank", text = string.format("Welcome back! You were gone %s.%s%s", TimeUtil.formatDuration(payload.away), meat, crew) })
 	end
 end
 
 local function renderCrew(s: any)
 	titleLabel.Text = "🍳 Ranch crew"
 	local sf = scroller(body)
-	local roster = s.staff and s.staff.roster or {}
-	local slots = s.staff and s.staff.slots or 1
+	local ranch = s.ranchCrew or {}
+	local owned = ranch.owned or {}
+	local slots = ranch.slots or 3
 	local waiter = s.staff and s.staff.waiter == true
-	local intro = card(sf, 0, waiter and 78 or 64)
+	local intro = card(sf, 0, 72)
 	intro.BackgroundTransparency = 1
-	lbl(intro, "Hands you hire cook, carry plates and serve. Your first grill and first smoker stay yours. Jimothy the Waiter is a separate pass: he serves food you already cooked, and he makes the crew walk a little faster.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 14, Font = T.body, TextColor3 = T.dim })
-	local nextHand = if #roster < slots then Staff.nextHand(roster) else nil
-	local cost = if nextHand then Staff.hireCost(#roster) else nil
-	if nextHand and cost then
-		local hire = card(sf, 1, 92)
-		lbl(hire, "Hire " .. nextHand.name .. " the " .. nextHand.title, { Size = UDim2.new(1, -180, 0, 26), TextSize = 20 })
-		lbl(hire, nextHand.blurb, { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -180, 0, 48), TextSize = 14, Font = T.body, TextColor3 = T.dim })
-		local hireBtn = btn(hire, "", s.coins >= cost and T.green or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 160, 0, 44) }, function()
-			Net.act("HireStaff")
+	lbl(intro, string.format("%s · %d / %d working · %s", ranch.tierName or "Open yard", math.min(#owned, slots), slots, Income.format(ranch.rate or 0)), { Size = UDim2.new(1, 0, 0, 24), TextSize = 18 })
+	lbl(intro, "Critters you hire walk home and work the ranch. Jimothy the Waiter is still his own pass. He serves plates. He isn't one of these slots.", { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, 0, 0, 40), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+	if ranch.nextCost and ranch.nextName then
+		local build = card(sf, 1, 88)
+		lbl(build, "Build " .. ranch.nextName, { Size = UDim2.new(1, -170, 0, 24), TextSize = 20 })
+		lbl(build, ranch.nextBlurb or "Adds 2 crew slots.", { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -170, 0, 44), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+		local buildBtn = btn(build, "", (s.coins or 0) >= ranch.nextCost and T.green or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 150, 0, 44) }, function()
+			Net.act("BuyRanchTier")
 		end)
-		UI.fillPrice(hireBtn, "Hire", cost)
-	elseif #roster >= #Staff.HANDS then
-		local full = card(sf, 1, 48)
-		lbl(full, "The crew is full. Upgrade them and the ranch keeps humming.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 16 })
-	else
-		local locked = card(sf, 1, 48)
-		lbl(locked, "Upgrade your pit to open another crew slot. (" .. #roster .. " / " .. slots .. " working)", { Size = UDim2.new(1, 0, 1, 0), TextSize = 16 })
+		UI.fillPrice(buildBtn, "Build", ranch.nextCost)
 	end
-	for i, e in ipairs(roster) do
-		local hand = Staff.hand(e.id)
+	if #owned == 0 then
+		local empty = card(sf, 2, 48)
+		lbl(empty, "Nobody's on the ranch yet. The Hiring Line is in the town square.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 16 })
+	end
+	for i, e in ipairs(owned) do
 		local working = i <= slots
-		local f = card(sf, 10 + i, 132)
+		local trait = if e.trait and e.trait ~= "none" then (" · " .. e.traitName) else ""
+		local badge = if e.badge then (" · " .. e.badge) else ""
+		local f = card(sf, 10 + i, 108)
 		f.BackgroundColor3 = working and T.card or T.panel
-		lbl(f, (working and "" or "Waiting · ") .. e.name .. " · " .. (hand and hand.title or e.role), { Size = UDim2.new(1, 0, 0, 24), TextSize = 20, TextColor3 = working and T.text or T.dim })
-		lbl(f, hand and hand.lines[1] or "", { Position = UDim2.new(0, 0, 0, 24), Size = UDim2.new(1, 0, 0, 20), TextSize = 14, Font = T.body, TextColor3 = T.dim })
-		local stats = {
-			{ id = "speed", label = "Speed", level = e.speed },
-			{ id = "capacity", label = "Carry", level = e.capacity },
-			{ id = "quality", label = "Quality", level = e.quality },
-		}
-		for n, stat in ipairs(stats) do
-			local up = Staff.upgradeCost(stat.id, stat.level)
-			local b = btn(f, "", up and (s.coins >= up and T.accent or T.cardHi) or T.cardHi, {
-				Position = UDim2.new((n - 1) * 0.33, 4, 0, 56),
-				Size = UDim2.new(0.33, -8, 0, 58),
-				TextSize = 14,
-			}, function()
-				if up then
-					Net.act("UpgradeStaff", e.id, stat.id)
-				end
-			end)
+		lbl(f, (working and "" or "Waiting · ") .. e.name .. " · " .. (e.roleName or e.role), { Size = UDim2.new(1, -150, 0, 24), TextSize = 20, TextColor3 = working and T.text or T.dim })
+		lbl(f, string.format("%s%s%s · level %d · %s", e.rarityName or "", trait, badge, e.level or 1, Income.format(e.earn or 0)), { Position = UDim2.new(0, 0, 0, 26), Size = UDim2.new(1, 0, 0, 20), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+		lbl(f, e.line or "", { Position = UDim2.new(0, 0, 0, 48), Size = UDim2.new(1, -160, 0, 36), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+		local up = e.levelCost
+		local b = btn(f, "", up and ((s.coins or 0) >= up and T.accent or T.cardHi) or T.cardHi, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, 0, 1, 0), Size = UDim2.new(0, 150, 0, 44), TextSize = 14 }, function()
 			if up then
-				UI.fillPrice(b, stat.label .. " " .. stat.level, up)
-			else
-				b.Text = stat.label .. " MAX"
+				Net.act("LevelCrew", e.uid)
 			end
+		end)
+		if up then
+			UI.fillPrice(b, "Level " .. tostring((e.level or 1) + 1), up)
+		else
+			b.Text = "Level max"
 		end
 	end
 	if not waiter then
 		local note = card(sf, 80, 48)
 		note.BackgroundTransparency = 1
 		lbl(note, "Jimothy the Waiter is in the Pit Shop if you want someone serving while you cook the long cuts yourself.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+	end
+end
+
+local function renderHire(s: any)
+	titleLabel.Text = "🐾 Hiring Line"
+	local sf = scroller(body)
+	local hiring = s.hiring or {}
+	local intro = card(sf, 0, 64)
+	intro.BackgroundTransparency = 1
+	lbl(intro, "They're walking the boardwalk in the town square. You hire the one you see. Coins only.", { Size = UDim2.new(1, 0, 0, 36), TextSize = 15, Font = T.body, TextColor3 = T.dim })
+	lbl(intro, hiring.clock or "Next lineup", { Position = UDim2.new(0, 0, 0, 38), Size = UDim2.new(1, 0, 0, 22), TextSize = 16 })
+	local rows = hiring.applicants or {}
+	if #rows == 0 then
+		local empty = card(sf, 1, 48)
+		lbl(empty, "The lineup is walking in.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 16 })
+	end
+	for _, applicant in ipairs(rows) do
+		local f = card(sf, applicant.index + 1, 96)
+		local trait = if applicant.trait and applicant.trait ~= "none" then (" · " .. applicant.traitName) else ""
+		lbl(f, applicant.name .. " · " .. (applicant.rarityName or ""), { Size = UDim2.new(1, -170, 0, 24), TextSize = 20, TextColor3 = Color3.fromHex(applicant.color or "#FFF6E0") })
+		lbl(f, (applicant.roleName or "Crew") .. trait, { Position = UDim2.new(0, 0, 0, 26), Size = UDim2.new(1, -170, 0, 20), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+		lbl(f, Income.format(applicant.rate or 0) .. " · " .. applicant.line, { Position = UDim2.new(0, 0, 0, 48), Size = UDim2.new(1, -170, 0, 36), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+		if applicant.taken then
+			local taken = btn(f, "Hired", T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 150, 0, 44) })
+			taken.AutoButtonColor = false
+			taken.Active = false
+		else
+			local hireBtn = btn(f, "", (s.coins or 0) >= (applicant.price or 0) and T.green or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 150, 0, 44) }, function()
+				Net.act("HireApplicant", applicant.index)
+			end)
+			UI.fillPrice(hireBtn, "Hire", applicant.price or 0)
+		end
 	end
 end
 
@@ -1282,6 +1311,8 @@ function Panels.render()
 			renderDaily(s)
 		elseif current == "crew" then
 			renderCrew(s)
+		elseif current == "hire" then
+			renderHire(s)
 		elseif current == "settings" then
 			renderSettings(s)
 		end

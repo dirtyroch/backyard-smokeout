@@ -32,6 +32,9 @@ local Staff = require(Shared.Logic.Staff)
 local Income = require(Shared.Logic.Income)
 local FreeGift = require(Shared.Logic.FreeGift)
 local Guide = require(Shared.Logic.Guide)
+local Crew = require(Shared.Logic.Crew)
+local HiringLine = require(Shared.Logic.HiringLine)
+local Offline = require(Shared.Logic.Offline)
 
 local GameService = {}
 local ctx: any = nil
@@ -61,6 +64,10 @@ type Runtime = {
 	staffNext: { [string]: number },
 	staffJob: { [string]: string },
 	eventNoteDue: boolean,
+	crewBank: number,
+	crewNext: { [string]: number },
+	offlineCrew: number,
+	offlineTipPaid: boolean,
 }
 
 GameService.runtime = {} :: { [Player]: Runtime }
@@ -362,15 +369,8 @@ local function plateValue(player: Player, data: any, plate: any, critter: any?, 
 	local rar = Rarity.get(Config.Rarities, plate.r)
 	local flipMult = 1
 	if meat.station == "grill" and meat.id == "burger" then
-		if plate.f == "perfect" then
-			flipMult = Config.Flip.perfectMult
-		elseif plate.f == "good" then
-			flipMult = Config.Flip.goodMult
-		elseif plate.f == "miss" then
-			flipMult = Config.Flip.missMult
-		else
-			flipMult = Config.Flip.unflippedMult
-		end
+		local F = Config.Flip
+		flipMult = Economy.flipFactor(plate.f, Config.Chores.flipRequired, F.perfectMult, F.goodMult, F.missMult, F.unflippedMult)
 	end
 	local r = rt(player)
 	return Economy.plateValue(meat.price, {
@@ -625,8 +625,14 @@ Actions.Peek = function(player, data, key)
 	if cook.revealed then
 		return false, "You already peeked."
 	end
-	local penalty = CookLogic.peek(cook, Config.PEEK_PENALTY_FRACTION, Config.PEEK_PENALTY_MIN)
+	local frac = if Config.Chores.peekPenalty then Config.PEEK_PENALTY_FRACTION else 0
+	local minimum = if Config.Chores.peekPenalty then Config.PEEK_PENALTY_MIN else 0
+	local penalty = CookLogic.peek(cook, frac, minimum)
 	local rar = Rarity.get(Config.Rarities, cook.rarity)
+	if not Config.Chores.peekPenalty then
+		GameService.toast(player, string.format("It's looking %s.", rar.name), "info")
+		return true, nil
+	end
 	GameService.toast(player, string.format("%s (+%s cook time) It's looking %s!", Content.PitmasterScold[rng:NextInteger(1, #Content.PitmasterScold)], TimeUtil.formatDuration(penalty), rar.name), "warn")
 	return true, nil
 end
@@ -729,9 +735,9 @@ function GameService.serveCustomer(player: Player, customer: any, tipExtra: numb
 		GameService.fx(player, "sixseven", { value = value })
 		ctx.Egg.found(player, data, "sixseven")
 	end
-	-- Lunch Rush
+	-- Lunch Rush stays in the code for one release. The switch keeps the bonus off.
 	local r = rt(player)
-	if r then
+	if Config.Chores.lunchRush and r then
 		local bonus
 		r.rush, bonus = Hype.rushStep(r.rush, T(), Config.Rush.period, Config.Rush.need, Config.Rush.bonusFrac, value)
 		if bonus > 0 then
@@ -1009,6 +1015,9 @@ Actions.ClaimGift = function(player, data)
 end
 
 Actions.HireStaff = function(player, data)
+	if not Config.Chores.legacyStaff then
+		return false, "Hire from the Hiring Line in the town square."
+	end
 	Staff.normalize(data)
 	local outcome = Staff.tryHire(data.staff.roster, data.pitLevel, data.coins)
 	if not outcome.ok or not outcome.employee or not outcome.cost then
@@ -1038,6 +1047,9 @@ Actions.HireStaff = function(player, data)
 end
 
 Actions.UpgradeStaff = function(player, data, id, stat)
+	if not Config.Chores.legacyStaff then
+		return false, "Level your crew from the Crew panel."
+	end
 	Staff.normalize(data)
 	local outcome = Staff.tryUpgrade(data.staff.roster, id, stat, data.coins)
 	if not outcome.ok or not outcome.stat or not outcome.cost or not outcome.level or outcome.from == nil then
@@ -1348,6 +1360,32 @@ local function snapshot(player: Player, data: any): any
 		giftsHeld = data.giftsHeld,
 		onceBought = data.purchases.once,
 		boughtAny = data.purchases.count > 0,
+		hiring = (function()
+			local line = if ctx.Crew and ctx.Crew.line then ctx.Crew.line() else nil
+			local rows = {}
+			if type(line) == "table" and type(line.applicants) == "table" then
+				for _, applicant in ipairs(line.applicants) do
+					table.insert(rows, {
+						index = applicant.index,
+						name = applicant.name,
+						rarityName = applicant.rarityName,
+						color = applicant.color,
+						roleName = applicant.roleName,
+						trait = applicant.trait,
+						traitName = applicant.traitName,
+						rate = applicant.rate,
+						price = applicant.price,
+						line = applicant.line,
+						taken = line.taken[applicant.index] ~= nil,
+					})
+				end
+			end
+			return {
+				clock = HiringLine.clockLabel(os.time(), Config.Hiring.period, Config.TIMEZONE_OFFSET_HOURS),
+				applicants = rows,
+			}
+		end)(),
+		ranchCrew = Crew.view(data, GameService.crewMults(player, data)),
 		seasonPass = ctx.Season.snapshot(data),
 		member = ctx.Membership.snapshot(player, data),
 		plot = r.plot,
@@ -1464,6 +1502,10 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 		staffNext = {},
 		staffJob = {},
 		eventNoteDue = false,
+		crewBank = 0,
+		crewNext = {},
+		offlineCrew = 0,
+		offlineTipPaid = false,
 	}
 	-- Runtime goes in before any yielding call. Until it exists, every action
 	-- returns "Still loading your ranch..." and prompts no-op.
@@ -1522,6 +1564,14 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 		end
 		if ok and type(passes) == "table" then
 			r.passes = passes
+			if passes.DoubleTips == true and not r.offlineTipPaid and r.offlineCrew > 0 then
+				r.offlineTipPaid = true
+				local extra = math.floor(r.offlineCrew * (Crew.tipMult(true) - 1) + 1e-9)
+				if extra > 0 then
+					GameService.addCoins(player, data, extra, true, "CrewOffline")
+					GameService.toast(player, string.format("Big Tipper added %d coins from while you were away.", extra), "good")
+				end
+			end
 		else
 			warn("[GameService] loadPasses failed: " .. tostring(passes))
 		end
@@ -1541,6 +1591,7 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 	-- Offline progress: one jump from the saved `last` of each cook to now.
 	local readyBefore = 0
 	local readyAfter = 0
+	local awayCrew = { seconds = 0, coins = 0 }
 	guard("offline", function()
 		for _, cook in pairs(data.stations) do
 			if type(cook) == "table" and CookLogic.isDone(cook) then
@@ -1548,6 +1599,15 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 			end
 		end
 		advanceAll(player, data, serverNow(), false)
+		Crew.ensure(data)
+		local rate = Crew.totalRate(data.crew.owned, data.crew.slots, { rank = data.rank, friends = 0, tipPass = false })
+		local settled = Offline.settle(data.offline.lastTick, os.time(), Offline.cap(false), rate)
+		data.offline.lastTick = settled.lastTick
+		r.offlineCrew = settled.coins
+		awayCrew = settled
+		if settled.coins > 0 then
+			GameService.addCoins(player, data, settled.coins, true, "CrewOffline")
+		end
 		for key, cook in pairs(data.stations) do
 			if type(cook) == "table" and CookLogic.isDone(cook) then
 				readyAfter += 1
@@ -1591,9 +1651,9 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 		local degraded = profile.memoryOnly and not RunService:IsStudio()
 		if isNew and not degraded then
 			ctx.Remotes.Push:FireClient(player, "welcome", { isNew = true })
-		elseif readyAfter > readyBefore and lastSeen > 0 then
+		elseif lastSeen > 0 and (readyAfter > readyBefore or awayCrew.coins > 0) then
 			local away = os.time() - lastSeen
-			ctx.Remotes.Push:FireClient(player, "welcome", { isNew = false, away = away, ready = readyAfter - readyBefore })
+			ctx.Remotes.Push:FireClient(player, "welcome", { isNew = false, away = away, ready = readyAfter - readyBefore, crewCoins = awayCrew.coins, crewAway = awayCrew.seconds })
 		elseif not degraded then
 			ctx.Remotes.Push:FireClient(player, "welcome", { isNew = false })
 		end
@@ -1609,6 +1669,12 @@ local function onRemoving(player: Player)
 	local data = profileOf(player)
 	if data then
 		advanceAll(player, data, T(), false)
+		if type(data.offline) == "table" then
+			data.offline.lastTick = os.time()
+		end
+	end
+	if ctx.Crew and ctx.Crew.onPlayerGone then
+		ctx.Crew.onPlayerGone(player)
 	end
 	ctx.Social.onLeave(player)
 	ctx.World.releasePlot(player)
@@ -1734,7 +1800,145 @@ local function countOpen(data: any, prefix: string, slots: number): number
 end
 
 -- Crew tick. The player's first grill and first smoker are never used here.
+function GameService.crewMults(player: Player, data: any): Crew.Mults
+	local r = rt(player)
+	return {
+		rank = data.rank,
+		friends = if r then r.crew else 0,
+		tipPass = r ~= nil and r.passes.DoubleTips == true,
+	}
+end
+
+function GameService.hireApplicant(player: Player, index: any): (boolean, string?)
+	local data = profileOf(player)
+	local r = rt(player)
+	if not data or not r then
+		return false, "Still loading your ranch..."
+	end
+	if type(index) ~= "number" then
+		local parsed = tonumber(index)
+		if parsed == nil then
+			return false, "Bad request."
+		end
+		index = parsed
+	end
+	local line = if ctx.Crew and ctx.Crew.line then ctx.Crew.line() else nil
+	if type(line) ~= "table" or type(line.applicants) ~= "table" then
+		return false, "The hiring line is still walking in."
+	end
+	if line.window ~= HiringLine.window(os.time(), Config.Hiring.period) then
+		return false, "A new lineup just walked in."
+	end
+	local applicant = nil
+	for _, row in ipairs(line.applicants) do
+		if row.index == index then
+			applicant = row
+			break
+		end
+	end
+	if not applicant then
+		return false, "They're not on the line."
+	end
+	local outcome = Crew.tryHire(data, applicant)
+	if not outcome.ok then
+		return false, Crew.hireMessage(outcome.reason, outcome.cost)
+	end
+	if not HiringLine.tryTake(line.taken, index :: number, player.UserId) then
+		return false, "Someone else hired them."
+	end
+	local member = Crew.applyHire(data, outcome)
+	if not member then
+		line.taken[index] = nil
+		return false, "You can't hire right now."
+	end
+	local verb = if outcome.mergeUid then "picked up a new trick" else "is walking to your ranch"
+	GameService.toast(player, member.name .. " " .. verb .. ".", "good")
+	GameService.fx(player, "hired", { name = member.name, title = (Config.CrewRoles :: any)[member.role] and (Config.CrewRoles :: any)[member.role].name or "Crew" })
+	if not outcome.mergeUid and ctx.Crew and ctx.Crew.walkHome then
+		ctx.Crew.walkHome(player, index)
+	end
+	return true, nil
+end
+
+Actions.HireApplicant = function(player, _data, index)
+	return GameService.hireApplicant(player, index)
+end
+
+Actions.LevelCrew = function(player, data, uid)
+	local outcome = Crew.tryLevel(data, uid)
+	if not Crew.applyLevel(data, outcome) then
+		return false, Crew.levelMessage(outcome.reason, outcome.cost)
+	end
+	local member = Crew.findUid(data.crew.owned, outcome.uid :: number)
+	local name = if member then member.name else "Your critter"
+	GameService.toast(player, string.format("%s is now level %d.", name, outcome.level), "good")
+	GameService.fx(player, "levelup", { text = name .. " " .. tostring(outcome.level) })
+	return true, nil
+end
+
+Actions.BuyRanchTier = function(player, data)
+	local outcome = Crew.tryTier(data)
+	if not Crew.applyTier(data, outcome) then
+		return false, Crew.tierMessage(outcome.reason, outcome.cost)
+	end
+	GameService.toast(player, string.format("Ranch tier %d: %s.", outcome.tier, outcome.name), "good")
+	GameService.fx(player, "levelup", { text = outcome.name })
+	return true, nil
+end
+
+local function payCrew(player: Player, data: any, r: Runtime)
+	if type(data.crew) ~= "table" or type(data.crew.owned) ~= "table" then
+		return
+	end
+	local rate = Crew.totalRate(data.crew.owned, data.crew.slots or 0, GameService.crewMults(player, data))
+	local coins, bank = Crew.tickPay(rate, r.crewBank)
+	r.crewBank = bank
+	if type(data.offline) ~= "table" then
+		data.offline = { lastTick = 0 }
+	end
+	data.offline.lastTick = os.time()
+	if coins > 0 then
+		GameService.addCoins(player, data, coins, true, "Crew")
+	end
+end
+
+local function runCrewJobs(player: Player, data: any, r: Runtime, t: number)
+	if type(data.crew) ~= "table" or type(data.crew.owned) ~= "table" then
+		return
+	end
+	local slots = data.crew.slots or 0
+	for i, member in ipairs(data.crew.owned) do
+		if i > slots then
+			break
+		end
+		local key = tostring(member.uid)
+		if r.crewNext[key] == nil then
+			r.crewNext[key] = t + i * 0.4
+		end
+		if t >= r.crewNext[key] then
+			r.crewNext[key] = t + Config.Hiring.workSeconds
+			local job = Crew.job(member.role)
+			if job == "smoke" then
+				local slot = emptyTended(data, "s", GameService.slotCount(player, data, "smoker"))
+				if slot then
+					GameService.beginCook(player, data, slot, "hotlink", { quiet = true, hand = "crew" })
+				end
+			elseif job == "grill" then
+				local slot = emptyTended(data, "g", GameService.slotCount(player, data, "grill"))
+				if slot then
+					GameService.beginCook(player, data, slot, "burger", { quiet = true, hand = "crew" })
+				end
+			elseif job == "serve" and #r.customers > 0 then
+				GameService.serveCustomer(player, r.customers[1], nil, true)
+			end
+		end
+	end
+end
+
 local function runStaff(player: Player, data: any, r: any, t: number)
+	if not Config.Chores.legacyStaff then
+		return
+	end
 	if type(data.staff) ~= "table" then
 		return
 	end
@@ -1883,9 +2087,15 @@ function GameService.start()
 						end
 					end
 					if #r.customers < Config.CUSTOMER_SPOTS and t >= r.nextSpawn then
-						r.nextSpawn = t + Config.CUSTOMER_SPAWN_SECONDS * (0.7 + rng:NextNumber() * 0.6)
+						local greeters = 0
+						if type(data.crew) == "table" and type(data.crew.owned) == "table" then
+							greeters = Crew.greeterCount(data.crew.owned, data.crew.slots or 0)
+						end
+						r.nextSpawn = t + Config.CUSTOMER_SPAWN_SECONDS * (0.7 + rng:NextNumber() * 0.6) * Crew.greeterDelay(greeters)
 						spawnCustomer(player, data, r)
 					end
+					payCrew(player, data, r)
+					runCrewJobs(player, data, r, t)
 					runStaff(player, data, r, t)
 					-- Jimothy the Waiter stays his own pass: he serves plates you already cooked.
 					-- The crew cooks and serves too. Owning the pass also shortens their interval.
