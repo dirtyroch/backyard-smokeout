@@ -20,7 +20,7 @@ If purchases already work in your Studio place, the Robux IDs are probably only 
 
 1. Download **`BackyardSmokeout.rbxlx`** from the GitHub repo. Click the file, then the **Download raw file** button.
 2. In Studio, choose **File > Open from File...** and pick `BackyardSmokeout.rbxlx`.
-3. You'll see the hub, 8 ranches in a circle and the creek out back.
+3. You'll see the hub, 10 ranches in a circle and the creek out back.
 4. Press **Play** (the ▶ button at the top) to try it. Press **Stop** (■) when you're done.
 
 **About Studio test mode:**

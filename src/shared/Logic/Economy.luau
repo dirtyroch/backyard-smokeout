@@ -68,6 +68,20 @@ end
 export type CookAccess = { pass: boolean, tokens: number, unlocked: boolean }
 export type CookBill = { allowed: boolean, coins: number, usesToken: boolean }
 
+-- A Premium Cuts pass, or spending a Wagyu/Tomahawk token, is a paid cook.
+-- The earned Tomahawk unlock does not spend a token, so it is not a paid path.
+function Economy.paidCut(meat: any, access: CookAccess, usesToken: boolean): boolean
+	return meat.premium == true and (access.pass == true or usesToken == true)
+end
+
+-- Paid cooks are Smoke Ring Gold. Anything else keeps the rarity already rolled.
+function Economy.cookRarity(meat: any, access: CookAccess, usesToken: boolean, rolled: string): string
+	if Economy.paidCut(meat, access, usesToken) then
+		return "smokering"
+	end
+	return rolled
+end
+
 -- Premium cuts always have a coin cost. The pass (or a token, or the Tomahawk
 -- path unlock) is access, not a free cook. A token is spent only when that is
 -- the thing granting access.

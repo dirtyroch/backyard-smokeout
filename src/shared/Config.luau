@@ -14,7 +14,7 @@ Config.TAGLINE = "Low and slow. Smoke it while you sleep."
 -- Daily resets, streaks and the Saturday Cook-Off use Texas time (Central, fixed UTC-6).
 Config.TIMEZONE_OFFSET_HOURS = -6
 
-Config.MAX_PLOTS = 8 -- set the server size to 8 in Game Settings > Places
+Config.MAX_PLOTS = 10 -- set the server size to 10 in Game Settings > Places
 Config.START_COINS = 50
 Config.COOLER_MAX = 40
 Config.AUTOSAVE_SECONDS = 60

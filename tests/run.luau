@@ -2026,6 +2026,35 @@ test("menu art does not keep the click, and the hit target sits above the scroll
 	truthy(string.find(UI_SRC, "task.spawn", 1, true) == nil, "spawn cleared the guard before the second Activated")
 end)
 
+print("Ten ranches")
+test("the server holds 10 ranches and the old gap scenes move into the new gaps", function()
+	local WorldBuilder = require("../src/shared/WorldBuilder")
+	eq(Config.MAX_PLOTS, 10)
+	eq(WorldBuilder.gapDegrees(8, 1), 22.5)
+	eq(WorldBuilder.gapDegrees(8, 2), 67.5)
+	eq(WorldBuilder.nearestGap(8, 112.5), 112.5, "eight ranches keep the original gaps")
+	eq(WorldBuilder.nearestGap(10, 22.5), 18)
+	eq(WorldBuilder.nearestGap(10, 67.5), 54)
+	near(WorldBuilder.nearestGap(10, 112.5), 126, 1e-6)
+	near(WorldBuilder.nearestGap(10, 337.5), 342, 1e-6)
+	local seen = {}
+	for i = 1, Config.MAX_PLOTS do
+		local g = WorldBuilder.gapDegrees(Config.MAX_PLOTS, i)
+		truthy(seen[g] == nil, "gap " .. g .. " is used twice")
+		seen[g] = true
+	end
+	-- Due north stays a gap between ranches, so the creek path is not a house.
+	local north = 270
+	local best = 1e9
+	for i = 1, Config.MAX_PLOTS do
+		local d = math.abs((WorldBuilder.gapDegrees(Config.MAX_PLOTS, i) - north + 180) % 360 - 180)
+		best = math.min(best, d)
+	end
+	near(best, 0, 1e-6, "a gap sits on the creek heading")
+	local WorldBuilderSrc = fs_read("src/shared/WorldBuilder.luau")
+	truthy(string.find(WorldBuilderSrc, "nearestGap", 1, true) ~= nil)
+end)
+
 print("Shops, howdy, signs, models")
 test("every Robux item stays listed when its id is 0, and a real id buys", function()
 	local offers = ShopCatalog.robuxKeys(Monetization)
@@ -2102,6 +2131,80 @@ test("every plot sign faces the approach path, and the other face is readable to
 		local vip = plot.VIPLights.VIPSign
 		local vipPos = vip.CFrame.Position
 		truthy(frontNormal(vip):Dot((V3.new(0, vipPos.Y, 0) - vipPos).Unit) > 0.5, "plot " .. i .. " VIP sign faces out")
+	end
+	eq(#map.Plots:GetChildren(), Config.MAX_PLOTS)
+	-- Pads may meet their own road and sit in the ground. Anything else intersecting a ranch is a real overlap.
+	local function axes(cf)
+		return { cf.RightVector, cf.UpVector, -cf.LookVector }
+	end
+	local function boxes(root)
+		local out = {}
+		for _, d in ipairs(root:GetDescendants()) do
+			if d:IsA("BasePart") and d.Transparency < 1 then
+				local cf = d.CFrame
+				table.insert(out, { pos = cf.Position, size = d.Size, ax = axes(cf), name = d.Name })
+			end
+		end
+		return out
+	end
+	local function extent(b, axis)
+		local e = b.size * 0.5
+		return e.X * math.abs(b.ax[1]:Dot(axis)) + e.Y * math.abs(b.ax[2]:Dot(axis)) + e.Z * math.abs(b.ax[3]:Dot(axis))
+	end
+	local function hit(a, b)
+		local delta = b.pos - a.pos
+		local function sep(axis)
+			if axis.Magnitude < 1e-6 then
+				return false
+			end
+			local n = axis.Unit
+			return math.abs(delta:Dot(n)) > extent(a, n) + extent(b, n) + 0.2
+		end
+		for axis = 1, 3 do
+			if sep(a.ax[axis]) or sep(b.ax[axis]) then
+				return false
+			end
+			for other = 1, 3 do
+				if sep(a.ax[axis]:Cross(b.ax[other])) then
+					return false
+				end
+			end
+		end
+		return true
+	end
+	local plotBoxes = {}
+	for i = 1, Config.MAX_PLOTS do
+		plotBoxes[i] = boxes(map.Plots:FindFirstChild("Plot" .. i))
+	end
+	for i = 1, Config.MAX_PLOTS do
+		for j = i + 1, Config.MAX_PLOTS do
+			for _, a in ipairs(plotBoxes[i]) do
+				for _, b in ipairs(plotBoxes[j]) do
+					truthy(not hit(a, b), "plot " .. i .. " " .. a.name .. " overlaps plot " .. j .. " " .. b.name)
+				end
+			end
+		end
+	end
+	local scenery = map:FindFirstChild("Scenery")
+	local hood = scenery and scenery:FindFirstChild("Neighborhood")
+	local critters = scenery and scenery:FindFirstChild("Critters")
+	local extras = {}
+	if hood then
+		for _, b in ipairs(boxes(hood)) do
+			table.insert(extras, b)
+		end
+	end
+	if critters then
+		for _, b in ipairs(boxes(critters)) do
+			table.insert(extras, b)
+		end
+	end
+	for i = 1, Config.MAX_PLOTS do
+		for _, a in ipairs(plotBoxes[i]) do
+			for _, b in ipairs(extras) do
+				truthy(not hit(a, b), "plot " .. i .. " " .. a.name .. " overlaps " .. b.name)
+			end
+		end
 	end
 end)
 test("birds are built from a beak, feathers and toes, and stay a small part count", function()
@@ -2444,6 +2547,70 @@ test("premium cuts cost coins even when the creator owns every pass", function()
 	eq(Monetization.Passes.PremiumCuts.price, 349)
 	eq(Monetization.Products.WagyuPack.id, 3732457988)
 	eq(Monetization.Products.WagyuPack.price, 79)
+end)
+test("paid Wagyu, Tomahawk and Premium Cuts cooks are always Smoke Ring Gold", function()
+	local gold = Rarity.get(Config.Rarities, "smokering")
+	eq(gold.name, "Smoke Ring Gold")
+	local function access(pass, tokens, unlocked)
+		return { pass = pass, tokens = tokens, unlocked = unlocked }
+	end
+	local function rarity(meat, acc, rolled)
+		local bill = Economy.cookBill(meat, 1, Config.RANK_STEP, acc)
+		return Economy.cookRarity(meat, acc, bill.usesToken, rolled), bill
+	end
+	local wagyu, tomahawk, burger = Config.Meats.wagyu, Config.Meats.tomahawk, Config.Meats.burger
+	local withPass, passBill = rarity(wagyu, access(true, 0, false), "meteorite")
+	eq(withPass, "smokering")
+	eq(passBill.usesToken, false)
+	local withTokens, tokenBill = rarity(tomahawk, access(false, 3, false), "texas")
+	eq(withTokens, "smokering")
+	eq(tokenBill.usesToken, true)
+	local wagyuTokens = rarity(wagyu, access(false, 1, false), "common")
+	eq(wagyuTokens, "smokering")
+	-- The earned path unlock is not a paid path, even if a token is sitting in the cooler.
+	local earned, earnedBill = rarity(tomahawk, access(false, 2, true), "juicy")
+	eq(earned, "juicy")
+	eq(earnedBill.usesToken, false)
+	local plain = rarity(burger, access(true, 5, true), "common")
+	eq(plain, "common")
+	truthy(Economy.paidCut(wagyu, access(true, 0, false), false))
+	truthy(not Economy.paidCut(tomahawk, access(false, 4, true), false))
+	truthy(string.find(Monetization.Passes.PremiumCuts.desc, "Smoke Ring Gold", 1, true) ~= nil)
+	truthy(string.find(Monetization.Products.WagyuPack.desc, "Smoke Ring Gold", 1, true) ~= nil)
+	truthy(string.find(Monetization.Products.TomahawkPack.desc, "Smoke Ring Gold", 1, true) ~= nil)
+	truthy(string.find(Monetization.Products.StarterPitPack.desc, "Smoke Ring Gold", 1, true) ~= nil)
+	local game = fs_read("src/server/Services/GameService.luau")
+	truthy(string.find(game, "Economy.cookRarity", 1, true) ~= nil)
+	truthy(string.find(game, "Economy.paidCut", 1, true) ~= nil)
+	-- Luck sauce is only opened when the cook still rolls.
+	local luckAt = string.find(game, 'useSauce(data, "luck")', 1, true)
+	local paidAt = string.find(game, "if not paidFixed then", 1, true)
+	truthy(paidAt ~= nil and luckAt ~= nil and paidAt < luckAt)
+end)
+test("an old save still loads, and a cook already on the pit keeps its rarity", function()
+	local old = {
+		schema = 1,
+		coins = 1234,
+		cuts = { wagyu = 2, tomahawk = 1 },
+		unlocks = { tomahawk = true },
+		stations = { s1 = { meat = "wagyu", rarity = "texas", start = 10, duration = 14400 } },
+		stats = { served = 40 },
+	}
+	local filled = Reconcile.fill(old, DefaultData)
+	eq(filled.schema, 1)
+	eq(filled.coins, 1234)
+	eq(filled.cuts.wagyu, 2)
+	eq(filled.cuts.tomahawk, 1)
+	eq(filled.unlocks.tomahawk, true)
+	eq(filled.stations.s1.rarity, "texas")
+	eq(filled.stations.s1.meat, "wagyu")
+	eq(filled.stats.served, 40)
+	eq(filled.pitLevel, 1)
+	eq(type(filled.staff.roster), "table")
+	eq(#filled.staff.roster, 0)
+	-- Nothing in the save records the server size, so 8-player ranches open on a 10-player server.
+	eq(filled.plot, nil)
+	eq(Config.MAX_PLOTS, 10)
 end)
 test("every shop grant exists, and nothing on the coin menu is accidentally free", function()
 	for key, p in pairs(Monetization.Products) do

@@ -678,8 +678,9 @@ local function renderCook(s: any)
 			}
 			local bill = Economy.cookBill(meat, s.rank, Config.RANK_STEP, access)
 			local tokenNote = if bill.usesToken then string.format("  •  uses 1 of %d", access.tokens) else ""
+			local paidNote = if Economy.paidCut(meat, access, bill.usesToken) then "  •  Smoke Ring Gold" else ""
 			lbl(f, meat.name, { Position = UDim2.new(0, 56, 0, 0), Size = UDim2.new(1, -230, 0, 26), TextSize = 20 })
-			lbl(f, string.format("%s  •  sells ~%s%s", TimeUtil.formatDuration(secs), UI.fmt(meat.price * rm), tokenNote), { Position = UDim2.new(0, 56, 0, 28), Size = UDim2.new(1, -230, 0, 22), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+			lbl(f, string.format("%s  •  sells ~%s%s%s", TimeUtil.formatDuration(secs), UI.fmt(meat.price * rm), tokenNote, paidNote), { Position = UDim2.new(0, 56, 0, 28), Size = UDim2.new(1, -230, 0, 22), TextSize = 14, Font = T.body, TextColor3 = T.dim })
 			local cost = bill.coins
 			local cookBtn = btn(f, why and "🔒" or "Cook", why and T.cardHi or T.accent, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 168, 0, 44) }, function()
 				if why then
@@ -703,8 +704,8 @@ local function renderCook(s: any)
 	for _, o in ipairs(odds) do
 		table.insert(parts, string.format("%s %.1f%%", o.name, o.pct))
 	end
-	local f = card(sf, 99, 64)
-	lbl(f, "Rarity odds right now (set when you start the cook):\n" .. table.concat(parts, "  •  ") .. (kind == "grill" and "\nBurgers top out at Smoke Ring Gold." or ""), { Size = UDim2.new(1, 0, 1, 0), TextSize = 13, Font = T.body, TextColor3 = T.dim })
+	local f = card(sf, 99, 82)
+	lbl(f, "Rarity odds right now (set when you start the cook):\n" .. table.concat(parts, "  •  ") .. (kind == "grill" and "\nBurgers top out at Smoke Ring Gold." or "") .. "\nA Premium Cuts pass or a token comes out Smoke Ring Gold.", { Size = UDim2.new(1, 0, 1, 0), TextSize = 13, Font = T.body, TextColor3 = T.dim })
 end
 
 -- ===== Index =====
