@@ -11,6 +11,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local CookLogic = require(Shared.Logic.CookLogic)
 local HudMenu = require(Shared.Logic.HudMenu)
+local Onboard = require(Shared.Logic.Onboard)
 local TimeUtil = require(Shared.Logic.TimeUtil)
 local Income = require(Shared.Logic.Income)
 local Economy = require(Shared.Logic.Economy)
@@ -224,6 +225,9 @@ function Hud.mount(screen: GuiObject, panels: any)
 	refs.btnPath = byId.path
 	refs.btnUp = byId.upgrades
 	refs.btnCrew = byId.crew
+	refs.btnHire = byId.hire
+	refs.btnRanch = byId.ranch
+	refs.menuById = byId
 	refs.btnDaily = byId.daily
 	refs.btnSettings = byId.settings
 	refs.btnInvite = byId.invite
@@ -426,6 +430,10 @@ function Hud.guideTarget(id: string): GuiObject?
 		return refs.serveAll
 	elseif id == "crew" then
 		return refs.btnCrew
+	elseif id == "hire" then
+		return refs.btnHire
+	elseif id == "ranchbuild" then
+		return refs.btnRanch
 	elseif id == "gift" then
 		if refs.gift and refs.gift.Visible then
 			return refs.gift
@@ -604,11 +612,11 @@ function Hud.update()
 	end
 	local crewRate = s.ranchCrew and s.ranchCrew.rate or 0
 	local rate = if crewRate > 0 then crewRate else trailing
-	refs.income.TextSize = if refs.layout and refs.layout.compact then 18 else 24
-	refs.income.Text = Income.format(rate)
+	refs.income.TextSize = if refs.layout and refs.layout.compact then 20 else 32
+	refs.income.Text = "+" .. Income.format(rate) .. "/s"
 	if crewRate > 0 and not refs.pulsing and refs.rateScale then
 		refs.pulsing = true
-		refs.rateTween = TweenService:Create(refs.rateScale, TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.12 })
+		refs.rateTween = TweenService:Create(refs.rateScale, TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.22 })
 		refs.rateTween:Play()
 	elseif crewRate <= 0 and refs.pulsing and refs.rateScale then
 		refs.pulsing = false
@@ -709,7 +717,12 @@ function Hud.update()
 		local _, _, done = Hud.view(st, s.boost)
 		anyDone = anyDone or done
 	end
-	refs.first.Visible = not s.tutorial.firstBrisket and not firstCooking and s.stations.s1 == nil
+	refs.first.Visible = s.onboard == nil and not s.tutorial.firstBrisket and not firstCooking and s.stations.s1 == nil
+	if refs.menuById then
+		for id, button in pairs(refs.menuById) do
+			button.Visible = Onboard.buttonOn(id, s.playSeconds or 0, s.menuAll == true)
+		end
+	end
 	local hint = ""
 	if not s.tutorial.done then
 		if firstCooking and not anyDone then

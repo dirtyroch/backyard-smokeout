@@ -37,6 +37,10 @@ local HiringLine = require(Shared.Logic.HiringLine)
 local Offline = require(Shared.Logic.Offline)
 local Index = require(Shared.Logic.Index)
 local Partners = require(Shared.Logic.Partners)
+local Onboard = require(Shared.Logic.Onboard)
+local Codes = require(Shared.Logic.Codes)
+local Offers = require(Shared.Logic.Offers)
+local Purse = require(Shared.Logic.Purse)
 
 local GameService = {}
 local ctx: any = nil
@@ -752,7 +756,7 @@ function GameService.serveCustomer(player: Player, customer: any, tipExtra: numb
 	end
 	if not data.tutorial.done then
 		data.tutorial.done = true
-		if not data.rookie.skipped and data.rookie.claimed == 0 then
+		if Onboard.skip(data) and not data.rookie.skipped and data.rookie.claimed == 0 then
 			ctx.Remotes.Push:FireClient(player, "dialog", { npc = "Unc Hank", text = Content.Rookie.start, reward = 0 })
 		end
 	end
@@ -1227,9 +1231,12 @@ Actions.Prompt = function(player, _data, kind, key)
 end
 
 -- Analytics only: which shop tab was opened (nothing changes for the player).
-Actions.ShopView = function(player, _data, tab)
+Actions.ShopView = function(player, data, tab)
 	if type(tab) ~= "string" or #tab > 24 then
 		return false, nil
+	end
+	if type(data.onboard) == "table" then
+		data.onboard.shopSeen = true
 	end
 	if tab == "" then
 		ctx.Insights.shopOpened(player)
@@ -1335,7 +1342,42 @@ local function snapshot(player: Player, data: any): any
 				coins = FreeGift.payout(rankMult(data)),
 			}
 		end)(),
-		guide = if type(data.guide) == "table" then Guide.view(data.guide) else { active = false },
+		guide = if Onboard.skip(data) and type(data.guide) == "table" then Guide.view(data.guide) else { active = false },
+		onboard = (function()
+			if Onboard.skip(data) then
+				return nil
+			end
+			local ownedN = if type(data.crew) == "table" and type(data.crew.owned) == "table" then #data.crew.owned else 0
+			local taught = type(data.onboard) == "table" and data.onboard.taught == true
+			local trait = taught
+			if not trait and type(data.crew) == "table" and type(data.crew.owned) == "table" then
+				for _, member in ipairs(data.crew.owned) do
+					if type(member.trait) == "string" and member.trait ~= "none" and member.trait ~= "" then
+						trait = true
+						break
+					end
+				end
+			end
+			local step = Onboard.reached({
+				claimed = r.plot ~= nil,
+				crew = ownedN,
+				tier = if type(data.ranch) == "table" then data.ranch.tier or 1 else 1,
+				trait = trait,
+				playSeconds = data.playSeconds or 0,
+				shopSeen = type(data.onboard) == "table" and data.onboard.shopSeen == true,
+			})
+			return Onboard.card(step, data.playSeconds or 0)
+		end)(),
+		menuAll = Onboard.skip(data),
+		offer = Offers.pick({
+			playSeconds = data.playSeconds or 0,
+			skip = Onboard.skip(data),
+			promptAt = Config.Onboarding.promptAt,
+			slotsFull = type(data.crew) == "table" and type(data.crew.owned) == "table" and #data.crew.owned >= (data.crew.slots or 0) and (data.crew.slots or 0) > 0,
+			bunkhouse = type(data.crew) == "table" and data.crew.bunkhouse == true,
+			autoHire = r.passes.AutoHire == true,
+			hasCrew = type(data.crew) == "table" and type(data.crew.owned) == "table" and #data.crew.owned > 0,
+		}),
 		crew = r.crew,
 		rush = (function()
 			local w = Hype.rushWindow(T(), Config.Rush.period)
@@ -1405,6 +1447,8 @@ local function snapshot(player: Player, data: any): any
 				view.nextCost = if nxt then nxt.cost else nil
 				view.nextName = if nxt then nxt.name else nil
 				view.nextBlurb = if nxt then nxt.blurb else nil
+			elseif view.tier == 1 and type(view.nextCost) == "number" then
+				view.nextCost = Onboard.tierPrice(view.nextCost, 1, data.playSeconds or 0, Onboard.skip(data))
 			end
 			return view
 		end)(),
@@ -1553,6 +1597,11 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 	-- Runtime goes in before any yielding call. Until it exists, every action
 	-- returns "Still loading your ranch..." and prompts no-op.
 	GameService.runtime[player] = r
+	task.defer(function()
+		if GameService.runtime[player] == r then
+			GameService.settlePurse(player)
+		end
+	end)
 
 	-- The plot and the first snapshot happen before pass checks, season sync, or
 	-- cosmetics. Those call Marketplace / friends / the map and must not be able
@@ -1570,6 +1619,12 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 			data.guide = Guide.new()
 		end
 		local rosterN = if type(data.staff) == "table" and type(data.staff.roster) == "table" then #data.staff.roster else 0
+		if type(data.onboard) ~= "table" then
+			data.onboard = { done = false, rookieReward = false, started = false, taught = false }
+		end
+		if not Onboard.skip(data) then
+			data.onboard.started = true
+		end
 		Guide.prepare(data.guide, {
 			served = data.stats and data.stats.served or 0,
 			firstBrisket = data.tutorial and data.tutorial.firstBrisket == true,
@@ -1607,6 +1662,11 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 		end
 		if ok and type(passes) == "table" then
 			r.passes = passes
+			if passes.Bunkhouse == true and type(data.crew) == "table" and data.crew.bunkhouse ~= true then
+				Crew.ensure(data)
+				data.crew.bunkhouse = true
+				data.crew.slots = Crew.slotCount(data.ranch.tier, data.crew.extra, true)
+			end
 			if passes.DoubleTips == true and not r.offlineTipPaid and r.offlineCrew > 0 then
 				r.offlineTipPaid = true
 				local extra = math.floor(r.offlineCrew * (Crew.tipMult(true) - 1) + 1e-9)
@@ -1644,7 +1704,7 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 		advanceAll(player, data, serverNow(), false)
 		Crew.ensure(data)
 		local rate = Crew.totalRate(data.crew.owned, data.crew.slots, { rank = data.rank, friends = 0, tipPass = false })
-		local settled = Offline.settle(data.offline.lastTick, os.time(), Offline.cap(false), rate)
+		local settled = Offline.settle(data.offline.lastTick, os.time(), Offline.cap(type(data.crew) == "table" and data.crew.bunkhouse == true), rate)
 		data.offline.lastTick = settled.lastTick
 		r.offlineCrew = settled.coins
 		awayCrew = settled
@@ -1719,7 +1779,7 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 		if ctx.Crew and ctx.Crew.walkStarter then
 			local seconds = ctx.Crew.walkStarter(player)
 			if type(seconds) == "number" and seconds > 0 then
-				walkFor = seconds
+				walkFor = math.min(seconds, Config.Onboarding.pipAt)
 			end
 		end
 		task.delay(walkFor, function()
@@ -1906,6 +1966,7 @@ function GameService.crewMults(player: Player, data: any): Crew.Mults
 		tipPass = r ~= nil and r.passes.DoubleTips == true,
 		index = Index.incomeMult(data),
 		cheers = cheers,
+		income = type(data.crew) == "table" and type(data.crew.boostUntil) == "number" and data.crew.boostUntil > os.time(),
 	}
 end
 
@@ -2004,7 +2065,7 @@ Actions.RemovePartner = function(_player, data, userId)
 	return true, nil
 end
 
-Actions.Cheer = function(player, _data, ownerId, crewUid)
+Actions.Cheer = function(player, data, ownerId, crewUid)
 	local owner = nil
 	for _, candidate in ipairs(Players:GetPlayers()) do
 		if candidate.UserId == ownerId or tostring(candidate.UserId) == tostring(ownerId) then
@@ -2021,33 +2082,36 @@ Actions.Cheer = function(player, _data, ownerId, crewUid)
 	if not ownerData or not ownerRun or not mine then
 		return false, "Still loading."
 	end
-	local allowed = owner == player
-	if not allowed then
-		for _, id in ipairs(Partners.ensure(ownerData)) do
-			if id == tostring(player.UserId) then
-				allowed = true
-			end
+	local partner = false
+	for _, id in ipairs(Partners.ensure(ownerData)) do
+		if id == tostring(player.UserId) then
+			partner = true
 		end
 	end
 	local family = type(ownerData.family) == "table" and ownerData.family.on == true and game.PrivateServerOwnerId ~= 0
-	if family then
-		allowed = true
-	end
+	local allowed, why = Partners.canCheer(tostring(player.UserId), tostring(owner.UserId), partner, family)
 	if not allowed then
-		return false, "Cheer is for ranch partners."
+		return false, why
 	end
 	local uid = tonumber(crewUid)
 	if not uid or not Crew.findUid(ownerData.crew.owned, uid) then
 		return false, "That critter isn't on the ranch."
 	end
 	local now = os.time()
-	local key = tostring(player.UserId)
-	local result = Partners.tryCheer(now, mine.cheerCooldown[key], ownerRun.cheerUntil[uid])
+	if type(data) ~= "table" then
+		return false, "Still loading."
+	end
+	-- `data` here is the cheerer, because act() passes the acting player's profile.
+	local savedNext = if type(data.social) == "table" then data.social.cheerNext else nil
+	local result = Partners.tryCheer(now, savedNext, ownerRun.cheerUntil[uid])
 	if not result.ok or not result.untilT then
 		return false, result.reason
 	end
 	ownerRun.cheerUntil[uid] = result.untilT
-	mine.cheerCooldown[key] = Partners.cheerCooldown(now)
+	if type(data.social) ~= "table" then
+		data.social = { cheerNext = 0 }
+	end
+	data.social.cheerNext = Partners.cheerCooldown(now)
 	GameService.toast(owner, player.DisplayName .. " cheered a critter. x1.25 for a minute.", "good")
 	GameService.markDirty(owner)
 	return true, nil
@@ -2068,6 +2132,11 @@ Actions.FamilyRanch = function(player, data, on)
 	return true, nil
 end
 
+Actions.RedeemCode = function(_player, data, raw)
+	local result = Codes.redeem(data, raw, os.time(), Config.CodesLikesLive)
+	return result.ok, result.message
+end
+
 Actions.ChipPurse = function(player, data, amount)
 	if game.PrivateServerOwnerId == 0 then
 		return false, "The shared purse is for a private server."
@@ -2082,14 +2151,18 @@ Actions.ChipPurse = function(player, data, amount)
 		end
 		return false, if here then "Family Ranch is off." else "The host isn't here."
 	end
-	local coins, purse = Partners.chip(data.coins, hostData.family.purse or 0, math.floor(tonumber(amount) or 0))
-	if not coins or not purse then
-		return false, "That amount doesn't fit."
+	local moved = Purse.transfer(data, hostData, math.floor(tonumber(amount) or 0), tostring(host.UserId), os.time(), function()
+		local profile = ctx.Data.profiles[player]
+		return profile ~= nil and ctx.Data.save(profile, false)
+	end, function()
+		local profile = ctx.Data.profiles[host]
+		return profile ~= nil and ctx.Data.save(profile, false)
+	end)
+	if not moved.ok then
+		return false, moved.message
 	end
-	data.coins = coins
-	hostData.family.purse = purse
 	GameService.markDirty(host)
-	GameService.toast(player, string.format("Added %d coins to the family purse.", math.floor(amount)), "good")
+	GameService.toast(player, moved.message, "good")
 	return true, nil
 end
 
@@ -2127,11 +2200,13 @@ Actions.BuyRanchTier = function(player, data)
 		hostData.family.purse -= nxt.cost
 		hostData.ranch.tier = nxt.tier
 		Crew.ensure(hostData)
-		hostData.crew.slots = Crew.slotCount(nxt.tier, hostData.crew.extra or 0)
+		hostData.crew.slots = Crew.slotCount(nxt.tier, hostData.crew.extra or 0, hostData.crew.bunkhouse == true)
 		GameService.toast(player, string.format("Family ranch tier %d: %s.", nxt.tier, nxt.name), "good")
 		return true, nil
 	end
-	local outcome = Crew.tryTier(data)
+	local nxt = Crew.nextTier(math.floor(data.ranch.tier or 1))
+	local price = if nxt then Onboard.tierPrice(nxt.cost, data.ranch.tier or 1, data.playSeconds or 0, Onboard.skip(data)) else nil
+	local outcome = Crew.tryTier(data, price)
 	if not Crew.applyTier(data, outcome) then
 		return false, Crew.tierMessage(outcome.reason, outcome.cost)
 	end
@@ -2163,7 +2238,8 @@ function GameService.crewSlots(data: any): number
 	local _, hostData = GameService.familyHost()
 	if hostData then
 		local extra = if type(data.crew) == "table" then data.crew.extra or 0 else 0
-		slots = Crew.slotCount(hostData.ranch.tier or 1, extra)
+		local bunk = type(data.crew) == "table" and data.crew.bunkhouse == true
+		slots = Crew.slotCount(hostData.ranch.tier or 1, extra, bunk)
 	end
 	return slots
 end
@@ -2307,6 +2383,123 @@ local function runStaff(player: Player, data: any, r: any, t: number)
 	end
 end
 
+-- Finish chips whose contributor saved and the host had not. A nonce already on the host is not added again.
+function GameService.settlePurse(player: Player)
+	local host, hostData = GameService.familyHost()
+	if not host or not hostData then
+		return
+	end
+	if player == host then
+		for other in pairs(GameService.runtime) do
+			if other ~= host then
+				GameService.settlePurse(other)
+			end
+		end
+	end
+	local data = profileOf(player)
+	if type(data) ~= "table" or type(data.purseOut) ~= "table" or #data.purseOut == 0 then
+		return
+	end
+	local mine = {}
+	for _, entry in ipairs(data.purseOut) do
+		if type(entry) == "table" and entry.hostId == tostring(host.UserId) then
+			table.insert(mine, entry)
+		end
+	end
+	if #mine == 0 then
+		return
+	end
+	local fresh = false
+	for _, entry in ipairs(mine) do
+		if Purse.apply(hostData, entry) then
+			fresh = true
+		end
+	end
+	if fresh then
+		local hostProfile = ctx.Data.profiles[host]
+		if not (hostProfile and ctx.Data.save(hostProfile, false)) then
+			return
+		end
+	end
+	for _, entry in ipairs(mine) do
+		Purse.ack(data, entry.nonce)
+	end
+	local profile = ctx.Data.profiles[player]
+	if profile then
+		ctx.Data.save(profile, false)
+	end
+	GameService.markDirty(host)
+end
+
+function GameService.tickOnboard(player: Player, data: any)
+	if type(data.onboard) ~= "table" or Onboard.skip(data) then
+		return
+	end
+	local r = rt(player)
+	if not r then
+		return
+	end
+	if (data.playSeconds or 0) >= Config.Onboarding.traitAt and data.onboard.taught ~= true and type(data.crew) == "table" then
+		for _, member in ipairs(data.crew.owned or {}) do
+			if member.trait == "none" or member.trait == nil or member.trait == "" then
+				member.trait = "smoky"
+				Index.note(data, member.species, "smoky")
+				data.onboard.taught = true
+				GameService.toast(player, member.name .. " caught Smoky. That's a trait, and it's free.", "good")
+				break
+			end
+		end
+	end
+	local ownedN = if type(data.crew) == "table" and type(data.crew.owned) == "table" then #data.crew.owned else 0
+	local step = Onboard.reached({
+		claimed = r.plot ~= nil,
+		crew = ownedN,
+		tier = if type(data.ranch) == "table" then data.ranch.tier or 1 else 1,
+		trait = data.onboard.taught == true,
+		playSeconds = data.playSeconds or 0,
+		shopSeen = data.onboard.shopSeen == true,
+	})
+	if step >= 7 then
+		data.onboard.done = true
+		if type(data.guide) == "table" then
+			data.guide.done = true
+		end
+	end
+	if ctx.Insights and ctx.Insights.minute then
+		ctx.Insights.minute(player, data, step)
+	end
+	r.dirty = true
+end
+
+function GameService.autoHire(player: Player)
+	local data = profileOf(player)
+	local r = rt(player)
+	if not data or not r or r.passes.AutoHire ~= true then
+		return
+	end
+	if type(data.settings) == "table" and data.settings.autoHire == false then
+		return
+	end
+	local line = if ctx.Crew and ctx.Crew.line then ctx.Crew.line() else nil
+	if type(line) ~= "table" or type(line.applicants) ~= "table" then
+		return
+	end
+	local bestIndex = nil
+	local bestRate = -1
+	for _, applicant in ipairs(line.applicants) do
+		if line.taken[applicant.index] == nil and type(applicant.price) == "number" and data.coins >= applicant.price then
+			local rate = applicant.rate or 0
+			if rate > bestRate then
+				bestRate = rate
+				bestIndex = applicant.index
+			end
+		end
+	end
+	if bestIndex then
+		GameService.hireApplicant(player, bestIndex)
+	end
+end
+
 function GameService.start()
 	ctx.Remotes.Action.OnServerInvoke = function(player: Player, action: any, a: any, b: any, c: any)
 		local ok, msg = handle(player, action, a, b, c)
@@ -2332,6 +2525,7 @@ function GameService.start()
 				if data then
 					advanceAll(player, data, t, true)
 					data.playSeconds += 1
+					GameService.tickOnboard(player, data)
 					GameService.checkRookie(player, data) -- catches goals met through world prompts too
 					ctx.Season.check(player, data)
 					ctx.Insights.onboarding(player, data)

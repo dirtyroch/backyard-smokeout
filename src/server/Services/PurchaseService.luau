@@ -21,6 +21,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Monetization = require(Shared.Monetization)
+local Onboard = require(Shared.Logic.Onboard)
 local ReceiptLedger = require(Shared.Logic.ReceiptLedger)
 local CookLogic = require(Shared.Logic.CookLogic)
 local CookOff = require(Shared.Logic.CookOff)
@@ -166,7 +167,17 @@ end
 -- Apply a developer product to a player's data. Returns a toast message.
 local function grantProduct(player: Player, data: any, key: string): string
 	local p = Monetization.Products[key]
-	if p.kind == "boost" then
+	if p.kind == "crewboost" then
+		local untilT = if type(data.crew) == "table" and type(data.crew.boostUntil) == "number" then data.crew.boostUntil else 0
+		local now = os.time()
+		if untilT < now then
+			untilT = now
+		end
+		if type(data.crew) ~= "table" then
+			data.crew = { owned = {}, slots = 3, nextUid = 1, extra = 0 }
+		end
+		data.crew.boostUntil = untilT + (p.minutes or 30) * 60
+	elseif p.kind == "boost" then
 		ctx.Game.addBoost(data, p.minutes or 30, p.mult or 2)
 		-- Fair Play: everyone else in the server gets a free Smoke Shower.
 		local now = workspace:GetServerTimeNow()
@@ -191,6 +202,10 @@ local function grantProduct(player: Player, data: any, key: string): string
 	elseif p.kind == "cosmetic" or p.kind == "bundle" or p.kind == "starter" then
 		for _, id in ipairs(p.grants or {}) do
 			ctx.Game.grantCosmetic(player, data, id)
+			local look = Config.Cosmetics[id]
+			if look and look.slot == "crew" and type(data.crew) == "table" then
+				data.crew.outfit = id
+			end
 		end
 		if (p.kind == "bundle" or p.kind == "starter") and p.minutes then
 			ctx.Game.addBoost(data, p.minutes, p.mult or 2)
@@ -223,6 +238,11 @@ local function grantPass(player: Player, key: string)
 		data.owned.vip_lights = true
 		data.equipped.patio = "vip_lights"
 	end
+	if key == "Bunkhouse" and data and type(data.crew) == "table" and data.crew.bunkhouse ~= true then
+		data.crew.bunkhouse = true
+		local Crew = require(Shared.Logic.Crew)
+		data.crew.slots = Crew.slotCount(data.ranch.tier, data.crew.extra, true)
+	end
 	ctx.Game.toast(player, "Thanks! " .. Monetization.Passes[key].icon .. " " .. Monetization.Passes[key].name .. " is active.", "good")
 	ctx.World.refreshStations(player)
 	ctx.Cosmetics.apply(player)
@@ -233,6 +253,9 @@ function PurchaseService.prompt(player: Player, kind: string, key: string): (boo
 	local data = ctx.Game.dataOf(player)
 	if not data then
 		return false, "Still loading..."
+	end
+	if not Onboard.allowPurchase(data.playSeconds or 0, Onboard.skip(data)) then
+		return false, "Have a look around first. The shop is here when you want it."
 	end
 	if kind == "pass" then
 		local p = Monetization.Passes[key]

@@ -134,7 +134,7 @@ function Migrate.apply(data: any, now: number?): boolean
 	end
 	data.ranch.tier = tier
 	data.crew.extra = extraSlots(data)
-	data.crew.slots = Crew.slotCount(tier, data.crew.extra)
+	data.crew.slots = Crew.slotCount(tier, data.crew.extra, data.crew.bunkhouse == true)
 	if progress(data) then
 		data.onboard.done = true
 	end

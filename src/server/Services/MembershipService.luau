@@ -18,6 +18,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Monetization = require(Shared.Monetization)
 local Storefront = require(Shared.Logic.Storefront)
+local Onboard = require(Shared.Logic.Onboard)
 local TimeUtil = require(Shared.Logic.TimeUtil)
 local Holiday = require(Shared.Logic.Holiday)
 
@@ -150,6 +151,9 @@ function MembershipService.init(c: any)
 	ctx = c
 	local A: any = c.Game.Actions
 	A.Subscribe = function(player, data): (boolean, string?)
+		if not Onboard.allowPurchase(data.playSeconds or 0, Onboard.skip(data)) then
+			return false, "Have a look around first. The shop is here when you want it."
+		end
 		if members[player] then
 			return false, "You're already in the Pit Crew Club. Thanks!"
 		end
@@ -187,7 +191,10 @@ function MembershipService.init(c: any)
 		shower(player, "🏠 Ranch Host")
 		return true, nil
 	end
-	A.PremiumInfo = function(player, _data): (boolean, string?)
+	A.PremiumInfo = function(player, data): (boolean, string?)
+		if not Onboard.allowPurchase(data.playSeconds or 0, Onboard.skip(data)) then
+			return false, "Have a look around first. The shop is here when you want it."
+		end
 		if MembershipService.isPremium(player) then
 			return false, "You're already a Premium member. Thanks!"
 		end

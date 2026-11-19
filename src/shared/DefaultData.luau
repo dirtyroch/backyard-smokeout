@@ -53,22 +53,24 @@ return {
 	daily = { jokeDay = -1, creekDay = -1, kingDone = false, bellDay = -1, turkeyDay = -1, holidayDay = -1 },
 	restock = { window = -1, bought = {} },
 	cookoff = { week = -1, best = 0, champWeek = -1 }, -- champWeek: last week whose podium was announced to this player
-	settings = { peace = true, sfx = true, music = true, musicVolume = 0.22 }, -- snagging is opt-in; music is its own quiet loop
+	settings = { peace = true, sfx = true, music = true, musicVolume = 0.22, autoHire = true }, -- snagging is opt-in; music is its own quiet loop
 	tutorial = { firstBrisket = false, done = false },
 	rookie = { claimed = 0, skipped = false, resumed = false }, -- Unc Hank's Rookie List (Logic/Rookie)
 	guide = { step = 1, done = false, skipped = false, introduced = false }, -- first-visit hints (Logic/Guide)
 	forceCritter = "",
 	jimothy = { seen = {}, lastAt = 0, rewarded = false }, -- sighting hunt (Logic/Jimothy)
 	staff = { roster = {} }, -- old named hands. Logic/Migrate copies hired founders into crew.owned.
-	crew = { owned = {}, slots = 3, nextUid = 1, extra = 0 }, -- critters on the ranch (Logic/Crew)
+	crew = { owned = {}, slots = 3, nextUid = 1, extra = 0, bunkhouse = false, boostUntil = 0, outfit = "" }, -- critters on the ranch (Logic/Crew)
 	ranch = { tier = 1 },
 	index = { traits = {} }, -- species traits discovered; filled in by a later update
 	codes = {},
 	offline = { lastTick = 0 }, -- 0 means "never ticked", so the first join pays nothing
 	partners = {},
-	family = { on = false, purse = 0 },
+	family = { on = false, purse = 0, seen = {} },
+	purseOut = {},
+	social = { cheerNext = 0 },
 	events = { smokeShowWeek = -1 },
-	onboard = { done = false, rookieReward = false },
+	onboard = { done = false, rookieReward = false, started = false, taught = false },
 	freeGift = { nextAt = 0 }, -- timed free gift (Logic/FreeGift). 0 means one is ready.
 	combo = 0,
 	receipts = {},

@@ -154,7 +154,7 @@ local function surfaceText(p, face, text, textColor, bg, font)
 	sg.Name = "SignGui"
 	sg.Face = face or E.Enum.NormalId.Front
 	sg.SizingMode = E.Enum.SurfaceGuiSizingMode.PixelsPerStud
-	sg.PixelsPerStud = 40
+	sg.PixelsPerStud = 52
 	sg.Parent = p
 	local tl = E.Instance.new("TextLabel")
 	tl.Name = "Text"
@@ -166,6 +166,8 @@ local function surfaceText(p, face, text, textColor, bg, font)
 	tl.TextColor3 = hex(textColor or "#FFFFFF")
 	tl.Font = font or E.Enum.Font.FredokaOne
 	tl.TextScaled = true
+	tl.TextStrokeTransparency = 0.45
+	tl.TextStrokeColor3 = hex("#2A1A12")
 	tl.Text = text
 	tl.Parent = sg
 	return tl
@@ -2586,6 +2588,40 @@ local function buildJimothy(map, cfg)
 	local oakPos = polar(WorldBuilder.nearestGap(cfg.MAX_PLOTS, 112.5), 182)
 	local oakParent = scenery or map
 	placeJimothy(oakParent, "Sighting_oak", E.CFrame.new(oakPos + oakPos.Unit * 7 + V(0, 0.55, 0)), sized(0.55), { sighting = "oak" })
+end
+
+-- Brighter than a realistic dusk: grass reads, signs read, trait glow has something to sit on.
+function WorldBuilder.lighting(lighting, storm: boolean?)
+	lighting.Brightness = if storm then 2.1 else 2.7
+	lighting.Ambient = Color3.fromRGB(186, 174, 156)
+	lighting.OutdoorAmbient = Color3.fromRGB(176, 166, 148)
+	lighting.EnvironmentDiffuseScale = 0.55
+	lighting.EnvironmentSpecularScale = 0.35
+	local function ensure(className: string, name: string)
+		local inst = lighting:FindFirstChild(name)
+		if not inst then
+			inst = Instance.new(className)
+			inst.Name = name
+			inst.Parent = lighting
+		end
+		return inst
+	end
+	local air = ensure("Atmosphere", "RanchAir")
+	air.Density = if storm then 0.45 else 0.26
+	air.Offset = 0.12
+	air.Color = if storm then Color3.fromRGB(255, 176, 96) else Color3.fromRGB(255, 226, 190)
+	air.Decay = Color3.fromRGB(190, 150, 110)
+	air.Glare = 0.12
+	air.Haze = if storm then 1.4 else 0.35
+	local grade = ensure("ColorCorrectionEffect", "RanchGrade")
+	grade.Saturation = 0.05
+	grade.Contrast = 0.05
+	grade.Brightness = 0.03
+	grade.TintColor = if storm then Color3.fromRGB(255, 214, 180) else Color3.fromRGB(255, 246, 232)
+	local bloom = ensure("BloomEffect", "RanchBloom")
+	bloom.Intensity = if storm then 0.55 else 0.35
+	bloom.Size = 16
+	bloom.Threshold = 1.05
 end
 
 function WorldBuilder.build(env, parent, cfg, content)

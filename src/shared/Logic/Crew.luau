@@ -22,6 +22,7 @@ export type Mults = {
 	tipPass: boolean?,
 	index: number?,
 	cheers: { [number]: boolean }?,
+	income: boolean?,
 }
 
 local function finite(n: any): number?
@@ -65,12 +66,13 @@ function Crew.rarityDef(rarityId: string): any?
 end
 
 -- Tier 1 starts at 3. Each tier adds 2. Old smoker and grill purchases add at most one slot each.
--- The cap is 19, which is tier 8 plus those two extras.
-function Crew.slotCount(tier: any, extra: any): number
+-- The Bunkhouse pass adds 4 more. The cap is tier 8 plus those.
+function Crew.slotCount(tier: any, extra: any, bunkhouse: boolean?): number
 	local hiring = rules()
 	local t = math.clamp(math.floor(finite(tier) or 1), 1, #Config.RanchTiers)
 	local e = math.clamp(math.floor(finite(extra) or 0), 0, 2)
-	local n = hiring.startSlots + (t - 1) * hiring.slotsPerTier + e
+	local b = if bunkhouse == true then hiring.bunkhouseSlots else 0
+	local n = hiring.startSlots + (t - 1) * hiring.slotsPerTier + e + b
 	return math.min(hiring.maxSlots, n)
 end
 
@@ -132,6 +134,9 @@ function Crew.memberRate(member: any, mults: Mults?): number
 	local cheers = mults and mults.cheers
 	if cheers and cheers[member.uid] then
 		per *= Config.Partners.cheerMult
+	end
+	if mults and mults.income == true then
+		per *= Config.CrewBoost.mult
 	end
 	return per
 end
@@ -229,7 +234,7 @@ function Crew.ensure(data: any): any
 	if type(data.ranch.tier) ~= "number" then
 		data.ranch.tier = 1
 	end
-	crew.slots = Crew.slotCount(data.ranch.tier, crew.extra)
+	crew.slots = Crew.slotCount(data.ranch.tier, crew.extra, crew.bunkhouse == true)
 	if type(data.offline) ~= "table" then
 		data.offline = { lastTick = 0 }
 	end
@@ -412,18 +417,19 @@ export type TierOutcome = {
 	name: string?,
 }
 
-function Crew.tryTier(data: any): TierOutcome
+function Crew.tryTier(data: any, price: number?): TierOutcome
 	Crew.ensure(data)
 	local balance = if finite(data.coins) then data.coins else 0
 	local nxt = Crew.nextTier(math.floor(data.ranch.tier))
 	if not nxt or not nxt.cost or nxt.cost <= 0 then
 		return { ok = false, reason = "max", coins = balance }
 	end
-	local left = takeCoins(data.coins, nxt.cost)
+	local cost = if type(price) == "number" and price > 0 then price else nxt.cost
+	local left = takeCoins(data.coins, cost)
 	if not left then
-		return { ok = false, reason = "coins", cost = nxt.cost, coins = balance }
+		return { ok = false, reason = "coins", cost = cost, coins = balance }
 	end
-	return { ok = true, reason = "ok", cost = nxt.cost, coins = left, tier = nxt.tier, name = nxt.name }
+	return { ok = true, reason = "ok", cost = cost, coins = left, tier = nxt.tier, name = nxt.name }
 end
 
 function Crew.tierMessage(reason: string, cost: number?): string
@@ -445,7 +451,7 @@ function Crew.applyTier(data: any, outcome: TierOutcome): boolean
 	end
 	data.coins = outcome.coins
 	data.ranch.tier = outcome.tier
-	crew.slots = Crew.slotCount(data.ranch.tier, crew.extra)
+	crew.slots = Crew.slotCount(data.ranch.tier, crew.extra, crew.bunkhouse == true)
 	return true
 end
 

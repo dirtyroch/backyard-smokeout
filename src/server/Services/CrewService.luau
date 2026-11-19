@@ -13,6 +13,8 @@ local Crew = require(Shared.Logic.Crew)
 local CrewMotion = require(Shared.Logic.CrewMotion)
 local Weather = require(Shared.Logic.Weather)
 local Income = require(Shared.Logic.Income)
+local TimeUtil = require(Shared.Logic.TimeUtil)
+local Onboard = require(Shared.Logic.Onboard)
 
 local CrewService = {}
 local ctx: any = nil
@@ -330,12 +332,17 @@ local function restock()
 	if lineState.window ~= window then
 		lineState.window = window
 		lineState.tier = tier
-		local show = Weather.smokeShow(os.time(), Config.TIMEZONE_OFFSET_HOURS)
+		local show = Weather.smokeShow(os.time(), TimeUtil.centralOffset(os.time()))
 		lineState.applicants = HiringLine.stock(lineState.seed, window, tier)
 		if show then
 			HiringLine.raiseFloor(lineState.applicants)
 		end
 		lineState.taken = {}
+		if ctx.Game and ctx.Game.autoHire then
+			for _, player in ipairs(Players:GetPlayers()) do
+				ctx.Game.autoHire(player)
+			end
+		end
 		for _, applicant in ipairs(lineState.applicants) do
 			if applicant.rarity == "legendary" or applicant.rarity == "mythic" or applicant.rarity == "secret" then
 				if ctx.Game and ctx.Game.announce then
@@ -382,6 +389,50 @@ local function stationPoints(plot: any, role: string): { Vector3 }
 	return points
 end
 
+local function traitFx(model: Model, traitId: string?)
+	if traitId == nil or traitId == "" or traitId == "none" then
+		return
+	end
+	local body = model:FindFirstChild("Body")
+	if not body or not body:IsA("BasePart") then
+		return
+	end
+	local p = Instance.new("ParticleEmitter")
+	p.Name = "Trait"
+	p.Rate = 4
+	p.Lifetime = NumberRange.new(0.6, 1.1)
+	p.Speed = NumberRange.new(0.3, 1)
+	p.LightEmission = if traitId == "golden" or traitId == "glazed" then 0.7 else 0.25
+	local color = if traitId == "smoky"
+		then Color3.fromRGB(170, 170, 170)
+		elseif traitId == "glazed" then Color3.fromRGB(255, 220, 150)
+		elseif traitId == "golden" then Color3.fromRGB(255, 196, 60)
+		else Color3.fromRGB(255, 96, 48)
+	p.Color = ColorSequence.new(color)
+	p.Parent = body
+end
+
+local function crewOutfit(model: Model, outfitId: string?)
+	if type(outfitId) ~= "string" or outfitId == "" then
+		return
+	end
+	local look = Config.Cosmetics[outfitId]
+	if type(look) ~= "table" or type(look.color) ~= "string" then
+		return
+	end
+	local body = model:FindFirstChild("Body")
+	if not body or not body:IsA("BasePart") then
+		return
+	end
+	local mark = Instance.new("Highlight")
+	mark.Name = "Outfit"
+	mark.FillColor = Color3.fromHex(look.color)
+	mark.FillTransparency = 0.55
+	mark.OutlineTransparency = 0.4
+	mark.Parent = model
+	mark.Adornee = body
+end
+
 local function showTiers(plot: any, tier: number)
 	local root = plot:FindFirstChild("RanchTiers")
 	if not root then
@@ -400,6 +451,21 @@ local function showTiers(plot: any, tier: number)
 			elseif d:IsA("TextLabel") then
 				d.TextTransparency = if on then 0 else 1
 			end
+		end
+	end
+end
+
+-- Unclaimed yards show the finished ranch, faded, so the build-out is visible before anyone claims it.
+local function showGhost(plot: any)
+	showTiers(plot, #Config.RanchTiers)
+	local root = plot:FindFirstChild("RanchTiers")
+	if not root then
+		return
+	end
+	for _, d in ipairs(root:GetDescendants()) do
+		if d:IsA("BasePart") and d.Transparency < 1 then
+			d.Transparency = 0.72
+			d.CanCollide = false
 		end
 	end
 end
@@ -507,6 +573,22 @@ local function refreshCrew(player: Player)
 				points[p] = points[p] + Vector3.new(side, 0, row)
 			end
 			tagAnim(model, points, "loop", 3.2, n)
+			traitFx(model, member.trait)
+			crewOutfit(model, if type(data.crew) == "table" then data.crew.outfit else nil)
+		end
+	end
+	if (data.playSeconds or 0) < 20 and not Onboard.skip(data) and not plot:FindFirstChild("WelcomeBeam") then
+		local pad = plot:FindFirstChild("Pad")
+		if pad and pad:IsA("BasePart") then
+			local beam = Instance.new("Part")
+			beam.Name = "WelcomeBeam"
+			beam.Anchored = true
+			beam.CanCollide = false
+			beam.Material = Enum.Material.Neon
+			beam.Color = Color3.fromRGB(255, 200, 80)
+			beam.Size = Vector3.new(1.2, 18, 1.2)
+			beam.CFrame = pad.CFrame * CFrame.new(0, 10, 0)
+			beam.Parent = plot
 		end
 	end
 end
@@ -599,9 +681,15 @@ function CrewService.walkStarter(player: Player): number?
 	local center = plotCenter(plot)
 	local greetPos = if pad and pad:IsA("BasePart") then pad.Position else center
 	local path = CrewMotion.homePath(start.X, start.Y + lift, start.Z, center.X, center.Z, greetPos.X, greetPos.Z)
-	tagPath(model, toWorld(path), Config.Hiring.walkSpeed)
+	local speed = Config.Hiring.walkSpeed
+	local seconds = CrewMotion.walkSeconds(path, speed)
+	-- The opening walk stays on the path, and Pip is on the pit by the time the tracker asks for a second hire.
+	if seconds > Config.Onboarding.pipAt then
+		speed = CrewMotion.length(path) / Config.Onboarding.pipAt
+		seconds = Config.Onboarding.pipAt
+	end
+	tagPath(model, toWorld(path), speed)
 	starters[player] = model
-	local seconds = CrewMotion.walkSeconds(path, Config.Hiring.walkSpeed)
 	task.delay(seconds + 1.5, function()
 		if starters[player] == model then
 			model:Destroy()
@@ -612,9 +700,17 @@ function CrewService.walkStarter(player: Player): number?
 end
 
 function CrewService.onPlayerGone(player: Player)
+	local plot = ctx.World and ctx.World.plotModel and ctx.World.plotModel(player)
 	clearCrew(player)
 	CrewService.cancelStarter(player)
 	tierSig[player] = nil
+	if plot then
+		local beam = plot:FindFirstChild("WelcomeBeam")
+		if beam then
+			beam:Destroy()
+		end
+		showGhost(plot)
+	end
 end
 
 function CrewService.start()
@@ -634,7 +730,7 @@ function CrewService.start()
 						WorldBuilder.ranchBuild(plot, pad.CFrame)
 					end
 				end
-				showTiers(plot, 1)
+				showGhost(plot)
 			end
 		end
 	end

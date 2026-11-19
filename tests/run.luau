@@ -1336,7 +1336,7 @@ test("Robux never buys coins: no product, skip, pack, club perk or season reward
 	end
 end)
 test("no paid random items: every product kind is a fixed, shown reward", function()
-	local fixed = { boost = true, finish = true, cosmetic = true, bundle = true, cut = true, starter = true, season = true, tierskip = true }
+	local fixed = { boost = true, crewboost = true, finish = true, cosmetic = true, bundle = true, cut = true, starter = true, season = true, tierskip = true }
 	for key, p in pairs(Monetization.Products) do
 		truthy(fixed[p.kind], key .. " has an unknown (maybe random) kind " .. tostring(p.kind))
 		truthy(p.odds == nil and p.random == nil and p.pool == nil, key .. " looks random")
@@ -1375,21 +1375,31 @@ test("value notes add up: Whole Hog R$499 vs R$730, Turkey and Holiday sets, sta
 	truthy(low < 80 and top == 499, "ladder from under R$80 to R$499")
 end)
 test("every game pass and developer product has a real Roblox ID", function()
+	-- These are in create-shop as a dry run. The game treats id 0 as not on sale yet.
+	local pending = { Bunkhouse = true, AutoHire = true, CrewIncome30 = true, CrewBandana = true, CrewStraw = true, CrewBib = true, CrewNight = true, CrewFlower = true, CrewBell = true }
 	local n = 0
 	local seen: { [number]: string } = {}
 	for key, p in pairs(Monetization.Passes) do
 		n += 1
-		truthy(p.id > 0 and p.id == math.floor(p.id), key .. " id is filled")
-		truthy(seen[p.id] == nil, key .. " id collides with " .. tostring(seen[p.id]))
-		seen[p.id] = key
+		if pending[key] then
+			eq(p.id, 0, key)
+		else
+			truthy(p.id > 0 and p.id == math.floor(p.id), key .. " id is filled")
+			truthy(seen[p.id] == nil, key .. " id collides with " .. tostring(seen[p.id]))
+			seen[p.id] = key
+		end
 	end
 	for key, p in pairs(Monetization.Products) do
 		n += 1
-		truthy(p.id > 0 and p.id == math.floor(p.id), key .. " id is filled")
-		truthy(seen[p.id] == nil, key .. " id collides with " .. tostring(seen[p.id]))
-		seen[p.id] = key
+		if pending[key] then
+			eq(p.id, 0, key)
+		else
+			truthy(p.id > 0 and p.id == math.floor(p.id), key .. " id is filled")
+			truthy(seen[p.id] == nil, key .. " id collides with " .. tostring(seen[p.id]))
+			seen[p.id] = key
+		end
 	end
-	eq(n, 44)
+	eq(n, 53)
 	eq(Monetization.Products.SmokeGrape.name, "Purple Cloud Smoke")
 end)
 test("IDs are placeholders or real and never pasted twice; subscription is empty or EXP-", function()
@@ -1941,7 +1951,7 @@ local HUD_SRC = fs_read("src/client/Hud.luau")
 
 test("every left-menu button names a real panel, except Invite", function()
 	local seen: { [string]: boolean } = {}
-	eq(#HudMenu.entries, 11)
+	eq(#HudMenu.entries, 12)
 	for _, entry in ipairs(HudMenu.entries) do
 		truthy(not seen[entry.id], "duplicate " .. entry.id)
 		seen[entry.id] = true
@@ -2058,7 +2068,7 @@ end)
 print("Shops, howdy, signs, models")
 test("every Robux item stays listed when its id is 0, and a real id buys", function()
 	local offers = ShopCatalog.robuxKeys(Monetization)
-	eq(#offers, 44)
+	eq(#offers, 53)
 	for _, offer in ipairs(offers) do
 		local item = if offer.kind == "pass" then Monetization.Passes[offer.key] else Monetization.Products[offer.key]
 		truthy(item.name and item.icon and item.desc and item.price, offer.key .. " has name, icon, price, description")
@@ -2066,7 +2076,8 @@ test("every Robux item stays listed when its id is 0, and a real id buys", funct
 		eq(soon, "soon")
 		eq(soonOn, false)
 		eq(ShopCatalog.robuxLabel(soon, item.price), "Coming soon")
-		local buy, buyOn = ShopCatalog.saleState(item.id, false, false)
+		local listed = if item.id > 0 then item.id else 12345
+		local buy, buyOn = ShopCatalog.saleState(listed, false, false)
 		eq(buy, "buy", offer.key)
 		eq(buyOn, true)
 		truthy(string.find(ShopCatalog.robuxLabel(buy, item.price), "R$", 1, true) ~= nil)
@@ -2613,8 +2624,13 @@ test("an old save still loads, and a cook already on the pit keeps its rarity", 
 	eq(Config.MAX_PLOTS, 10)
 end)
 test("every shop grant exists, and nothing on the coin menu is accidentally free", function()
+	local pending = { CrewIncome30 = true, CrewBandana = true, CrewStraw = true, CrewBib = true, CrewNight = true, CrewFlower = true, CrewBell = true }
 	for key, p in pairs(Monetization.Products) do
-		truthy(p.id > 0 and p.price > 0, key)
+		truthy((p.id > 0 or pending[key] == true) and p.price > 0, key)
+		if p.kind == "crewboost" then
+			truthy((p.minutes or 0) > 0 and (p.mult or 0) > 1, key)
+			truthy(string.find(string.lower(p.desc), "odds", 1, true) ~= nil, key .. " says the odds stay put")
+		end
 		if p.grants then
 			for _, id in ipairs(p.grants) do
 				truthy(Config.Cosmetics[id] ~= nil, key .. " grants missing " .. id)
@@ -2629,8 +2645,9 @@ test("every shop grant exists, and nothing on the coin menu is accidentally free
 			truthy((p.minutes or 0) > 0 and (p.mult or 0) > 1, key)
 		end
 	end
+	local pendingPass = { Bunkhouse = true, AutoHire = true }
 	for key, pass in pairs(Monetization.Passes) do
-		truthy(pass.id > 0 and pass.price > 0, key)
+		truthy((pass.id > 0 or pendingPass[key] == true) and pass.price > 0, key)
 	end
 	for _, id in ipairs(Config.SauceOrder) do
 		local sauce = Config.Sauces[id]
@@ -3904,6 +3921,155 @@ test("a hire leaves from the pose on the loop, and Pip walks a path at a stroll"
 	eq(CrewMotion.detail(20), "full")
 	eq(CrewMotion.detail(100), "cheap")
 	eq(CrewMotion.detail(200), "freeze")
+end)
+
+print("First minute, shop, codes")
+local Onboard = require("../src/shared/Logic/Onboard")
+local Codes = require("../src/shared/Logic/Codes")
+local Offers = require("../src/shared/Logic/Offers")
+local Purse = require("../src/shared/Logic/Purse")
+
+test("a new player can hire by 25 seconds and build tier 2 before 60", function()
+	local opening = Onboard.opening(1, 1)
+	truthy(opening.hireAt > 0 and opening.hireAt <= 25, "hire at " .. tostring(opening.hireAt))
+	truthy(opening.tierAt > opening.hireAt and opening.tierAt < 60, "tier at " .. tostring(opening.tierAt))
+	eq(Onboard.visibleCount(0, false), 4)
+	eq(Onboard.buttonOn("shop", 0, false), false)
+	eq(Onboard.buttonOn("shop", Config.Onboarding.shopAt, false), true)
+	eq(Onboard.buttonOn("shop", 0, true), true)
+	eq(Onboard.allowPurchase(299, false), false)
+	eq(Onboard.allowPurchase(Config.Onboarding.promptAt, false), true)
+	eq(Onboard.allowPurchase(0, true), true)
+	local fresh = { onboard = { started = true }, guide = { done = false }, tutorial = { done = false }, playSeconds = 20, ranch = { tier = 1 } }
+	eq(Onboard.skip(fresh), false)
+	eq(Onboard.tierPrice(150, 1, 20, false), Config.Onboarding.tier2Cost)
+	eq(Onboard.tierPrice(150, 1, 20, true), 150)
+	local veteran = { guide = { done = true }, tutorial = { done = true }, onboard = {} }
+	eq(Onboard.skip(veteran), true)
+	eq(Onboard.reached({ claimed = true, crew = 1, tier = 1, trait = false, playSeconds = 10, shopSeen = false }), 3)
+	eq(#Onboard.STEPS, 7)
+end)
+
+test("Central time follows daylight saving, so the Saturday show stays at 2 PM", function()
+	eq(TimeUtil.unix(1970, 1, 1, 0, 0), 0)
+	eq(TimeUtil.centralOffset(TimeUtil.unix(2026, 1, 15, 18, 0)), -6)
+	eq(TimeUtil.centralOffset(TimeUtil.unix(2026, 7, 4, 18, 0)), -5)
+	local july2 = TimeUtil.unix(2026, 7, 4, 19, 0)
+	eq(TimeUtil.weekday(july2, -5), 7)
+	truthy(Weather.smokeShow(july2, TimeUtil.centralOffset(july2)))
+	local july3 = TimeUtil.unix(2026, 7, 4, 20, 0)
+	eq(Weather.smokeShow(july3, -6), true)
+	eq(Weather.smokeShow(july3, TimeUtil.centralOffset(july3)), false)
+	local march = TimeUtil.unix(2026, 3, 8, 8, 0)
+	eq(TimeUtil.centralOffset(march - 1), -6)
+	eq(TimeUtil.centralOffset(march), -5)
+	local november = TimeUtil.unix(2026, 11, 1, 7, 0)
+	eq(TimeUtil.centralOffset(november - 1), -5)
+	eq(TimeUtil.centralOffset(november), -6)
+end)
+
+test("codes pay coins or a look, once, and never a crew critter", function()
+	local data = { coins = 10, codes = {}, sauces = { luck = { amount = 0, charges = 0 } }, owned = {}, crew = { owned = {} } }
+	local welcome = Codes.redeem(data, " welcome ", 1800000000, false)
+	truthy(welcome.ok)
+	eq(data.coins, 260)
+	eq(Codes.redeem(data, "WELCOME", 1800000000, false).message, "You already used that code.")
+	local expired = Codes.redeem(data, "RIBFEST", 1800000000, false)
+	eq(expired.ok, false)
+	eq(expired.message, "That code has expired.")
+	eq(Codes.redeem(data, "1KLIKES", 1800000000, false).message, "That code isn't turned on yet.")
+	local likes = Codes.redeem(data, "1klikes", 1800000000, true)
+	truthy(likes.ok)
+	eq(data.coins, 760)
+	local look = Codes.redeem(data, "SMOKEOUT", 1800000000, false)
+	truthy(look.ok)
+	eq(data.owned.bandana_welcome, true)
+	eq(data.sauces.luck.charges, 2)
+	eq(#data.crew.owned, 0)
+	for _, row in ipairs(Config.Codes) do
+		eq(row.species, nil)
+		eq(row.crew, nil)
+	end
+end)
+
+test("offers stay quiet for five minutes and do not invent a deadline", function()
+	local early = Offers.pick({ playSeconds = 60, skip = false, promptAt = 300, slotsFull = true, bunkhouse = false, autoHire = false, hasCrew = true })
+	eq(early, nil)
+	local card = Offers.pick({ playSeconds = 400, skip = false, promptAt = 300, slotsFull = true, bunkhouse = false, autoHire = false, hasCrew = true })
+	eq(card.key, "Bunkhouse")
+	local text = string.lower(card.title .. " " .. card.detail)
+	truthy(string.find(text, "only", 1, true) == nil)
+	truthy(string.find(text, "hurry", 1, true) == nil)
+	truthy(string.find(text, "left", 1, true) == nil)
+	truthy(string.find(text, "!", 1, true) == nil)
+	eq(Monetization.ShopTabs[1], "Passes")
+	eq(#Monetization.ShopTabs, 3)
+	eq(Monetization.Passes.Bunkhouse.id, 0)
+	eq(Monetization.Passes.AutoHire.id, 0)
+	eq(Monetization.Products.CrewIncome30.id, 0)
+	eq(Monetization.Passes.DoubleTips.id, 2088839581)
+	eq(Monetization.Passes.AutoServe.id, 2089955594)
+	eq(Monetization.Passes.PremiumCuts.id, 2088479585)
+	eq(Monetization.Passes.ExtraSmokers.id, 2089577508)
+	eq(Monetization.Passes.VIPPatio.id, 2089979602)
+	local quiet = Crew.memberRate({ uid = 1, species = "armadillo", level = 1, trait = "none" }, { rank = 1, friends = 0, tipPass = false })
+	local boosted = Crew.memberRate({ uid = 1, species = "armadillo", level = 1, trait = "none" }, { rank = 1, friends = 0, tipPass = false, income = true })
+	near(boosted, quiet * Config.CrewBoost.mult)
+	eq(Crew.slotCount(1, 0, true), 7)
+	eq(Crew.slotCount(8, 2, true), 23)
+	eq(Crew.slotCount(8, 9), 19)
+end)
+
+test("cheer is saved, not for your own critter, and the family bonus stays off public servers", function()
+	local no, why = Partners.canCheer("4", "4", true, true)
+	eq(no, false)
+	truthy(why ~= "")
+	local yes = Partners.canCheer("4", "9", true, false)
+	eq(yes, true)
+	eq(Partners.familyOthers(false, true, 6), 0)
+	eq(Partners.familyOthers(true, true, 6), 6)
+	eq(Partners.bonusCount({}, {}, Partners.familyOthers(false, true, 6)), 0)
+	eq(Partners.bonusCount({}, {}, Partners.familyOthers(true, true, 6)), 3)
+	local data = { social = { cheerNext = 0 } }
+	local now = 5000
+	local cheer = Partners.tryCheer(now, data.social.cheerNext, nil)
+	truthy(cheer.ok)
+	data.social.cheerNext = Partners.cheerCooldown(now)
+	eq(Partners.tryCheer(now + 10, data.social.cheerNext, nil).ok, false)
+	eq(Partners.tryCheer(data.social.cheerNext, data.social.cheerNext, nil).ok, true)
+end)
+
+test("a family chip is not credited when the contributor's save fails, and a nonce cannot pay twice", function()
+	local giver = { coins = 80, purseOut = {} }
+	local host = { family = { on = true, purse = 10, seen = {} } }
+	local failed = Purse.transfer(giver, host, 50, "9", 100, function()
+		return false
+	end, function()
+		return true
+	end)
+	eq(failed.ok, false)
+	eq(giver.coins, 80)
+	eq(host.family.purse, 10)
+	local paid = Purse.transfer(giver, host, 50, "9", 100, function()
+		return true
+	end, function()
+		return true
+	end)
+	truthy(paid.ok)
+	eq(giver.coins, 30)
+	eq(host.family.purse, 60)
+	eq(#giver.purseOut, 0)
+	local again = Purse.transfer(giver, host, 20, "9", 101, function()
+		return true
+	end, function()
+		return false
+	end)
+	truthy(again.ok)
+	eq(giver.coins, 10)
+	eq(host.family.purse, 80)
+	truthy(#giver.purseOut == 1)
+	eq(Purse.apply(host, giver.purseOut[1]), false)
+	eq(host.family.purse, 80)
 end)
 
 print("Ranch load")

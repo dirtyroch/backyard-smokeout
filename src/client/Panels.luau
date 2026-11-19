@@ -319,7 +319,7 @@ end
 
 local function renderShop(s: any)
 	titleLabel.Text = "🛒 Pitmaster Outfitters"
-	local sel, content = tabs(body, "shop", Monetization.ShopTabs, "This Week")
+	local sel, content = tabs(body, "shop", Monetization.ShopTabs, "Passes")
 	-- analytics only (Roblox funnel: opened shop -> opened a tab -> tapped buy -> bought)
 	if freshOpen then
 		loggedTab = nil
@@ -369,27 +369,13 @@ local function renderShop(s: any)
 		end)
 	else
 		local keys = {}
-		if sel == "This Week" then
-			if event then
-				for k, p in pairs(Monetization.Products) do
-					if p.event == event then
-						table.insert(keys, k)
-					end
-				end
-				byPrice(keys)
-			end
-			for _, k in ipairs(s.rotation) do
+		for k, p in pairs(Monetization.Products) do
+			if Monetization.tabFor(p) == sel and not (p.once and s.onceBought and s.onceBought[k]) then
 				table.insert(keys, k)
 			end
-		else
-			for k, p in pairs(Monetization.Products) do
-				if p.category == sel and not (p.once and s.onceBought and s.onceBought[k]) then
-					table.insert(keys, k)
-				end
-			end
-			byPrice(keys)
 		end
-		if sel == "This Week" and s.seasonPass and s.seasonPass.active then
+		byPrice(keys)
+		if sel == "Looks" and s.seasonPass and s.seasonPass.active then
 			local sp = s.seasonPass
 			n += 1
 			infoCard(sf, 0, sp.icon, "Smokehouse Pass", string.format("Season %d: %s. Free and pass tracks of looks and titles. You're on tier %d of %d.", sp.number, sp.name, sp.tier, sp.max), sp.starts .. " to " .. sp.ends, "See the season", T.accent, function()
@@ -405,8 +391,10 @@ local function renderShop(s: any)
 		lbl(sf, "Nothing here yet. Check back soon!", { Size = UDim2.new(0, 400, 0, 30) })
 	end
 	local foot = "Every purchase shows exactly what you get. No random items, ever. Tap 🎁 to gift a look to someone in your server."
-	if sel == "This Week" then
-		foot = event and (eventName .. " looks are here through " .. eventEnds .. " and return next year. " .. eventFree) or "This week's looks rotate every Monday and come back in a later week. Looks only, no stats."
+	if sel == "Looks" then
+		foot = event and (eventName .. " looks are here through " .. eventEnds .. " and return next year. " .. eventFree) or "Looks only. Nothing here changes coins, traits, or odds."
+	elseif sel == "Crew" then
+		foot = "Crew boosts and outfits. Double crew income lasts 30 minutes and does not change trait odds."
 	elseif sel == "Passes" then
 		foot = "Passes are yours forever. The Pit Crew Club and Premium are monthly and give looks and friendly perks, never coins."
 	end
@@ -1106,6 +1094,25 @@ local function renderSettings(s: any)
 				end
 			end)
 		end
+		local codeCard = card(sf, 1, 88)
+		lbl(codeCard, "Codes", { Size = UDim2.new(1, 0, 0, 22), TextSize = 18 })
+		local codeBox = UI.new("TextBox", {
+			PlaceholderText = "Type a code",
+			Text = "",
+			ClearTextOnFocus = false,
+			Font = T.body,
+			TextSize = 16,
+			TextColor3 = T.text,
+			PlaceholderColor3 = T.dim,
+			BackgroundColor3 = T.cardHi,
+			Position = UDim2.new(0, 0, 0, 30),
+			Size = UDim2.new(1, -130, 0, 40),
+			Parent = codeCard,
+		})
+		UI.corner(codeBox, 8)
+		btn(codeCard, "Redeem", T.green, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, 0, 1, 0), Size = UDim2.new(0, 120, 0, 40), TextSize = 16 }, function()
+			Net.act("RedeemCode", codeBox.Text)
+		end)
 		settingCard(2, 100, string.format("Partner bonus: +%d%% (%d partner%s here)", math.floor((s.crew or 0) * Config.Partners.per * 100 + 0.5), s.crew or 0, (s.crew or 0) == 1 and "" or "s"), "Each ranch partner in this server gives +10% coins, up to 3.", "Invite friends", T.blue, function()
 			Panels.invite()
 		end)
@@ -1228,6 +1235,14 @@ local function renderCrew(s: any)
 	intro.BackgroundTransparency = 1
 	lbl(intro, string.format("%s · %d / %d working · %s", ranch.tierName or "Open yard", math.min(#owned, slots), slots, Income.format(ranch.rate or 0)), { Size = UDim2.new(1, 0, 0, 24), TextSize = 18 })
 	lbl(intro, "Critters you hire walk home and work the ranch. Jimothy the Waiter is still his own pass. He serves plates. He isn't one of these slots.", { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, 0, 0, 40), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+	if type(s.offer) == "table" and s.offer.id == "bunkhouse" then
+		local offer = card(sf, 2, 96)
+		lbl(offer, s.offer.title, { Size = UDim2.new(1, -150, 0, 24), TextSize = 18 })
+		lbl(offer, s.offer.detail, { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -150, 0, 60), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+		btn(offer, "See the pass", T.accent, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 140, 0, 40), TextSize = 15 }, function()
+			Net.act("Prompt", s.offer.kind, s.offer.key)
+		end)
+	end
 	if ranch.nextCost and ranch.nextName then
 		local build = card(sf, 1, 88)
 		lbl(build, "Build " .. ranch.nextName, { Size = UDim2.new(1, -170, 0, 24), TextSize = 20 })
@@ -1318,6 +1333,14 @@ local function renderHire(s: any)
 	intro.BackgroundTransparency = 1
 	lbl(intro, "They're walking the boardwalk in the town square. You hire the one you see. Coins only.", { Size = UDim2.new(1, 0, 0, 36), TextSize = 15, Font = T.body, TextColor3 = T.dim })
 	lbl(intro, hiring.clock or "Next lineup", { Position = UDim2.new(0, 0, 0, 38), Size = UDim2.new(1, 0, 0, 22), TextSize = 16 })
+	if type(s.offer) == "table" and s.offer.id == "autohire" then
+		local offer = card(sf, 1, 96)
+		lbl(offer, s.offer.title, { Size = UDim2.new(1, -150, 0, 24), TextSize = 18 })
+		lbl(offer, s.offer.detail, { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -150, 0, 60), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+		btn(offer, "See the pass", T.accent, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 140, 0, 40), TextSize = 15 }, function()
+			Net.act("Prompt", s.offer.kind, s.offer.key)
+		end)
+	end
 	local rows = hiring.applicants or {}
 	if #rows == 0 then
 		local empty = card(sf, 1, 48)
