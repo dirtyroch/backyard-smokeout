@@ -1,7 +1,8 @@
 --!strict
 --[[
 	SocialService — friendly multiplayer.
-	  * Crew bonus: +10% coins for each friend in the server (max 3).
+	  * Crew bonus: +10% coins for each ranch partner who is here (max 3).
+	  * In a family ranch, the other players on the server count toward that same cap.
 	  * Plate snagging ("you got taxed!"): grab ONE Common/Juicy plate from another player's
 	    pass window. Rules that keep it fun instead of mean:
 	      - only while the owner is online and in the game (never offline),
@@ -20,6 +21,7 @@ local Config = require(Shared.Config)
 local Content = require(Shared.Content)
 local Rarity = require(Shared.Logic.Rarity)
 local Economy = require(Shared.Logic.Economy)
+local Partners = require(Shared.Logic.Partners)
 local WorldBuilder = require(Shared.WorldBuilder)
 
 local SocialService = {}
@@ -56,18 +58,33 @@ local function areFriends(a: Player, b: Player): boolean
 	return v
 end
 
+function SocialService.areFriends(a: Player, b: Player): boolean
+	return areFriends(a, b)
+end
+
 local function recountCrew()
-	for player, r in pairs(ctx.Game.runtime) do
-		local n = 0
-		for other in pairs(ctx.Game.runtime) do
-			if other ~= player and areFriends(player, other) then
-				n += 1
-			end
+	local online: { [string]: boolean } = {}
+	local headcount = 0
+	for player in pairs(ctx.Game.runtime) do
+		online[tostring(player.UserId)] = true
+		headcount += 1
+	end
+	local familyOn = false
+	for player in pairs(ctx.Game.runtime) do
+		local data = ctx.Game.dataOf(player)
+		if type(data) == "table" and type(data.family) == "table" and data.family.on == true and player.UserId == game.PrivateServerOwnerId then
+			familyOn = true
+			break
 		end
-		n = math.min(n, Config.Crew.maxFriends)
+	end
+	for player, r in pairs(ctx.Game.runtime) do
+		local data = ctx.Game.dataOf(player)
+		local list = if type(data) == "table" then Partners.ensure(data) else {}
+		local others = if familyOn then math.max(0, headcount - 1) else 0
+		local n = Partners.bonusCount(list, online, others)
 		if n ~= r.crew then
 			if n > r.crew then
-				ctx.Game.toast(player, string.format("Crew bonus! +%d%% coins with %d friend%s here. 🤝", math.floor(n * Config.Crew.perFriend * 100 + 0.5), n, n == 1 and "" or "s"), "good")
+				ctx.Game.toast(player, string.format("Ranch partner bonus: +%d%% with %d partner%s here.", math.floor(n * Config.Partners.per * 100 + 0.5), n, n == 1 and "" or "s"), "good")
 			end
 			r.crew = n
 			ctx.Game.markDirty(player)
@@ -91,6 +108,10 @@ function SocialService.onLeave(player: Player)
 		end
 	end
 	task.defer(recountCrew)
+end
+
+function SocialService.refreshBonus()
+	recountCrew()
 end
 
 local function baseValue(plate: any): number

@@ -398,6 +398,44 @@ Config.Snag = {
 
 Config.Crew = { perFriend = 0.10, maxFriends = 3 }
 
+-- Smoke Storm is free for everyone. These odds never take a pass, a product, or a purchase.
+Config.Storm = {
+	duration = 180,
+	gapMin = 45 * 60,
+	gapMax = 60 * 60,
+	showHour = 14, -- 2:00 PM CT
+	showLength = 30 * 60,
+	triple = 3,
+	odds = {
+		{ id = "none", name = "No trait", weight = 72.25 },
+		{ id = "smoky", name = "Smoky", weight = 20 },
+		{ id = "glazed", name = "Glazed", weight = 6 },
+		{ id = "golden", name = "Golden", weight = 1.5 },
+		{ id = "meteorite", name = "Meteorite", weight = 0.25 },
+	},
+}
+-- One finished species row (all 4 traits) is a permanent +2% crew income.
+Config.IndexBonus = 0.02
+Config.IndexTitles = {
+	common = "Common Crew",
+	uncommon = "Uncommon Crew",
+	rare = "Rare Crew",
+	epic = "Epic Crew",
+	legendary = "Legendary Crew",
+	mythic = "Mythic Crew",
+	secret = "Rex Crew",
+}
+-- Partners replace the old "any friend in the server" crew bonus. Same 10% and cap of 3.
+Config.Partners = {
+	per = 0.10,
+	max = 3,
+	cheerMult = 1.25,
+	cheerSeconds = 60,
+	cheerCooldown = 300,
+}
+-- Far crew freeze so a phone is not posing every critter in the server.
+Config.CrewLod = { near = 80, far = 150, cheapStep = 0.25 }
+
 -- Fair Play: paid perks are capped so they never wall off free players.
 --   * the tip pass is +50% (not x2) and never applies to the Cook-Off or snagging
 --   * buying a speed boost gives everyone else in the server a free "Smoke Shower"
@@ -522,7 +560,8 @@ Config.Hiring = {
 	cheapPrice = 50, -- every lineup keeps at least two applicants at or under the starting purse
 	cheapCount = 2,
 	starterDelay = 2, -- seconds before Pip starts walking over
-	starterWalk = 6, -- he is on the ranch by starterDelay + starterWalk (under 10s)
+	starterWalk = 6, -- fallback if the path length is not ready yet
+	walkSpeed = 12, -- studs per second, a stroll rather than a scoot
 }
 Config.CrewRarities = {
 	{ id = "common", name = "Common", color = "#E7E2DA", order = 1 },

@@ -682,7 +682,9 @@ function Hud.update()
 	refs.btnShop.Dot.Visible = rookieDone and not s.boughtAny and s.onceBought ~= nil and not s.onceBought.StarterPitPack and s.productIds.products.StarterPitPack == true
 	refs.serveAll.Text = "🍽️ Serve All" .. (#s.customers > 0 and (" (" .. #s.customers .. ")") or "")
 	showStatus(refs.customers, #s.customers > 0 and (#s.customers .. " hungry critter" .. (#s.customers == 1 and "" or "s") .. " waiting") or "")
-	if Config.Chores.lunchRush and s.rush then
+	if s.storm and s.storm.active and type(s.storm.banner) == "string" and s.storm.banner ~= "" then
+		showStatus(refs.rush, s.storm.banner)
+	elseif Config.Chores.lunchRush and s.rush then
 		local ends, n, done = s.rush.ends, s.rush.n, s.rush.done
 		if now >= ends then
 			local P = Config.Rush.period

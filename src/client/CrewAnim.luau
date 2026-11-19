@@ -2,6 +2,11 @@
 -- Crew and Hiring Line critters are posed on each client. The server only stores
 -- where they are going (CrewAnim attributes) and pays the coins.
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+local CrewMotion = require(Shared.Logic.CrewMotion)
 
 local CrewAnim = {}
 
@@ -10,6 +15,8 @@ type Mover = {
 	points: { Vector3 },
 	length: number,
 	raw: string,
+	cheapAt: number,
+	vecs: { { number } },
 }
 
 local movers: { Mover } = {}
@@ -39,20 +46,12 @@ local function lengthOf(points: { Vector3 }): number
 	return total
 end
 
-local function along(points: { Vector3 }, distance: number): (Vector3, Vector3)
-	local remain = distance
-	for i = 1, #points - 1 do
-		local span = (points[i + 1] - points[i]).Magnitude
-		if remain <= span or i == #points - 1 then
-			local alpha = if span > 0.05 then math.clamp(remain / span, 0, 1) else 0
-			local pos = points[i]:Lerp(points[i + 1], alpha)
-			local face = points[i + 1] - points[i]
-			return pos, face
-		end
-		remain -= span
+local function toVecs(points: { Vector3 }): { { number } }
+	local vecs = {}
+	for _, p in ipairs(points) do
+		table.insert(vecs, { p.X, p.Y, p.Z })
 	end
-	local last = points[#points]
-	return last, Vector3.new(0, 0, -1)
+	return vecs
 end
 
 local track: (Model) -> ()
@@ -79,7 +78,7 @@ track = function(model: Model)
 		watching[model]:Disconnect()
 		watching[model] = nil
 	end
-	table.insert(movers, { model = model, points = points, length = math.max(lengthOf(points), 0.05), raw = model:GetAttribute("AnimPoints") :: string })
+	table.insert(movers, { model = model, points = points, length = math.max(lengthOf(points), 0.05), raw = model:GetAttribute("AnimPoints") :: string, cheapAt = 0, vecs = toVecs(points) })
 end
 
 local function step(mover: Mover, now: number)
@@ -94,6 +93,7 @@ local function step(mover: Mover, now: number)
 		if #points >= 2 then
 			mover.points = points
 			mover.length = math.max(lengthOf(points), 0.05)
+			mover.vecs = toVecs(points)
 		end
 		mover.raw = raw
 	end
@@ -101,20 +101,29 @@ local function step(mover: Mover, now: number)
 	local pace = if type(speed) == "number" and speed > 0 then speed else 4
 	local phase = model:GetAttribute("AnimPhase")
 	local shift = if type(phase) == "number" then phase else 0
-	local kind = model:GetAttribute("CrewAnim")
-	local distance
-	if kind == "once" then
-		local start = model:GetAttribute("AnimStart")
-		local began = if type(start) == "number" then start else now
-		distance = math.clamp((now - began) * pace, 0, mover.length)
-	else
-		distance = (now * pace + shift * 1.7) % mover.length
+	local kind = if model:GetAttribute("CrewAnim") == "once" then "once" else "loop"
+	local startAttr = model:GetAttribute("AnimStart")
+	local began = if type(startAttr) == "number" then startAttr else nil
+	local x, y, z = CrewMotion.pose(mover.vecs, now, pace, shift, kind, began)
+	-- Cull by where the critter should be, not where it was last drawn. A late joiner's copy
+	-- still sits at the server's first point, which can be far from its real path.
+	local cam = workspace.CurrentCamera
+	if cam then
+		local dist = (cam.CFrame.Position - Vector3.new(x, y, z)).Magnitude
+		local detail = CrewMotion.detail(dist, Config.CrewLod.near, Config.CrewLod.far)
+		if detail == "freeze" then
+			return
+		elseif detail == "cheap" and now - mover.cheapAt < Config.CrewLod.cheapStep then
+			return
+		end
+		if detail == "cheap" then
+			mover.cheapAt = now
+		end
 	end
-	local pos, face = along(mover.points, distance)
-	local flat = Vector3.new(face.X, 0, face.Z)
+	local x2, _, z2 = CrewMotion.pose(mover.vecs, now + 0.08, pace, shift, kind, began)
+	local flat = Vector3.new(x2 - x, 0, z2 - z)
 	local look = if flat.Magnitude > 0.05 then flat.Unit else Vector3.new(0, 0, -1)
-	local bob = math.abs(math.sin(now * 8 + shift)) * 0.22
-	local at = pos + Vector3.new(0, bob, 0)
+	local at = Vector3.new(x, y, z)
 	model:PivotTo(CFrame.lookAt(at, at + look))
 end
 

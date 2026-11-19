@@ -10,6 +10,8 @@ local Config = require(Shared.Config)
 local WorldBuilder = require(Shared.WorldBuilder)
 local HiringLine = require(Shared.Logic.HiringLine)
 local Crew = require(Shared.Logic.Crew)
+local CrewMotion = require(Shared.Logic.CrewMotion)
+local Weather = require(Shared.Logic.Weather)
 local Income = require(Shared.Logic.Income)
 
 local CrewService = {}
@@ -198,6 +200,43 @@ local function tagAnim(model: Model, ground: { Vector3 }, kind: string, speed: n
 	model:PivotTo(CFrame.lookAt(first, nextPoint))
 end
 
+-- `points` are already where the client should draw the pivot, bob not included.
+local function tagPath(model: Model, points: { Vector3 }, speed: number)
+	if #points < 2 then
+		return
+	end
+	local vecs = {}
+	for _, p in ipairs(points) do
+		table.insert(vecs, { p.X, p.Y, p.Z })
+	end
+	model:SetAttribute("CrewAnim", "once")
+	model:SetAttribute("AnimSpeed", speed)
+	model:SetAttribute("AnimPhase", 0)
+	model:SetAttribute("AnimPoints", CrewMotion.encode(vecs))
+	model:SetAttribute("AnimStart", workspace:GetServerTimeNow())
+	local nextPoint = points[2]
+	if (nextPoint - points[1]).Magnitude < 0.05 then
+		nextPoint = points[1] + Vector3.new(0, 0, -1)
+	end
+	model:PivotTo(CFrame.lookAt(points[1], nextPoint))
+end
+
+local function toWorld(path: { { number } }): { Vector3 }
+	local out = {}
+	for _, p in ipairs(path) do
+		table.insert(out, Vector3.new(p[1], p[2], p[3]))
+	end
+	return out
+end
+
+local function plotCenter(plot: any): Vector3
+	local pad = plot and plot:FindFirstChild("Pad")
+	if pad and pad:IsA("BasePart") then
+		return pad.Position
+	end
+	return Vector3.zero
+end
+
 local function hiringFolder(): Folder?
 	local map = mapModel()
 	local hub = map and map:FindFirstChild("Hub")
@@ -291,8 +330,20 @@ local function restock()
 	if lineState.window ~= window then
 		lineState.window = window
 		lineState.tier = tier
+		local show = Weather.smokeShow(os.time(), Config.TIMEZONE_OFFSET_HOURS)
 		lineState.applicants = HiringLine.stock(lineState.seed, window, tier)
+		if show then
+			HiringLine.raiseFloor(lineState.applicants)
+		end
 		lineState.taken = {}
+		for _, applicant in ipairs(lineState.applicants) do
+			if applicant.rarity == "legendary" or applicant.rarity == "mythic" or applicant.rarity == "secret" then
+				if ctx.Game and ctx.Game.announce then
+					ctx.Game.announce(string.format("%s the %s is on the Hiring Line.", applicant.name, applicant.rarityName), applicant.color)
+				end
+				break
+			end
+		end
 	end
 	local sig = lineSignature()
 	if sig ~= lineSig then
@@ -369,13 +420,21 @@ local function refreshCrew(player: Player)
 		return
 	end
 	Crew.ensure(data)
-	local tier = math.floor(data.ranch.tier or 1)
+	local hostData = nil
+	if ctx.Game.familyHost then
+		local _, saved = ctx.Game.familyHost()
+		hostData = saved
+	end
+	local tier = math.floor(if hostData then hostData.ranch.tier or 1 else data.ranch.tier or 1)
 	if tierSig[player] ~= tier then
 		showTiers(plot, tier)
 		tierSig[player] = tier
 	end
 	local mults = ctx.Game.crewMults(player, data)
 	local view = Crew.view(data, mults)
+	if ctx.Game.crewSlots then
+		view.slots = ctx.Game.crewSlots(data)
+	end
 	local parts = {}
 	for i, member in ipairs(view.owned) do
 		if i > view.slots then
@@ -435,6 +494,12 @@ local function refreshCrew(player: Player)
 				WorldBuilder.billboard(adornee, "NameTag", tag, 2.2, 70, "#FFF6E0", 180, 28, { 5, 0.7, 80, 14 })
 				WorldBuilder.billboard(adornee, "Rate", Income.format(member.earn), 3.15, 70, "#7DCE6A", 140, 28, { 4.2, 0.7, 70, 16 })
 			end
+			local body = model:FindFirstChild("Body")
+			if body and body:IsA("BasePart") then
+				local cheer = WorldBuilder.prompt(body, "cheer", "Cheer", member.name, 0, 10)
+				cheer:SetAttribute("OwnerUserId", player.UserId)
+				cheer:SetAttribute("CrewUid", member.uid)
+			end
 			local points = stationPoints(plot, member.role)
 			local side = ((n - 1) % 3 - 1) * 1.5
 			local row = math.floor((n - 1) / 3) * 1.2
@@ -471,12 +536,26 @@ function CrewService.walkHome(player: Player, index: number)
 	home.Name = "WalkingHome"
 	home.Parent = mapModel() or workspace
 	model.Parent = home
-	local from = model:GetPivot().Position
-	local goal = Vector3.new(pad.Position.X, from.Y, pad.Position.Z)
-	-- Points are already at pivot height. tagAnim adds the pivot Y again, so pass ground-level Y.
-	local groundY = from.Y - model:GetPivot().Position.Y
-	tagAnim(model, { Vector3.new(from.X, groundY, from.Z), Vector3.new(goal.X, groundY, goal.Z) }, "once", 14, 0)
-	task.delay(8, function()
+	local now = workspace:GetServerTimeNow()
+	local saved = CrewMotion.decode(model:GetAttribute("AnimPoints"))
+	local speedAttr = model:GetAttribute("AnimSpeed")
+	local phaseAttr = model:GetAttribute("AnimPhase")
+	local kindAttr = model:GetAttribute("CrewAnim")
+	local startAttr = model:GetAttribute("AnimStart")
+	local x, y, z = CrewMotion.pose(
+		saved,
+		now,
+		if type(speedAttr) == "number" then speedAttr else 5.5,
+		if type(phaseAttr) == "number" then phaseAttr else 0,
+		if kindAttr == "once" then "once" else "loop",
+		if type(startAttr) == "number" then startAttr else nil
+	)
+	local center = plotCenter(plot)
+	local path = CrewMotion.homePath(x, y, z, center.X, center.Z, pad.Position.X, pad.Position.Z)
+	local world = toWorld(path)
+	tagPath(model, world, Config.Hiring.walkSpeed)
+	local seconds = CrewMotion.walkSeconds(path, Config.Hiring.walkSpeed)
+	task.delay(seconds + 1.5, function()
 		if model then
 			model:Destroy()
 		end
@@ -491,16 +570,16 @@ function CrewService.cancelStarter(player: Player)
 	end
 end
 
-function CrewService.walkStarter(player: Player)
+function CrewService.walkStarter(player: Player): number?
 	CrewService.cancelStarter(player)
 	local folder = hiringFolder()
 	local points = padPoints()
 	if not folder or #points < 1 then
-		return
+		return nil
 	end
 	local species = Crew.byId("armadillo")
 	if not species then
-		return
+		return nil
 	end
 	local model = WorldBuilder.critter(ENV, folder, appearance(species, true), CFrame.new())
 	model.Name = "StarterPip"
@@ -512,24 +591,24 @@ function CrewService.walkStarter(player: Player)
 		WorldBuilder.billboard(adornee, "NameTag", "Pip", 2.2, 90, "#FFF6E0", 160, 28, { 4.5, 0.7, 80, 16 })
 		WorldBuilder.billboard(adornee, "Offer", "First hire's on the house!", 3.2, 90, "#7DCE6A", 260, 32, { 7, 0.8, 110, 16 })
 	end
+	local start = points[1]
 	local plot = ctx.World.plotModel(player)
 	local greet = plot and plot:FindFirstChild("CrewStations")
 	local pad = greet and greet:FindFirstChild("Greet")
-	local start = points[1]
-	if pad and pad:IsA("BasePart") then
-		local dist = (Vector3.new(pad.Position.X, start.Y, pad.Position.Z) - start).Magnitude
-		local speed = dist / math.max(Config.Hiring.starterWalk, 0.5)
-		tagAnim(model, { start, Vector3.new(pad.Position.X, start.Y, pad.Position.Z) }, "once", speed, 0)
-	else
-		tagAnim(model, { start, start + Vector3.new(0, 0, 4) }, "once", 4, 0)
-	end
+	local lift = model:GetPivot().Position.Y
+	local center = plotCenter(plot)
+	local greetPos = if pad and pad:IsA("BasePart") then pad.Position else center
+	local path = CrewMotion.homePath(start.X, start.Y + lift, start.Z, center.X, center.Z, greetPos.X, greetPos.Z)
+	tagPath(model, toWorld(path), Config.Hiring.walkSpeed)
 	starters[player] = model
-	task.delay(Config.Hiring.starterWalk + 1.5, function()
+	local seconds = CrewMotion.walkSeconds(path, Config.Hiring.walkSpeed)
+	task.delay(seconds + 1.5, function()
 		if starters[player] == model then
 			model:Destroy()
 			starters[player] = nil
 		end
 	end)
+	return seconds
 end
 
 function CrewService.onPlayerGone(player: Player)
@@ -560,7 +639,14 @@ function CrewService.start()
 		end
 	end
 	ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, player: Player)
-		if prompt:GetAttribute("Kind") ~= "hire" then
+		if prompt:GetAttribute("Kind") ~= "hire" and prompt:GetAttribute("Kind") ~= "cheer" then
+			return
+		end
+		if prompt:GetAttribute("Kind") == "cheer" then
+			local ok, msg = ctx.Game.act(player, "Cheer", prompt:GetAttribute("OwnerUserId"), prompt:GetAttribute("CrewUid"))
+			if not ok and type(msg) == "string" and msg ~= "" then
+				ctx.Game.toast(player, msg, "warn")
+			end
 			return
 		end
 		local index = prompt:GetAttribute("Applicant")

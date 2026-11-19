@@ -260,6 +260,29 @@ function HiringLine.stock(seed: number, window: number, tier: number, list: { an
 	return out
 end
 
+-- Saturday Smoke Show: commons and uncommons step up to a Rare or better species. Still deterministic.
+function HiringLine.raiseFloor(stock: { Applicant }, list: { any }?)
+	local species = list or Config.CrewSpecies
+	local pool = {}
+	for _, row in ipairs(species) do
+		if row.secret ~= true and (row.rarity == "rare" or row.rarity == "epic" or row.rarity == "legendary" or row.rarity == "mythic") then
+			table.insert(pool, row)
+		end
+	end
+	if #pool == 0 then
+		return
+	end
+	local n = 1
+	for i, applicant in ipairs(stock) do
+		-- The two applicants a new purse can afford stay put. The rest of the line steps up.
+		if (applicant.rarity == "common" or applicant.rarity == "uncommon") and applicant.price > Config.Hiring.cheapPrice then
+			local chosen = pool[((n - 1) % #pool) + 1]
+			n += 1
+			stock[i] = toApplicant(i, chosen, "none")
+		end
+	end
+end
+
 -- First valid claim wins. A failed claim (not enough coins, no slot) must not call this.
 function HiringLine.tryTake(taken: { [number]: number }, index: any, userId: number): boolean
 	if type(index) ~= "number" or index ~= math.floor(index) or index < 1 or index > Config.Hiring.count then

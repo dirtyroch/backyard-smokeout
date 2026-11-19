@@ -66,6 +66,7 @@ return {
 	codes = {},
 	offline = { lastTick = 0 }, -- 0 means "never ticked", so the first join pays nothing
 	partners = {},
+	family = { on = false, purse = 0 },
 	events = { smokeShowWeek = -1 },
 	onboard = { done = false, rookieReward = false },
 	freeGift = { nextAt = 0 }, -- timed free gift (Logic/FreeGift). 0 means one is ready.

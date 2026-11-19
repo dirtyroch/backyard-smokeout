@@ -35,6 +35,8 @@ local Guide = require(Shared.Logic.Guide)
 local Crew = require(Shared.Logic.Crew)
 local HiringLine = require(Shared.Logic.HiringLine)
 local Offline = require(Shared.Logic.Offline)
+local Index = require(Shared.Logic.Index)
+local Partners = require(Shared.Logic.Partners)
 
 local GameService = {}
 local ctx: any = nil
@@ -68,6 +70,8 @@ type Runtime = {
 	crewNext: { [string]: number },
 	offlineCrew: number,
 	offlineTipPaid: boolean,
+	cheerUntil: { [number]: number },
+	cheerCooldown: { [string]: number },
 }
 
 GameService.runtime = {} :: { [Player]: Runtime }
@@ -1385,7 +1389,44 @@ local function snapshot(player: Player, data: any): any
 				applicants = rows,
 			}
 		end)(),
-		ranchCrew = Crew.view(data, GameService.crewMults(player, data)),
+		ranchCrew = (function()
+			local view = Crew.view(data, GameService.crewMults(player, data))
+			local _, hostData = GameService.familyHost()
+			if hostData and type(data.crew) == "table" then
+				local slots = GameService.crewSlots(data)
+				view.slots = slots
+				view.used = math.min(#view.owned, slots)
+				view.rate = Crew.totalRate(data.crew.owned, slots, GameService.crewMults(player, data))
+				local tier = math.floor(hostData.ranch.tier or 1)
+				local nxt = Crew.nextTier(tier)
+				local tierRow = Config.RanchTiers[math.clamp(tier, 1, #Config.RanchTiers)]
+				view.tier = tier
+				view.tierName = "Family · " .. (if tierRow then tierRow.name else "Open yard")
+				view.nextCost = if nxt then nxt.cost else nil
+				view.nextName = if nxt then nxt.name else nil
+				view.nextBlurb = if nxt then nxt.blurb else nil
+			end
+			return view
+		end)(),
+		storm = if ctx.Weather and ctx.Weather.state then ctx.Weather.state() else { active = false, banner = "", odds = {} },
+		partners = Partners.ensure(data),
+		family = {
+			on = type(data.family) == "table" and data.family.on == true,
+			purse = if type(data.family) == "table" then data.family.purse or 0 else 0,
+			host = player.UserId == game.PrivateServerOwnerId,
+			privateServer = game.PrivateServerOwnerId ~= 0,
+		},
+		indexBonus = Index.incomeMult(data),
+		indexTraits = if type(data.index) == "table" then data.index.traits or {} else {},
+		serverMates = (function()
+			local rows = {}
+			for _, other in ipairs(Players:GetPlayers()) do
+				if other ~= player then
+					table.insert(rows, { id = other.UserId, name = other.DisplayName })
+				end
+			end
+			return rows
+		end)(),
 		seasonPass = ctx.Season.snapshot(data),
 		member = ctx.Membership.snapshot(player, data),
 		plot = r.plot,
@@ -1506,6 +1547,8 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 		crewNext = {},
 		offlineCrew = 0,
 		offlineTipPaid = false,
+		cheerUntil = {},
+		cheerCooldown = {},
 	}
 	-- Runtime goes in before any yielding call. Until it exists, every action
 	-- returns "Still loading your ranch..." and prompts no-op.
@@ -1672,10 +1715,14 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 		if not live or not Crew.needsStarter(live) then
 			return
 		end
+		local walkFor = Config.Hiring.starterWalk
 		if ctx.Crew and ctx.Crew.walkStarter then
-			ctx.Crew.walkStarter(player)
+			local seconds = ctx.Crew.walkStarter(player)
+			if type(seconds) == "number" and seconds > 0 then
+				walkFor = seconds
+			end
 		end
-		task.delay(Config.Hiring.starterWalk, function()
+		task.delay(walkFor, function()
 			if not player.Parent or GameService.runtime[player] ~= r then
 				return
 			end
@@ -1844,10 +1891,21 @@ end
 -- Crew tick. The player's first grill and first smoker are never used here.
 function GameService.crewMults(player: Player, data: any): Crew.Mults
 	local r = rt(player)
+	local cheers: { [number]: boolean } = {}
+	if r and type(r.cheerUntil) == "table" then
+		local now = os.time()
+		for uid, untilT in pairs(r.cheerUntil) do
+			if Partners.cheered(untilT, now) then
+				cheers[uid] = true
+			end
+		end
+	end
 	return {
 		rank = data.rank,
 		friends = if r then r.crew else 0,
 		tipPass = r ~= nil and r.passes.DoubleTips == true,
+		index = Index.incomeMult(data),
+		cheers = cheers,
 	}
 end
 
@@ -1906,6 +1964,135 @@ Actions.HireApplicant = function(player, _data, index)
 	return GameService.hireApplicant(player, index)
 end
 
+Actions.AddPartner = function(player, data, userId)
+	Partners.ensure(data)
+	local otherId = tostring(userId)
+	local other = nil
+	for _, candidate in ipairs(Players:GetPlayers()) do
+		if tostring(candidate.UserId) == otherId then
+			other = candidate
+			break
+		end
+	end
+	if not other then
+		return false, "They're not in this server."
+	end
+	local privateServer = game.PrivateServerOwnerId ~= 0
+	local friend = false
+	if ctx.Social and ctx.Social.areFriends then
+		friend = ctx.Social.areFriends(player, other)
+	end
+	local ok, why = Partners.canAdd(data.partners, tostring(player.UserId), otherId, friend, privateServer)
+	if not ok then
+		return false, why
+	end
+	Partners.add(data, otherId)
+	if ctx.Social and ctx.Social.refreshBonus then
+		ctx.Social.refreshBonus()
+	end
+	GameService.toast(player, other.DisplayName .. " is a ranch partner.", "good")
+	return true, nil
+end
+
+Actions.RemovePartner = function(_player, data, userId)
+	if not Partners.remove(data, tostring(userId)) then
+		return false, "They're not a partner."
+	end
+	if ctx.Social and ctx.Social.refreshBonus then
+		ctx.Social.refreshBonus()
+	end
+	return true, nil
+end
+
+Actions.Cheer = function(player, _data, ownerId, crewUid)
+	local owner = nil
+	for _, candidate in ipairs(Players:GetPlayers()) do
+		if candidate.UserId == ownerId or tostring(candidate.UserId) == tostring(ownerId) then
+			owner = candidate
+			break
+		end
+	end
+	if not owner then
+		return false, "They're not in this server."
+	end
+	local ownerData = profileOf(owner)
+	local ownerRun = rt(owner)
+	local mine = rt(player)
+	if not ownerData or not ownerRun or not mine then
+		return false, "Still loading."
+	end
+	local allowed = owner == player
+	if not allowed then
+		for _, id in ipairs(Partners.ensure(ownerData)) do
+			if id == tostring(player.UserId) then
+				allowed = true
+			end
+		end
+	end
+	local family = type(ownerData.family) == "table" and ownerData.family.on == true and game.PrivateServerOwnerId ~= 0
+	if family then
+		allowed = true
+	end
+	if not allowed then
+		return false, "Cheer is for ranch partners."
+	end
+	local uid = tonumber(crewUid)
+	if not uid or not Crew.findUid(ownerData.crew.owned, uid) then
+		return false, "That critter isn't on the ranch."
+	end
+	local now = os.time()
+	local key = tostring(player.UserId)
+	local result = Partners.tryCheer(now, mine.cheerCooldown[key], ownerRun.cheerUntil[uid])
+	if not result.ok or not result.untilT then
+		return false, result.reason
+	end
+	ownerRun.cheerUntil[uid] = result.untilT
+	mine.cheerCooldown[key] = Partners.cheerCooldown(now)
+	GameService.toast(owner, player.DisplayName .. " cheered a critter. x1.25 for a minute.", "good")
+	GameService.markDirty(owner)
+	return true, nil
+end
+
+Actions.FamilyRanch = function(player, data, on)
+	if not Partners.canHostFamily(game.PrivateServerOwnerId ~= 0, player.UserId == game.PrivateServerOwnerId) then
+		return false, "Family Ranch is for the host of a private server."
+	end
+	if type(data.family) ~= "table" then
+		data.family = { on = false, purse = 0 }
+	end
+	data.family.on = on == true
+	if ctx.Social and ctx.Social.refreshBonus then
+		ctx.Social.refreshBonus()
+	end
+	GameService.toast(player, if data.family.on then "Family Ranch is on. Tiers come from the shared purse." else "Family Ranch is off.", "info")
+	return true, nil
+end
+
+Actions.ChipPurse = function(player, data, amount)
+	if game.PrivateServerOwnerId == 0 then
+		return false, "The shared purse is for a private server."
+	end
+	local host, hostData = GameService.familyHost()
+	if not host or not hostData then
+		local here = false
+		for _, candidate in ipairs(Players:GetPlayers()) do
+			if candidate.UserId == game.PrivateServerOwnerId and GameService.runtime[candidate] then
+				here = true
+			end
+		end
+		return false, if here then "Family Ranch is off." else "The host isn't here."
+	end
+	local coins, purse = Partners.chip(data.coins, hostData.family.purse or 0, math.floor(tonumber(amount) or 0))
+	if not coins or not purse then
+		return false, "That amount doesn't fit."
+	end
+	data.coins = coins
+	hostData.family.purse = purse
+	GameService.markDirty(host)
+	GameService.toast(player, string.format("Added %d coins to the family purse.", math.floor(amount)), "good")
+	return true, nil
+end
+
 Actions.LevelCrew = function(player, data, uid)
 	local outcome = Crew.tryLevel(data, uid)
 	if not Crew.applyLevel(data, outcome) then
@@ -1919,6 +2106,31 @@ Actions.LevelCrew = function(player, data, uid)
 end
 
 Actions.BuyRanchTier = function(player, data)
+	local hostData = data
+	local family = false
+	local _, saved = GameService.familyHost()
+	if saved then
+		hostData = saved
+		family = true
+	end
+	if family and hostData ~= data then
+		Partners.ensure(hostData)
+	end
+	if family then
+		local nxt = Crew.nextTier(math.floor(hostData.ranch.tier or 1))
+		if not nxt or not nxt.cost or nxt.cost <= 0 then
+			return false, "The ranch is built out."
+		end
+		if (hostData.family.purse or 0) < nxt.cost then
+			return false, "The family purse needs more coins."
+		end
+		hostData.family.purse -= nxt.cost
+		hostData.ranch.tier = nxt.tier
+		Crew.ensure(hostData)
+		hostData.crew.slots = Crew.slotCount(nxt.tier, hostData.crew.extra or 0)
+		GameService.toast(player, string.format("Family ranch tier %d: %s.", nxt.tier, nxt.name), "good")
+		return true, nil
+	end
 	local outcome = Crew.tryTier(data)
 	if not Crew.applyTier(data, outcome) then
 		return false, Crew.tierMessage(outcome.reason, outcome.cost)
@@ -1928,11 +2140,40 @@ Actions.BuyRanchTier = function(player, data)
 	return true, nil
 end
 
+-- The private-server host, only while Family Ranch is on. Crew stays on each plot.
+function GameService.familyHost(): (Player?, any)
+	if game.PrivateServerOwnerId == 0 then
+		return nil, nil
+	end
+	for _, candidate in ipairs(Players:GetPlayers()) do
+		-- runtime is cleared before the leave save, so a leaving host's record is never written after it.
+		if candidate.UserId == game.PrivateServerOwnerId and GameService.runtime[candidate] then
+			local hostData = profileOf(candidate)
+			if hostData and type(hostData.family) == "table" and hostData.family.on == true then
+				return candidate, hostData
+			end
+			return nil, nil
+		end
+	end
+	return nil, nil
+end
+
+function GameService.crewSlots(data: any): number
+	local slots = if type(data.crew) == "table" then data.crew.slots or 0 else 0
+	local _, hostData = GameService.familyHost()
+	if hostData then
+		local extra = if type(data.crew) == "table" then data.crew.extra or 0 else 0
+		slots = Crew.slotCount(hostData.ranch.tier or 1, extra)
+	end
+	return slots
+end
+
 local function payCrew(player: Player, data: any, r: Runtime)
 	if type(data.crew) ~= "table" or type(data.crew.owned) ~= "table" then
 		return
 	end
-	local rate = Crew.totalRate(data.crew.owned, data.crew.slots or 0, GameService.crewMults(player, data))
+	local slots = GameService.crewSlots(data)
+	local rate = Crew.totalRate(data.crew.owned, slots, GameService.crewMults(player, data))
 	local coins, bank = Crew.tickPay(rate, r.crewBank)
 	r.crewBank = bank
 	if type(data.offline) ~= "table" then

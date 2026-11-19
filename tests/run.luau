@@ -3614,6 +3614,16 @@ test("every lineup has two applicants a new player can afford, and Pip is free",
 				if cheap < 2 then
 					error(string.format("seed %d window %d tier %d has %d cheap applicants", seed, w, tier, cheap))
 				end
+				HiringLine.raiseFloor(stock)
+				local still = 0
+				for _, applicant in ipairs(stock) do
+					if applicant.price <= Config.Hiring.cheapPrice then
+						still += 1
+					end
+				end
+				if still < 2 then
+					error(string.format("Saturday floor seed %d window %d tier %d left %d cheap applicants", seed, w, tier, still))
+				end
 			end
 		end
 	end
@@ -3737,6 +3747,163 @@ test("the Hiring Line does not overlap the rest of the town square", function()
 			truthy(not hit(a, box), "Hiring Line overlaps " .. landmark.Name)
 		end
 	end
+end)
+
+print("Smoke Storm, Index, partners")
+local Weather = require("../src/shared/Logic/Weather")
+local Index = require("../src/shared/Logic/Index")
+local Partners = require("../src/shared/Logic/Partners")
+local CrewMotion = require("../src/shared/Logic/CrewMotion")
+
+test("smoke storm odds are shown, sum to 100, and ignore purchases", function()
+	local function sum(triple)
+		local total = 0
+		for _, row in ipairs(Weather.shownOdds(triple)) do
+			total += row.pct
+		end
+		return total
+	end
+	near(sum(false), 100, 1e-6)
+	near(sum(true), 100, 1e-6)
+	local base = Weather.shownOdds(false)
+	local show = Weather.shownOdds(true)
+	local function pct(rows, id)
+		for _, row in ipairs(rows) do
+			if row.id == id then
+				return row.pct
+			end
+		end
+		return 0
+	end
+	truthy(pct(show, "golden") > pct(base, "golden"))
+	eq(Weather.roll(0, false), "none")
+	eq(Weather.upgrade("golden", "smoky"), "golden")
+	eq(Weather.upgrade("none", "glazed"), "glazed")
+	eq(Weather.upgrade("meteorite", "golden"), "meteorite")
+	local src = fs_read("src/shared/Logic/Weather.luau")
+	truthy(string.find(src, "Monetization", 1, true) == nil)
+	truthy(string.find(src, "Robux", 1, true) == nil)
+	local a = Weather.stormAt(9, 10)
+	local b = Weather.stormAt(9, a.finish)
+	local gap = b.start - a.finish
+	truthy(gap >= Config.Storm.gapMin - 0.01 and gap <= Config.Storm.gapMax + 0.01, "gap " .. tostring(gap))
+	eq(a.finish - a.start, Config.Storm.duration)
+	local saw = false
+	for t = 1762473600, 1762473600 + 10 * 86400, 1800 do
+		if Weather.smokeShow(t, -6) then
+			saw = true
+			break
+		end
+	end
+	truthy(saw, "a Saturday 2pm CT window exists")
+	local far = Weather.stormAt(3, 1700000000)
+	truthy(far.finish > far.start)
+end)
+
+test("the storm timeline is cheap to read forward and matches a cold read", function()
+	-- seed 4242 is only used here, so the first call is a cold walk from 1970
+	local base = 1795050000
+	local cold = {}
+	for k = 0, 40 do
+		local s = Weather.stormAt(4242 + k, base + k * 997)
+		table.insert(cold, s)
+	end
+	for k = 0, 40 do
+		local warm = Weather.stormAt(4242, base + k * 997)
+		local fresh = Weather.stormAt(4242 + 1000 + k, 0) -- touch other seeds; must not disturb 4242
+		truthy(fresh.index >= 0)
+		if k == 0 then
+			eq(warm.index, cold[1].index)
+			eq(warm.start, cold[1].start)
+		end
+		truthy(warm.start <= base + k * 997 + Config.Storm.gapMax + 1)
+	end
+	-- Going back in time falls back to a full walk and still agrees.
+	local later = Weather.stormAt(4242, base + 86400)
+	local earlier = Weather.stormAt(4242, base)
+	eq(earlier.index, cold[1].index)
+	eq(earlier.start, cold[1].start)
+	truthy(later.index > earlier.index)
+	local t0 = os.clock()
+	for k = 1, 200 do
+		Weather.stormAt(4242, base + 86400 + k)
+	end
+	truthy(os.clock() - t0 < 0.05, "warm reads stay fast")
+end)
+
+test("a finished species row is +2% income and a finished rarity grants a title", function()
+	local data = { index = { traits = {} }, titles = {}, crew = { owned = {}, slots = 3, nextUid = 1, extra = 0 }, ranch = { tier = 1 }, coins = 0, offline = { lastTick = 0 } }
+	eq(Index.incomeMult(data), 1)
+	for _, traitId in ipairs(Index.traits()) do
+		Index.note(data, "armadillo", traitId)
+	end
+	near(Index.incomeMult(data), 1.02)
+	local owned = { { uid = 1, species = "armadillo", name = "Pip", level = 1, trait = "golden", role = "pit" } }
+	local plain = Crew.totalRate(owned, 1, { rank = 1, friends = 0, tipPass = false, index = 1 })
+	local boosted = Crew.totalRate(owned, 1, { rank = 1, friends = 0, tipPass = false, index = Index.incomeMult(data) })
+	near(boosted, plain * 1.02)
+	local commons = {}
+	for _, species in ipairs(Config.CrewSpecies) do
+		if species.rarity == "common" then
+			table.insert(commons, species.id)
+		end
+	end
+	for _, id in ipairs(commons) do
+		for _, traitId in ipairs(Index.traits()) do
+			Index.note(data, id, traitId)
+		end
+	end
+	eq(data.titles[Config.IndexTitles.common], true)
+end)
+
+test("partners replace the friend count, cheer is short, and family ranch is private-host only", function()
+	local data = { partners = {}, family = { on = false, purse = 0 }, coins = 80 }
+	local okAdd, why = Partners.canAdd(data.partners, "1", "1", true, false)
+	eq(okAdd, false)
+	truthy(why ~= "")
+	local okFriend = Partners.canAdd({}, "1", "2", false, false)
+	eq(okFriend, false)
+	local okPrivate = Partners.canAdd({}, "1", "2", false, true)
+	eq(okPrivate, true)
+	Partners.add(data, "2")
+	eq(Partners.bonusCount(data.partners, { ["2"] = true }), 1)
+	eq(Partners.bonusCount(data.partners, {}), 0, "an offline partner does not pay")
+	eq(Partners.bonusCount({ "2", "3", "4", "5" }, { ["2"] = true, ["3"] = true, ["4"] = true, ["5"] = true }), 3)
+	near(Partners.mult(3), 1.3)
+	local cheer = Partners.tryCheer(1000, nil, nil)
+	truthy(cheer.ok)
+	local cooled = Partners.tryCheer(1000, Partners.cheerCooldown(1000), nil)
+	eq(cooled.ok, false)
+	eq(Partners.canHostFamily(false, true), false)
+	eq(Partners.canHostFamily(true, false), false)
+	eq(Partners.canHostFamily(true, true), true)
+	local left, purse = Partners.chip(80, 10, 30)
+	eq(left, 50)
+	eq(purse, 40)
+	eq(Partners.chip(10, 0, 50), nil)
+	local cheered = Crew.memberRate({ uid = 4, species = "armadillo", level = 1, trait = "none" }, { rank = 1, friends = 0, tipPass = false, cheers = { [4] = true } })
+	local quiet = Crew.memberRate({ uid = 4, species = "armadillo", level = 1, trait = "none" }, { rank = 1, friends = 0, tipPass = false })
+	near(cheered, quiet * Config.Partners.cheerMult)
+end)
+
+test("a hire leaves from the pose on the loop, and Pip walks a path at a stroll", function()
+	local points = { { 0, 2, 0 }, { 20, 2, 0 }, { 20, 2, 20 } }
+	local x1, y1, z1 = CrewMotion.pose(points, 80, 5, 1, "loop", nil)
+	local x2, y2, z2 = CrewMotion.pose(points, 80, 5, 1, "loop", nil)
+	near(x1, x2)
+	near(y1, y2)
+	near(z1, z2)
+	local startX = CrewMotion.pose(points, 0, 5, 0, "loop", nil)
+	local laterX = CrewMotion.pose(points, 3, 5, 0, "loop", nil)
+	truthy(math.abs(laterX - startX) > 0.5, "the loop actually moves")
+	local path = CrewMotion.homePath(0, 2, -26, 150, 0, 140, 8)
+	truthy(#path >= 3, "Pip has waypoints, not only a straight line")
+	local seconds = CrewMotion.walkSeconds(path, Config.Hiring.walkSpeed)
+	near(seconds, CrewMotion.length(path) / Config.Hiring.walkSpeed)
+	truthy(Config.Hiring.walkSpeed <= 16 and Config.Hiring.walkSpeed >= 8)
+	eq(CrewMotion.detail(20), "full")
+	eq(CrewMotion.detail(100), "cheap")
+	eq(CrewMotion.detail(200), "freeze")
 end)
 
 print("Ranch load")

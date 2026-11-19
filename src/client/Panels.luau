@@ -711,8 +711,43 @@ end
 -- ===== Index =====
 local function renderIndex(s: any)
 	titleLabel.Text = "📖 Index"
-	local sel, content = tabs(body, "index", { "Regulars", "Cuts", "Secrets" }, "Regulars")
-	if sel == "Regulars" then
+	local sel, content = tabs(body, "index", { "Crew", "Customers", "Cuts", "Secrets" }, "Crew")
+	if sel == "Crew" then
+		local sf = scroller(content)
+		local bonus = math.floor(((s.indexBonus or 1) - 1) * 100 + 0.5)
+		local intro = card(sf, 0, 64)
+		lbl(intro, string.format("Crew Index  ·  +%d%% income from finished rows", bonus), { Size = UDim2.new(1, 0, 0, 24), TextSize = 18 })
+		local odds = s.storm and s.storm.odds or {}
+		local oddText = "Smoke Storm odds: "
+		if #odds == 0 then
+			oddText ..= "Smoky 20% · Glazed 6% · Golden 1.5% · Meteorite 0.25%"
+		else
+			local bits = {}
+			for _, row in ipairs(odds) do
+				if row.id ~= "none" then
+					table.insert(bits, string.format("%s %.2g%%", row.name, row.pct))
+				end
+			end
+			oddText ..= table.concat(bits, " · ")
+		end
+		lbl(intro, oddText .. "  Free for everyone.", { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, 0, 0, 32), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+		local caught = s.indexTraits or {}
+		for i, species in ipairs(Config.CrewSpecies) do
+			if species.secret ~= true then
+				local row = caught[species.id] or {}
+				local done = row.smoky and row.glazed and row.golden and row.meteorite
+				local f = card(sf, i, 52)
+				lbl(f, species.name .. " · " .. species.rarity .. (done and "  ·  row complete" or ""), { Size = UDim2.new(1, 0, 0, 20), TextSize = 16 })
+				local chips = UI.frame({ BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 22), Size = UDim2.new(1, 0, 0, 24), ZIndex = 23, Parent = f })
+				UI.list(chips, Enum.FillDirection.Horizontal, 6)
+				for n, traitId in ipairs({ "smoky", "glazed", "golden", "meteorite" }) do
+					local got = row[traitId] == true
+					local chip = UI.label(got and traitId or "—", { Size = UDim2.new(0, 72, 1, 0), TextSize = 12, LayoutOrder = n, ZIndex = 24, TextColor3 = got and T.text or T.dim, BackgroundTransparency = got and 0.2 or 0.6, BackgroundColor3 = T.cardHi, Parent = chips })
+					UI.corner(chip, 6)
+				end
+			end
+		end
+	elseif sel == "Customers" then
 		local sf = scroller(content, true, Vector2.new(210, 156))
 		local odds = Rarity.weightedOdds(Config.Critters)
 		for i, c in ipairs(Config.Critters) do
@@ -1071,7 +1106,7 @@ local function renderSettings(s: any)
 				end
 			end)
 		end
-		settingCard(2, 100, string.format("Crew bonus: +%d%% (%d friend%s here)", math.floor(s.crew * Config.Crew.perFriend * 100 + 0.5), s.crew, s.crew == 1 and "" or "s"), "Each friend in your server gives +10% coins (up to 3).", "Invite friends", T.blue, function()
+		settingCard(2, 100, string.format("Partner bonus: +%d%% (%d partner%s here)", math.floor((s.crew or 0) * Config.Partners.per * 100 + 0.5), s.crew or 0, (s.crew or 0) == 1 and "" or "s"), "Each ranch partner in this server gives +10% coins, up to 3.", "Invite friends", T.blue, function()
 			Panels.invite()
 		end)
 		-- Unc's Rookie List: bring it back after a skip (and still earn the finish reward)
@@ -1196,8 +1231,14 @@ local function renderCrew(s: any)
 	if ranch.nextCost and ranch.nextName then
 		local build = card(sf, 1, 88)
 		lbl(build, "Build " .. ranch.nextName, { Size = UDim2.new(1, -170, 0, 24), TextSize = 20 })
-		lbl(build, ranch.nextBlurb or "Adds 2 crew slots.", { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -170, 0, 44), TextSize = 14, Font = T.body, TextColor3 = T.dim })
-		local buildBtn = btn(build, "", (s.coins or 0) >= ranch.nextCost and T.green or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 150, 0, 44) }, function()
+		local blurb = ranch.nextBlurb or "Adds 2 crew slots."
+		local afford = s.coins or 0
+		if s.family and s.family.on then
+			blurb ..= " Paid from the family purse."
+			afford = s.family.purse or 0
+		end
+		lbl(build, blurb, { Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, -170, 0, 44), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+		local buildBtn = btn(build, "", afford >= ranch.nextCost and T.green or T.cardHi, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.new(0, 150, 0, 44) }, function()
 			Net.act("BuyRanchTier")
 		end)
 		UI.fillPrice(buildBtn, "Build", ranch.nextCost)
@@ -1226,6 +1267,41 @@ local function renderCrew(s: any)
 		else
 			b.Text = "Level max"
 		end
+	end
+	local mates = s.serverMates or {}
+	if #mates > 0 then
+		local box = card(sf, 70, 36 + #mates * 40)
+		lbl(box, "Ranch partners", { Size = UDim2.new(1, 0, 0, 22), TextSize = 16 })
+		local have: { [string]: boolean } = {}
+		for _, id in ipairs(s.partners or {}) do
+			have[tostring(id)] = true
+		end
+		for i, mate in ipairs(mates) do
+			local y = 24 + (i - 1) * 36
+			lbl(box, mate.name, { Position = UDim2.new(0, 0, 0, y), Size = UDim2.new(1, -120, 0, 32), TextSize = 15 })
+			if have[tostring(mate.id)] then
+				btn(box, "Remove", T.cardHi, { Position = UDim2.new(1, -110, 0, y), Size = UDim2.new(0, 110, 0, 32), TextSize = 14 }, function()
+					Net.act("RemovePartner", mate.id)
+				end)
+			else
+				btn(box, "Add partner", T.green, { Position = UDim2.new(1, -110, 0, y), Size = UDim2.new(0, 110, 0, 32), TextSize = 14 }, function()
+					Net.act("AddPartner", mate.id)
+				end)
+			end
+		end
+	end
+	if s.family and s.family.privateServer then
+		local fam = card(sf, 71, 78)
+		lbl(fam, s.family.on and "Family Ranch is on" or "Family Ranch", { Size = UDim2.new(1, -160, 0, 22), TextSize = 16 })
+		lbl(fam, string.format("Shared tier purse: %d coins.", s.family.purse or 0), { Position = UDim2.new(0, 0, 0, 24), Size = UDim2.new(1, 0, 0, 20), TextSize = 14, Font = T.body, TextColor3 = T.dim })
+		if s.family.host then
+			btn(fam, s.family.on and "Turn off" or "Turn on", T.accent, { Position = UDim2.new(1, -140, 0, 0), Size = UDim2.new(0, 140, 0, 36), TextSize = 14 }, function()
+				Net.act("FamilyRanch", not s.family.on)
+			end)
+		end
+		btn(fam, "Add 50", T.green, { Position = UDim2.new(0, 0, 0, 46), Size = UDim2.new(0, 100, 0, 28), TextSize = 14 }, function()
+			Net.act("ChipPurse", 50)
+		end)
 	end
 	if not waiter then
 		local note = card(sf, 80, 48)
