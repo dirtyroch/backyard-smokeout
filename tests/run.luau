@@ -3800,6 +3800,37 @@ test("smoke storm odds are shown, sum to 100, and ignore purchases", function()
 	truthy(far.finish > far.start)
 end)
 
+test("the storm timeline is cheap to read forward and matches a cold read", function()
+	-- seed 4242 is only used here, so the first call is a cold walk from 1970
+	local base = 1795050000
+	local cold = {}
+	for k = 0, 40 do
+		local s = Weather.stormAt(4242 + k, base + k * 997)
+		table.insert(cold, s)
+	end
+	for k = 0, 40 do
+		local warm = Weather.stormAt(4242, base + k * 997)
+		local fresh = Weather.stormAt(4242 + 1000 + k, 0) -- touch other seeds; must not disturb 4242
+		truthy(fresh.index >= 0)
+		if k == 0 then
+			eq(warm.index, cold[1].index)
+			eq(warm.start, cold[1].start)
+		end
+		truthy(warm.start <= base + k * 997 + Config.Storm.gapMax + 1)
+	end
+	-- Going back in time falls back to a full walk and still agrees.
+	local later = Weather.stormAt(4242, base + 86400)
+	local earlier = Weather.stormAt(4242, base)
+	eq(earlier.index, cold[1].index)
+	eq(earlier.start, cold[1].start)
+	truthy(later.index > earlier.index)
+	local t0 = os.clock()
+	for k = 1, 200 do
+		Weather.stormAt(4242, base + 86400 + k)
+	end
+	truthy(os.clock() - t0 < 0.05, "warm reads stay fast")
+end)
+
 test("a finished species row is +2% income and a finished rarity grants a title", function()
 	local data = { index = { traits = {} }, titles = {}, crew = { owned = {}, slots = 3, nextUid = 1, extra = 0 }, ranch = { tier = 1 }, coins = 0, offline = { lastTick = 0 } }
 	eq(Index.incomeMult(data), 1)

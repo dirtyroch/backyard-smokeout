@@ -6440,13 +6440,20 @@ end
 
 export type Storm = { active: boolean, start: number, finish: number, nextStart: number, index: number }
 
+-- Where the timeline was last walked to, per seed: `t` is the start of gap `i`.
+-- A server's clock only moves forward, so later calls start from here instead of from 1970.
+local walked: { [number]: { i: number, t: number } } = {}
+
 -- The storm timeline is fixed for a server seed, so every client can be told the same window.
 function Weather.stormAt(seed: number, now: number): Storm
 	local duration = Config.Storm.duration
 	local t = 0
 	local i = 0
 	local avg = (Config.Storm.gapMin + Config.Storm.gapMax) / 2 + duration
-	if now > avg * 4 then
+	local memo = walked[seed]
+	if memo and memo.t <= now then
+		i, t = memo.i, memo.t
+	elseif now > avg * 4 then
 		i = math.max(0, math.floor(now / avg) - 4)
 		for n = 0, i - 1 do
 			t += gapFor(seed, n) + duration
@@ -6456,12 +6463,14 @@ function Weather.stormAt(seed: number, now: number): Storm
 			t -= gapFor(seed, i) + duration
 		end
 	end
-	while i < 1000000 do
+	while i < 100000000 do
 		local start = t + gapFor(seed, i)
 		local finish = start + duration
-		if now < start then
-			return { active = false, start = start, finish = finish, nextStart = start, index = i }
-		elseif now < finish then
+		if now < finish then
+			walked[seed] = { i = i, t = t }
+			if now < start then
+				return { active = false, start = start, finish = finish, nextStart = start, index = i }
+			end
 			return { active = true, start = start, finish = finish, nextStart = finish + gapFor(seed, i + 1), index = i }
 		end
 		t = finish
@@ -14110,19 +14119,15 @@ Actions.ChipPurse = function(player, data, amount)
 	if game.PrivateServerOwnerId == 0 then
 		return false, "The shared purse is for a private server."
 	end
-	local host = nil
-	for _, candidate in ipairs(Players:GetPlayers()) do
-		if candidate.UserId == game.PrivateServerOwnerId then
-			host = candidate
-			break
+	local host, hostData = GameService.familyHost()
+	if not host or not hostData then
+		local here = false
+		for _, candidate in ipairs(Players:GetPlayers()) do
+			if candidate.UserId == game.PrivateServerOwnerId and GameService.runtime[candidate] then
+				here = true
+			end
 		end
-	end
-	if not host then
-		return false, "The host isn't here."
-	end
-	local hostData = profileOf(host)
-	if not hostData or type(hostData.family) ~= "table" or hostData.family.on ~= true then
-		return false, "Family Ranch is off."
+		return false, if here then "Family Ranch is off." else "The host isn't here."
 	end
 	local coins, purse = Partners.chip(data.coins, hostData.family.purse or 0, math.floor(tonumber(amount) or 0))
 	if not coins or not purse then
@@ -14150,17 +14155,10 @@ end
 Actions.BuyRanchTier = function(player, data)
 	local hostData = data
 	local family = false
-	if game.PrivateServerOwnerId ~= 0 then
-		for _, candidate in ipairs(Players:GetPlayers()) do
-			if candidate.UserId == game.PrivateServerOwnerId then
-				local saved = profileOf(candidate)
-				if saved and type(saved.family) == "table" and saved.family.on == true then
-					hostData = saved
-					family = true
-				end
-				break
-			end
-		end
+	local _, saved = GameService.familyHost()
+	if saved then
+		hostData = saved
+		family = true
 	end
 	if family and hostData ~= data then
 		Partners.ensure(hostData)
@@ -14195,7 +14193,8 @@ function GameService.familyHost(): (Player?, any)
 		return nil, nil
 	end
 	for _, candidate in ipairs(Players:GetPlayers()) do
-		if candidate.UserId == game.PrivateServerOwnerId then
+		-- runtime is cleared before the leave save, so a leaving host's record is never written after it.
+		if candidate.UserId == game.PrivateServerOwnerId and GameService.runtime[candidate] then
 			local hostData = profileOf(candidate)
 			if hostData and type(hostData.family) == "table" and hostData.family.on == true then
 				return candidate, hostData
@@ -15869,12 +15868,11 @@ local function shoutTrait(player: Player, member: any, traitId: string)
 	ctx.Game.announce(string.format("%s's %s caught %s!", player.DisplayName, member.name, trait.name), "#FFC83C")
 end
 
-local function rollPlayer(player: Player, stormKey: string)
+local function rollPlayer(player: Player, stormKey: string, show: boolean, week: number)
 	local data = ctx.Game.dataOf(player)
 	if type(data) ~= "table" or type(data.crew) ~= "table" or type(data.crew.owned) ~= "table" then
 		return
 	end
-	local show = Weather.smokeShow(os.time(), Config.TIMEZONE_OFFSET_HOURS)
 	local slots = data.crew.slots or 0
 	local changed = false
 	for i, member in ipairs(data.crew.owned) do
@@ -15882,8 +15880,19 @@ local function rollPlayer(player: Player, stormKey: string)
 			break
 		end
 		local key = stormKey .. ":" .. tostring(player.UserId) .. ":" .. tostring(member.uid)
-		if not rolled[key] then
+		-- `rolled` only lives in this server. The saved marks stop a server hop from re-rolling:
+		-- one roll per Saturday show, and one per storm gap otherwise.
+		local now = os.time()
+		local fresh = if show
+			then member.showWeek ~= week
+			else type(member.stormAt) ~= "number" or now - member.stormAt >= Config.Storm.gapMin or now < member.stormAt
+		if not rolled[key] and fresh then
 			rolled[key] = true
+			member.stormAt = now
+			if show then
+				member.showWeek = week
+			end
+			changed = true
 			local rolledTrait = Weather.roll(Random.new():NextNumber(), show)
 			local nextTrait = Weather.upgrade(member.trait, rolledTrait)
 			if nextTrait ~= member.trait then
@@ -15957,9 +15966,10 @@ function WeatherService.start()
 				table.clear(rolled)
 			end
 			if storm.active or show then
-				local key = tostring(storm.index) .. (if show then ":show" else "")
+				local week = TimeUtil.weekNumber(now, Config.TIMEZONE_OFFSET_HOURS)
+				local key = if show then "show:" .. tostring(week) else "storm:" .. tostring(storm.index)
 				for _, player in ipairs(Players:GetPlayers()) do
-					local ok, err = pcall(rollPlayer, player, key)
+					local ok, err = pcall(rollPlayer, player, key, show, week)
 					if not ok then
 						warn("[Weather] " .. tostring(err))
 					end
@@ -15968,7 +15978,10 @@ function WeatherService.start()
 			if show then
 				local week = TimeUtil.weekNumber(now, Config.TIMEZONE_OFFSET_HOURS)
 				for _, player in ipairs(Players:GetPlayers()) do
-					grantShow(player, week)
+					local ok, err = pcall(grantShow, player, week)
+					if not ok then
+						warn("[Weather] " .. tostring(err))
+					end
 				end
 			end
 			task.wait(1)
@@ -17132,6 +17145,7 @@ type Mover = {
 	length: number,
 	raw: string,
 	cheapAt: number,
+	vecs: { { number } },
 }
 
 local movers: { Mover } = {}
@@ -17161,6 +17175,14 @@ local function lengthOf(points: { Vector3 }): number
 	return total
 end
 
+local function toVecs(points: { Vector3 }): { { number } }
+	local vecs = {}
+	for _, p in ipairs(points) do
+		table.insert(vecs, { p.X, p.Y, p.Z })
+	end
+	return vecs
+end
+
 local track: (Model) -> ()
 track = function(model: Model)
 	if seen[model] or not model:IsA("Model") then
@@ -17185,7 +17207,7 @@ track = function(model: Model)
 		watching[model]:Disconnect()
 		watching[model] = nil
 	end
-	table.insert(movers, { model = model, points = points, length = math.max(lengthOf(points), 0.05), raw = model:GetAttribute("AnimPoints") :: string, cheapAt = 0 })
+	table.insert(movers, { model = model, points = points, length = math.max(lengthOf(points), 0.05), raw = model:GetAttribute("AnimPoints") :: string, cheapAt = 0, vecs = toVecs(points) })
 end
 
 local function step(mover: Mover, now: number)
@@ -17193,9 +17215,30 @@ local function step(mover: Mover, now: number)
 	if not model.Parent then
 		return
 	end
+	-- The server re-tags a model when its path changes (a hire walking home), so pick up new points.
+	local raw = model:GetAttribute("AnimPoints")
+	if type(raw) == "string" and raw ~= mover.raw then
+		local points = decode(raw)
+		if #points >= 2 then
+			mover.points = points
+			mover.length = math.max(lengthOf(points), 0.05)
+			mover.vecs = toVecs(points)
+		end
+		mover.raw = raw
+	end
+	local speed = model:GetAttribute("AnimSpeed")
+	local pace = if type(speed) == "number" and speed > 0 then speed else 4
+	local phase = model:GetAttribute("AnimPhase")
+	local shift = if type(phase) == "number" then phase else 0
+	local kind = if model:GetAttribute("CrewAnim") == "once" then "once" else "loop"
+	local startAttr = model:GetAttribute("AnimStart")
+	local began = if type(startAttr) == "number" then startAttr else nil
+	local x, y, z = CrewMotion.pose(mover.vecs, now, pace, shift, kind, began)
+	-- Cull by where the critter should be, not where it was last drawn. A late joiner's copy
+	-- still sits at the server's first point, which can be far from its real path.
 	local cam = workspace.CurrentCamera
 	if cam then
-		local dist = (cam.CFrame.Position - model:GetPivot().Position).Magnitude
+		local dist = (cam.CFrame.Position - Vector3.new(x, y, z)).Magnitude
 		local detail = CrewMotion.detail(dist, Config.CrewLod.near, Config.CrewLod.far)
 		if detail == "freeze" then
 			return
@@ -17206,28 +17249,7 @@ local function step(mover: Mover, now: number)
 			mover.cheapAt = now
 		end
 	end
-	-- The server re-tags a model when its path changes (a hire walking home), so pick up new points.
-	local raw = model:GetAttribute("AnimPoints")
-	if type(raw) == "string" and raw ~= mover.raw then
-		local points = decode(raw)
-		if #points >= 2 then
-			mover.points = points
-			mover.length = math.max(lengthOf(points), 0.05)
-		end
-		mover.raw = raw
-	end
-	local speed = model:GetAttribute("AnimSpeed")
-	local pace = if type(speed) == "number" and speed > 0 then speed else 4
-	local phase = model:GetAttribute("AnimPhase")
-	local shift = if type(phase) == "number" then phase else 0
-	local kind = model:GetAttribute("CrewAnim")
-	local began = model:GetAttribute("AnimStart")
-	local vecs = {}
-	for _, p in ipairs(mover.points) do
-		table.insert(vecs, { p.X, p.Y, p.Z })
-	end
-	local x, y, z = CrewMotion.pose(vecs, now, pace, shift, if kind == "once" then "once" else "loop", if type(began) == "number" then began else nil)
-	local x2, _, z2 = CrewMotion.pose(vecs, now + 0.08, pace, shift, if kind == "once" then "once" else "loop", if type(began) == "number" then began else nil)
+	local x2, _, z2 = CrewMotion.pose(mover.vecs, now + 0.08, pace, shift, kind, began)
 	local flat = Vector3.new(x2 - x, 0, z2 - z)
 	local look = if flat.Magnitude > 0.05 then flat.Unit else Vector3.new(0, 0, -1)
 	local at = Vector3.new(x, y, z)

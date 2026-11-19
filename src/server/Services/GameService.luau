@@ -2072,19 +2072,15 @@ Actions.ChipPurse = function(player, data, amount)
 	if game.PrivateServerOwnerId == 0 then
 		return false, "The shared purse is for a private server."
 	end
-	local host = nil
-	for _, candidate in ipairs(Players:GetPlayers()) do
-		if candidate.UserId == game.PrivateServerOwnerId then
-			host = candidate
-			break
+	local host, hostData = GameService.familyHost()
+	if not host or not hostData then
+		local here = false
+		for _, candidate in ipairs(Players:GetPlayers()) do
+			if candidate.UserId == game.PrivateServerOwnerId and GameService.runtime[candidate] then
+				here = true
+			end
 		end
-	end
-	if not host then
-		return false, "The host isn't here."
-	end
-	local hostData = profileOf(host)
-	if not hostData or type(hostData.family) ~= "table" or hostData.family.on ~= true then
-		return false, "Family Ranch is off."
+		return false, if here then "Family Ranch is off." else "The host isn't here."
 	end
 	local coins, purse = Partners.chip(data.coins, hostData.family.purse or 0, math.floor(tonumber(amount) or 0))
 	if not coins or not purse then
@@ -2112,17 +2108,10 @@ end
 Actions.BuyRanchTier = function(player, data)
 	local hostData = data
 	local family = false
-	if game.PrivateServerOwnerId ~= 0 then
-		for _, candidate in ipairs(Players:GetPlayers()) do
-			if candidate.UserId == game.PrivateServerOwnerId then
-				local saved = profileOf(candidate)
-				if saved and type(saved.family) == "table" and saved.family.on == true then
-					hostData = saved
-					family = true
-				end
-				break
-			end
-		end
+	local _, saved = GameService.familyHost()
+	if saved then
+		hostData = saved
+		family = true
 	end
 	if family and hostData ~= data then
 		Partners.ensure(hostData)
@@ -2157,7 +2146,8 @@ function GameService.familyHost(): (Player?, any)
 		return nil, nil
 	end
 	for _, candidate in ipairs(Players:GetPlayers()) do
-		if candidate.UserId == game.PrivateServerOwnerId then
+		-- runtime is cleared before the leave save, so a leaving host's record is never written after it.
+		if candidate.UserId == game.PrivateServerOwnerId and GameService.runtime[candidate] then
 			local hostData = profileOf(candidate)
 			if hostData and type(hostData.family) == "table" and hostData.family.on == true then
 				return candidate, hostData

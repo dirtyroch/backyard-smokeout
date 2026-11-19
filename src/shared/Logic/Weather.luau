@@ -79,13 +79,20 @@ end
 
 export type Storm = { active: boolean, start: number, finish: number, nextStart: number, index: number }
 
+-- Where the timeline was last walked to, per seed: `t` is the start of gap `i`.
+-- A server's clock only moves forward, so later calls start from here instead of from 1970.
+local walked: { [number]: { i: number, t: number } } = {}
+
 -- The storm timeline is fixed for a server seed, so every client can be told the same window.
 function Weather.stormAt(seed: number, now: number): Storm
 	local duration = Config.Storm.duration
 	local t = 0
 	local i = 0
 	local avg = (Config.Storm.gapMin + Config.Storm.gapMax) / 2 + duration
-	if now > avg * 4 then
+	local memo = walked[seed]
+	if memo and memo.t <= now then
+		i, t = memo.i, memo.t
+	elseif now > avg * 4 then
 		i = math.max(0, math.floor(now / avg) - 4)
 		for n = 0, i - 1 do
 			t += gapFor(seed, n) + duration
@@ -95,12 +102,14 @@ function Weather.stormAt(seed: number, now: number): Storm
 			t -= gapFor(seed, i) + duration
 		end
 	end
-	while i < 1000000 do
+	while i < 100000000 do
 		local start = t + gapFor(seed, i)
 		local finish = start + duration
-		if now < start then
-			return { active = false, start = start, finish = finish, nextStart = start, index = i }
-		elseif now < finish then
+		if now < finish then
+			walked[seed] = { i = i, t = t }
+			if now < start then
+				return { active = false, start = start, finish = finish, nextStart = start, index = i }
+			end
 			return { active = true, start = start, finish = finish, nextStart = finish + gapFor(seed, i + 1), index = i }
 		end
 		t = finish

@@ -42,12 +42,11 @@ local function shoutTrait(player: Player, member: any, traitId: string)
 	ctx.Game.announce(string.format("%s's %s caught %s!", player.DisplayName, member.name, trait.name), "#FFC83C")
 end
 
-local function rollPlayer(player: Player, stormKey: string)
+local function rollPlayer(player: Player, stormKey: string, show: boolean, week: number)
 	local data = ctx.Game.dataOf(player)
 	if type(data) ~= "table" or type(data.crew) ~= "table" or type(data.crew.owned) ~= "table" then
 		return
 	end
-	local show = Weather.smokeShow(os.time(), Config.TIMEZONE_OFFSET_HOURS)
 	local slots = data.crew.slots or 0
 	local changed = false
 	for i, member in ipairs(data.crew.owned) do
@@ -55,8 +54,19 @@ local function rollPlayer(player: Player, stormKey: string)
 			break
 		end
 		local key = stormKey .. ":" .. tostring(player.UserId) .. ":" .. tostring(member.uid)
-		if not rolled[key] then
+		-- `rolled` only lives in this server. The saved marks stop a server hop from re-rolling:
+		-- one roll per Saturday show, and one per storm gap otherwise.
+		local now = os.time()
+		local fresh = if show
+			then member.showWeek ~= week
+			else type(member.stormAt) ~= "number" or now - member.stormAt >= Config.Storm.gapMin or now < member.stormAt
+		if not rolled[key] and fresh then
 			rolled[key] = true
+			member.stormAt = now
+			if show then
+				member.showWeek = week
+			end
+			changed = true
 			local rolledTrait = Weather.roll(Random.new():NextNumber(), show)
 			local nextTrait = Weather.upgrade(member.trait, rolledTrait)
 			if nextTrait ~= member.trait then
@@ -130,9 +140,10 @@ function WeatherService.start()
 				table.clear(rolled)
 			end
 			if storm.active or show then
-				local key = tostring(storm.index) .. (if show then ":show" else "")
+				local week = TimeUtil.weekNumber(now, Config.TIMEZONE_OFFSET_HOURS)
+				local key = if show then "show:" .. tostring(week) else "storm:" .. tostring(storm.index)
 				for _, player in ipairs(Players:GetPlayers()) do
-					local ok, err = pcall(rollPlayer, player, key)
+					local ok, err = pcall(rollPlayer, player, key, show, week)
 					if not ok then
 						warn("[Weather] " .. tostring(err))
 					end
@@ -141,7 +152,10 @@ function WeatherService.start()
 			if show then
 				local week = TimeUtil.weekNumber(now, Config.TIMEZONE_OFFSET_HOURS)
 				for _, player in ipairs(Players:GetPlayers()) do
-					grantShow(player, week)
+					local ok, err = pcall(grantShow, player, week)
+					if not ok then
+						warn("[Weather] " .. tostring(err))
+					end
 				end
 			end
 			task.wait(1)
