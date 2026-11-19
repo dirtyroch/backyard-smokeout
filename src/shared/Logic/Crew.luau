@@ -20,6 +20,8 @@ export type Mults = {
 	rank: number?,
 	friends: number?,
 	tipPass: boolean?,
+	index: number?,
+	cheers: { [number]: boolean }?,
 }
 
 local function finite(n: any): number?
@@ -117,6 +119,7 @@ function Crew.rate(baseRate: number, level: any, traitId: string?, mults: Mults?
 	per *= Crew.rankMult(m.rank)
 	per *= Crew.friendMult(m.friends)
 	per *= Crew.tipMult(m.tipPass)
+	per *= if type(m.index) == "number" and m.index > 0 then m.index else 1
 	return per
 end
 
@@ -125,7 +128,12 @@ function Crew.memberRate(member: any, mults: Mults?): number
 	if not species then
 		return 0
 	end
-	return Crew.rate(species.baseRate, member.level, member.trait, mults, false)
+	local per = Crew.rate(species.baseRate, member.level, member.trait, mults, false)
+	local cheers = mults and mults.cheers
+	if cheers and cheers[member.uid] then
+		per *= Config.Partners.cheerMult
+	end
+	return per
 end
 
 -- The first `slots` owned critters are the ones on station. The rest wait for a ranch tier.

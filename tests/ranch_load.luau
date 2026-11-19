@@ -131,6 +131,9 @@ local function openServer()
 
 	local game = roblox.Instance.new("DataModel")
 	game.JobId = "live-test-job"
+	-- Lune's DataModel has no default for these. A public server reads as 0.
+	game.PrivateServerId = ""
+	game.PrivateServerOwnerId = 0
 	local workspace = game:GetService("Workspace")
 	local replicated = game:GetService("ReplicatedStorage")
 	local shared = roblox.Instance.new("Folder")
