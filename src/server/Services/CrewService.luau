@@ -53,6 +53,8 @@ local homeWalkers: { Walker } = {}
 local crewWalkers: { [Player]: { Walker } } = {}
 local crewSig: { [Player]: string } = {}
 local tierSig: { [Player]: number } = {}
+local CREW_STEP = 1 / 15
+local crewAcc = 0
 
 local function mapModel(): any
 	return workspace:FindFirstChild("Map")
@@ -579,9 +581,17 @@ function CrewService.start()
 			end
 		end
 		homeWalkers = stillHome
-		for _, list in pairs(crewWalkers) do
-			for _, w in ipairs(list) do
-				stepWalker(w, dt, 3.2)
+		-- Ranch crew can reach 10 players x 19 critters (about 5,000 parts). Moving them every
+		-- frame on the server costs ~9 ms of CPU and replicates every part each frame, so they
+		-- step at 15 Hz. They stroll slowly, so the steps stay small.
+		crewAcc += dt
+		if crewAcc >= CREW_STEP then
+			local step = math.min(crewAcc, 0.5)
+			crewAcc = 0
+			for _, list in pairs(crewWalkers) do
+				for _, w in ipairs(list) do
+					stepWalker(w, step, 3.2)
+				end
 			end
 		end
 	end)
