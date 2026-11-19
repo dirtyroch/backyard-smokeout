@@ -799,6 +799,9 @@ function WorldService.init(c: any)
 end
 
 function WorldService.start()
+	pcall(function()
+		WorldBuilder.lighting(game:GetService("Lighting"), false)
+	end)
 	task.spawn(doneLoop)
 	-- Jimothy the Waiter: a fast waddle between the grill and the tables while AutoServe is owned.
 	RunService.Heartbeat:Connect(function(dt)

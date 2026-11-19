@@ -111,6 +111,28 @@ function Partners.canHostFamily(isPrivate: boolean, isHost: boolean): boolean
 	return isPrivate == true and isHost == true
 end
 
+-- The +30% in a full family server is for a private server only. A public server never gets it.
+function Partners.familyOthers(isPrivate: boolean, familyOn: boolean, others: number): number
+	if isPrivate ~= true or familyOn ~= true then
+		return 0
+	end
+	if type(others) ~= "number" or others ~= others or others <= 0 then
+		return 0
+	end
+	return others
+end
+
+-- Cheer is for someone else's critter. The owner cheering their own crew is not the action.
+function Partners.canCheer(selfId: string, ownerId: string, isPartner: boolean, family: boolean): (boolean, string)
+	if ownerId == "" or selfId == ownerId then
+		return false, "Cheer is for someone else's critter."
+	end
+	if family or isPartner then
+		return true, ""
+	end
+	return false, "Cheer is for ranch partners."
+end
+
 function Partners.chip(coins: number, purse: number, amount: number): (number?, number?)
 	if amount ~= amount or amount <= 0 or amount ~= math.floor(amount) then
 		return nil, nil

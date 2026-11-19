@@ -16,6 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Funnels = require(Shared.Logic.Funnels)
+local Onboard = require(Shared.Logic.Onboard)
 
 local InsightsService = {}
 local ctx: any = nil
@@ -32,8 +33,22 @@ local function try(fn: () -> ())
 end
 
 -- Log any onboarding steps this save has newly reached.
-function InsightsService.onboarding(player: Player, data: any)
+function InsightsService.minute(player: Player, data: any, step: number)
 	if type(data.analytics) ~= "table" then
+		data.analytics = { onboard = 0, minute = 0 }
+	end
+	local logged = data.analytics.minute or 0
+	for i = logged + 1, math.min(step, #Onboard.STEPS) do
+		local name = Onboard.STEPS[i]
+		try(function()
+			AnalyticsService:LogOnboardingFunnelStepEvent(player, i, name)
+		end)
+		data.analytics.minute = i
+	end
+end
+
+function InsightsService.onboarding(player: Player, data: any)
+	if type(data.analytics) ~= "table" or not Onboard.skip(data) then
 		return
 	end
 	local reached = Funnels.onboardingReached(data, Config.RookieSteps)

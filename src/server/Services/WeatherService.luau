@@ -9,16 +9,18 @@ local Weather = require(Shared.Logic.Weather)
 local Index = require(Shared.Logic.Index)
 local Crew = require(Shared.Logic.Crew)
 local TimeUtil = require(Shared.Logic.TimeUtil)
+local WorldBuilder = require(Shared.WorldBuilder)
 
 local WeatherService = {}
 local ctx: any = nil
 local seed = 1
 local rolled: { [string]: boolean } = {}
 local stormIndex = -1
+local litFor = false -- WorldService sets the calm look at boot
 
 function WeatherService.state(): any
 	local now = os.time()
-	local show = Weather.smokeShow(now, Config.TIMEZONE_OFFSET_HOURS)
+	local show = Weather.smokeShow(now, TimeUtil.centralOffset(now))
 	local storm = Weather.stormAt(seed, now)
 	local active = storm.active or show
 	return {
@@ -26,7 +28,7 @@ function WeatherService.state(): any
 		show = show,
 		banner = if active then Weather.banner(show) else "",
 		odds = Weather.shownOdds(show),
-		nextAt = TimeUtil.clock(if storm.active then storm.finish else storm.start, Config.TIMEZONE_OFFSET_HOURS),
+		nextAt = TimeUtil.clock(if storm.active then storm.finish else storm.start, TimeUtil.centralOffset(now)),
 	}
 end
 
@@ -134,13 +136,20 @@ function WeatherService.start()
 		while true do
 			local now = os.time()
 			local storm = Weather.stormAt(seed, now)
-			local show = Weather.smokeShow(now, Config.TIMEZONE_OFFSET_HOURS)
+			local show = Weather.smokeShow(now, TimeUtil.centralOffset(now))
 			if storm.index ~= stormIndex then
 				stormIndex = storm.index
 				table.clear(rolled)
 			end
+			local lit = storm.active or show
+			if lit ~= litFor then
+				litFor = lit
+				pcall(function()
+					WorldBuilder.lighting(game:GetService("Lighting"), lit)
+				end)
+			end
 			if storm.active or show then
-				local week = TimeUtil.weekNumber(now, Config.TIMEZONE_OFFSET_HOURS)
+				local week = TimeUtil.weekNumber(now, TimeUtil.centralOffset(now))
 				local key = if show then "show:" .. tostring(week) else "storm:" .. tostring(storm.index)
 				for _, player in ipairs(Players:GetPlayers()) do
 					local ok, err = pcall(rollPlayer, player, key, show, week)
@@ -150,7 +159,7 @@ function WeatherService.start()
 				end
 			end
 			if show then
-				local week = TimeUtil.weekNumber(now, Config.TIMEZONE_OFFSET_HOURS)
+				local week = TimeUtil.weekNumber(now, TimeUtil.centralOffset(now))
 				for _, player in ipairs(Players:GetPlayers()) do
 					local ok, err = pcall(grantShow, player, week)
 					if not ok then

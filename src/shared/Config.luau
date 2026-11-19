@@ -220,6 +220,13 @@ Config.Critters = {
 -- "sighting" (free, for finding every Jimothy; never sold).
 Config.Cosmetics = {
 	hat_pitmaster = { name = "Pitmaster Cowboy Hat", slot = "hat", source = "robux", color = "#3B2A1A" },
+	bandana_welcome = { name = "Welcome Bandana", slot = "hat", source = "code", color = "#E07A3D" },
+	crew_bandana = { name = "Crew Bandana", slot = "crew", source = "robux", color = "#3A6EA5" },
+	crew_straw = { name = "Crew Straw Hat", slot = "crew", source = "robux", color = "#E3C77A" },
+	crew_bib = { name = "Sauce Bib", slot = "crew", source = "robux", color = "#B22222" },
+	crew_night = { name = "Night Sky Collar", slot = "crew", source = "robux", color = "#3A0CA3" },
+	crew_flower = { name = "Bluebonnet Collar", slot = "crew", source = "robux", color = "#5B4B8A" },
+	crew_bell = { name = "Gold Bell", slot = "crew", source = "robux", color = "#FFD700" },
 	hat_straw = { name = "Straw Cowboy Hat", slot = "hat", source = "path", color = "#E3C77A" },
 	hat_turkey = { name = "Gobble Hat", slot = "hat", source = "rotation", color = "#8B5A2B" },
 	apron_grillmaster = { name = "Grill Master Apron", slot = "apron", source = "robux", color = "#B22222", text = "GRILL MASTER" },
@@ -436,6 +443,45 @@ Config.Partners = {
 -- Far crew freeze so a phone is not posing every critter in the server.
 Config.CrewLod = { near = 80, far = 150, cheapStep = 0.25 }
 
+-- The opening minute. The first shed is cheaper than the listed ranch price so it lands before 60 seconds.
+-- Shop and purchase prompts wait. Button ids match HudMenu.
+Config.Onboarding = {
+	tier2Cost = 55,
+	hireCost = 25,
+	pipAt = 12,
+	askAt = 15,
+	secondDelay = 10,
+	traitAt = 60,
+	shopAt = 180,
+	promptAt = 300,
+	unlock = {
+		crew = 0,
+		hire = 0,
+		ranch = 0,
+		settings = 0,
+		index = 60,
+		daily = 60,
+		path = 120,
+		invite = 120,
+		shop = 180,
+		sauce = 180,
+		upgrades = 180,
+		season = 300,
+	},
+}
+
+-- A bought 2x. It multiplies crew coins per second. It does not touch trait odds.
+Config.CrewBoost = { mult = 2, seconds = 30 * 60 }
+
+-- Launch codes. `likes` stays off until Mike turns Config.CodesLikesLive on at 1,000 likes.
+Config.CodesLikesLive = false
+Config.Codes = {
+	{ code = "WELCOME", coins = 250, note = "Welcome code: 250 coins." },
+	{ code = "SMOKEOUT", sauces = { luck = 2 }, cosmetic = "bandana_welcome", note = "Smokeout code: 2 luck charges and the Welcome Bandana." },
+	{ code = "1KLIKES", coins = 500, likes = true, note = "1,000 likes code: 500 coins." },
+	{ code = "RIBFEST", coins = 100, expires = 1700000000, note = "That one has ended." },
+}
+
 -- Fair Play: paid perks are capped so they never wall off free players.
 --   * the tip pass is +50% (not x2) and never applies to the Cook-Off or snagging
 --   * buying a speed boost gives everyone else in the server a free "Smoke Shower"
@@ -555,7 +601,8 @@ Config.Hiring = {
 	maxLevel = 10,
 	startSlots = 3,
 	slotsPerTier = 2, -- tier 1 is 3 slots, each tier after adds 2, tier 8 is 17
-	maxSlots = 19, -- tier 8 plus one slot from an old smoker purchase and one from an old grill purchase
+	maxSlots = 23, -- tier 8, plus 2 legacy slots, plus the Bunkhouse's 4
+	bunkhouseSlots = 4,
 	workSeconds = 8,
 	cheapPrice = 50, -- every lineup keeps at least two applicants at or under the starting purse
 	cheapCount = 2,

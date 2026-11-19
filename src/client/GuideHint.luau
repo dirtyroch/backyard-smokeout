@@ -120,7 +120,11 @@ function GuideHint.update(s: any)
 	if not refs.card then
 		return
 	end
-	local g = s and s.guide
+	local g = if s and type(s.onboard) == "table" and s.onboard.title then s.onboard else s and s.guide
+	if type(g) == "table" and g.title and g.active ~= false and s and type(s.onboard) == "table" then
+		g = s.onboard
+		g.active = true
+	end
 	if not g or g.active ~= true then
 		refs.card.Visible = false
 		if refs.arrow then

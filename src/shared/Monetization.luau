@@ -64,11 +64,21 @@ Monetization.Passes = {
 	DoubleTips = { id = 2088839581, name = "Big Tipper", price = 299, icon = "💰", desc = "Every plate you serve earns +50% coins, and your hired crew earns +50% coins per second. Capped for Fair Play; does not affect the Cook-Off or snagging." },
 	PremiumCuts = { id = 2088479585, name = "Premium Cuts", price = 349, icon = "🥩", desc = "Cook Wagyu Brisket and Tomahawk Steaks any time. Each cook comes out Smoke Ring Gold. You still pay the meat cost. (Both can also be earned on the Pitmaster Path.)" },
 	VIPPatio = { id = 2089979602, name = "VIP Patio", price = 149, icon = "✨", desc = "String lights over your ranch, a VIP sign and a gold name tag. Looks only." },
+	-- id 0 until scripts/create-shop.luau is run for real. The game treats 0 as "not on sale yet."
+	Bunkhouse = { id = 0, name = "Bunkhouse", price = 299, icon = "🛏️", desc = "+4 crew slots, and your crew keeps earning for 8 hours while you're away." },
+	AutoHire = { id = 0, name = "Auto-Hire", price = 199, icon = "🐾", desc = "While you're in the game, hires the best critter you can afford each time the line restocks. Turn it off any time in Settings." },
 } :: { [string]: Pass }
 
 -- DEVELOPER PRODUCTS (can be bought more than once; cosmetics are saved forever once bought)
 Monetization.Products = {
 	-- Boosts (advantage)
+	CrewIncome30 = { id = 0, name = "Crew Income x2 (30 min)", price = 59, icon = "🍳", kind = "crewboost", category = "Crew", minutes = 30, mult = 2, desc = "Your hired crew earns twice as much for 30 minutes. Trait odds stay the same." },
+	CrewBandana = { id = 0, name = "Crew Bandana", price = 49, icon = "🧢", kind = "cosmetic", category = "Crew", grants = { "crew_bandana" }, desc = "A blue bandana for your crew. Looks only." },
+	CrewStraw = { id = 0, name = "Crew Straw Hat", price = 49, icon = "👒", kind = "cosmetic", category = "Crew", grants = { "crew_straw" }, desc = "A straw hat for your crew. Looks only." },
+	CrewBib = { id = 0, name = "Sauce Bib", price = 75, icon = "🦺", kind = "cosmetic", category = "Crew", grants = { "crew_bib" }, desc = "A sauce bib for your crew. Looks only." },
+	CrewNight = { id = 0, name = "Night Sky Collar", price = 99, icon = "🌌", kind = "cosmetic", category = "Crew", grants = { "crew_night" }, desc = "A night-sky collar for your crew. Looks only." },
+	CrewFlower = { id = 0, name = "Bluebonnet Collar", price = 99, icon = "💠", kind = "cosmetic", category = "Crew", grants = { "crew_flower" }, desc = "A bluebonnet collar for your crew. Looks only." },
+	CrewBell = { id = 0, name = "Gold Bell", price = 149, icon = "🔔", kind = "cosmetic", category = "Crew", grants = { "crew_bell" }, desc = "A gold bell for your crew. Looks only. It does not pay extra." },
 	Boost30 = { id = 3732456848, name = "Smoke Speed x2 (30 min)", price = 49, icon = "⏩", kind = "boost", category = "Boosts", minutes = 30, mult = 2, desc = "Everything on your smokers and grill cooks twice as fast for 30 minutes, even while you're offline." },
 	Boost120 = { id = 3732456801, name = "Smoke Speed x2 (2 hours)", price = 149, icon = "⏩", kind = "boost", category = "Boosts", minutes = 120, mult = 2, desc = "Twice as fast for 2 hours, online or offline." },
 	FinishSmokers = { id = 3732456991, name = "Finish All Smokers", price = 39, icon = "✅", kind = "finish", category = "Boosts", desc = "Everything currently cooking finishes instantly. The rarity is already set and doesn't change." },
@@ -160,6 +170,18 @@ Monetization.Badges = {
 	Cooked = 0, -- got a "Cooked" rating at a Cook-Off
 }
 
-Monetization.ShopTabs = { "This Week", "Bundles", "Fits", "Smokers", "Smoke", "Trails", "Boosts", "Passes" }
+Monetization.ShopTabs = { "Passes", "Crew", "Looks" }
+
+-- Three tabs. Passes are their own list. Crew holds the crew boost and crew outfits.
+-- Everything else a player wears or shows off is Looks.
+function Monetization.tabFor(product: any): string
+	if type(product) ~= "table" then
+		return "Looks"
+	end
+	if product.category == "Crew" or product.kind == "crewboost" or product.kind == "boost" or product.kind == "finish" or product.kind == "cut" then
+		return "Crew"
+	end
+	return "Looks"
+end
 
 return Monetization

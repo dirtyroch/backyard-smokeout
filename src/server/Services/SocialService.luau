@@ -80,7 +80,8 @@ local function recountCrew()
 	for player, r in pairs(ctx.Game.runtime) do
 		local data = ctx.Game.dataOf(player)
 		local list = if type(data) == "table" then Partners.ensure(data) else {}
-		local others = if familyOn then math.max(0, headcount - 1) else 0
+		local privateServer = game.PrivateServerOwnerId ~= 0
+		local others = Partners.familyOthers(privateServer, familyOn, math.max(0, headcount - 1))
 		local n = Partners.bonusCount(list, online, others)
 		if n ~= r.crew then
 			if n > r.crew then

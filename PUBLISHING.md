@@ -99,6 +99,8 @@ The manual steps below still work if you'd rather click through the dashboard.
 | `AutoServe` | Jimothy the Waiter | R$ 299 |
 | `PremiumCuts` | Premium Cuts | R$ 349 |
 | `DoubleTips` | Big Tipper (+50% tips and crew income, Fair Play cap) | R$ 299 |
+| `Bunkhouse` | Bunkhouse (+4 crew slots, 8 hour offline) | R$ 299 |
+| `AutoHire` | Auto-Hire | R$ 199 |
 
 ### Developer Products (can be bought more than once, or one-time cosmetics)
 
@@ -121,6 +123,13 @@ Go to **Monetization > Developer Products > Create a Developer Product**. For ea
 | `BundleStarter` | Pitmaster Starter Bundle | R$ 199 |
 | `BundleGoldRush` | Gold Rush Bundle | R$ 349 |
 | `Boost30` | Smoke Speed x2 (30 min) | R$ 49 |
+| `CrewIncome30` | Crew Income x2 (30 min) | R$ 59 |
+| `CrewBandana` | Crew Bandana | R$ 49 |
+| `CrewStraw` | Crew Straw Hat | R$ 49 |
+| `CrewBib` | Sauce Bib | R$ 75 |
+| `CrewNight` | Night Sky Collar | R$ 99 |
+| `CrewFlower` | Bluebonnet Collar | R$ 99 |
+| `CrewBell` | Gold Bell | R$ 149 |
 | `Boost120` | Smoke Speed x2 (2 hours) | R$ 149 |
 | `FinishSmokers` | Finish All Smokers | R$ 39 |
 | `WagyuPack` | Wagyu Brisket x3 | R$ 79 |
