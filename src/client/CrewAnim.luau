@@ -9,10 +9,12 @@ type Mover = {
 	model: Model,
 	points: { Vector3 },
 	length: number,
+	raw: string,
 }
 
 local movers: { Mover } = {}
 local seen: { [Model]: boolean } = {}
+local watching: { [Model]: RBXScriptConnection } = {}
 
 local function decode(text: any): { Vector3 }
 	local points = {}
@@ -53,9 +55,17 @@ local function along(points: { Vector3 }, distance: number): (Vector3, Vector3)
 	return last, Vector3.new(0, 0, -1)
 end
 
-local function track(model: Model)
+local track: (Model) -> ()
+track = function(model: Model)
 	if seen[model] or not model:IsA("Model") then
 		return
+	end
+	-- A streamed/replicated Model can arrive before its animation attributes. Watch
+	-- for readiness rather than dropping it forever after DescendantAdded.
+	if not watching[model] then
+		watching[model] = model.AttributeChanged:Connect(function()
+			track(model)
+		end)
 	end
 	if model:GetAttribute("CrewAnim") == nil then
 		return
@@ -65,13 +75,27 @@ local function track(model: Model)
 		return
 	end
 	seen[model] = true
-	table.insert(movers, { model = model, points = points, length = math.max(lengthOf(points), 0.05) })
+	if watching[model] then
+		watching[model]:Disconnect()
+		watching[model] = nil
+	end
+	table.insert(movers, { model = model, points = points, length = math.max(lengthOf(points), 0.05), raw = model:GetAttribute("AnimPoints") :: string })
 end
 
 local function step(mover: Mover, now: number)
 	local model = mover.model
 	if not model.Parent then
 		return
+	end
+	-- The server re-tags a model when its path changes (a hire walking home), so pick up new points.
+	local raw = model:GetAttribute("AnimPoints")
+	if type(raw) == "string" and raw ~= mover.raw then
+		local points = decode(raw)
+		if #points >= 2 then
+			mover.points = points
+			mover.length = math.max(lengthOf(points), 0.05)
+		end
+		mover.raw = raw
 	end
 	local speed = model:GetAttribute("AnimSpeed")
 	local pace = if type(speed) == "number" and speed > 0 then speed else 4
@@ -110,6 +134,12 @@ function CrewAnim.start()
 	end)
 	RunService.Heartbeat:Connect(function()
 		local now = workspace:GetServerTimeNow()
+		for model, connection in pairs(watching) do
+			if not model:IsDescendantOf(workspace) then
+				connection:Disconnect()
+				watching[model] = nil
+			end
+		end
 		local keep = {}
 		for _, mover in ipairs(movers) do
 			if mover.model.Parent then
