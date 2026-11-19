@@ -229,6 +229,13 @@ local function syncStaff(player: Player)
 	if not plot or not data or type(data.staff) ~= "table" then
 		return
 	end
+	if not Config.Chores.legacyStaff then
+		if crewSig[player] ~= "" then
+			clearCrew(player, plot)
+			crewSig[player] = ""
+		end
+		return
+	end
 	local slots = Staff.slots(data.pitLevel or 1)
 	local sig = Staff.signature(data.staff.roster or {}, slots)
 	local existing = crews[player]

@@ -33,6 +33,23 @@ function TimeUtil.month(now: number, offsetHours: number): number
 	return m
 end
 
+-- Clock time in the offset zone, e.g. "3:45 PM". A time of day, not a countdown.
+function TimeUtil.clock(now: number, offsetHours: number): string
+	local localSec = now + offsetHours * 3600
+	local sod = localSec % 86400
+	if sod < 0 then
+		sod += 86400
+	end
+	local hour = math.floor(sod / 3600)
+	local minute = math.floor((sod % 3600) / 60)
+	local am = hour < 12
+	local h12 = hour % 12
+	if h12 == 0 then
+		h12 = 12
+	end
+	return string.format("%d:%02d %s", h12, minute, if am then "AM" else "PM")
+end
+
 function TimeUtil.formatDuration(seconds: number): string
 	seconds = math.max(0, math.floor(seconds))
 	local h = math.floor(seconds / 3600)

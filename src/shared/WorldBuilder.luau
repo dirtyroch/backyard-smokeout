@@ -78,6 +78,14 @@ local function folder(parent, name)
 	return f
 end
 
+-- Attribute plus CollectionService tag when the engine has it. Lune bakes the attribute either way.
+local function streamTag(inst, tag)
+	inst:SetAttribute("StreamTag", tag)
+	pcall(function()
+		inst:AddTag(tag)
+	end)
+end
+
 local function V(x, y, z)
 	return E.Vector3.new(x, y, z)
 end
@@ -643,6 +651,90 @@ function WorldBuilder.critter(env, parent, def, cf)
 		end
 		eyeY, eyeZ, eyeX, eyeSize = 2.3, -1.45, 0.3, 1
 		iris, pupil = "#F6E27A", "#1A120E"
+	elseif def.style then
+		local style = def.style
+		body = e("Body", 1.65, 1.25, 1.9, BC, 0, 0.95, 0)
+		head = e("Head", 1.15, 1.0, 1.05, HC, 0, 1.85, -0.9)
+		e("Muzzle", 0.48, 0.3, 0.38, lighten(HC, 0.18), 0, 1.65, -1.32)
+		e("Nose", 0.16, 0.12, 0.1, "#2A1C16", 0, 1.7, -1.5)
+		for _, lx in ipairs({ -0.4, 0.4 }) do
+			paw(lx, -0.42, 0.38, BC, 0.16)
+			paw(lx, 0.5, 0.38, BC, 0.16)
+		end
+		e("Tail", 0.26, 0.26, 0.7, BC, 0, 1.0, 1.1)
+		eyeY, eyeZ, eyeX, eyeSize = 2.0, -1.32, 0.26, 0.85
+		if style == "prairie" then
+			e("Cheek", 0.28, 0.2, 0.16, "#F3C1A5", -0.32, 1.7, -1.15)
+			e("Cheek", 0.28, 0.2, 0.16, "#F3C1A5", 0.32, 1.7, -1.15)
+		elseif style == "turtle" then
+			e("Shell", 1.7, 0.7, 1.55, "#2F6B45", 0, 1.45, 0.05)
+			e("ShellRim", 1.85, 0.18, 1.7, "#E7D7A8", 0, 1.15, 0.05)
+		elseif style == "rabbit" then
+			e("Ear", 0.22, 1.15, 0.12, HC, -0.28, 2.55, -0.85)
+			e("Ear", 0.22, 1.15, 0.12, HC, 0.28, 2.55, -0.85)
+		elseif style == "possum" then
+			e("Tail", 0.2, 0.2, 0.55, "#F2C2C8", 0, 0.85, 1.45)
+		elseif style == "bee" then
+			e("Stripe", 1.15, 0.22, 1.2, "#2A241C", 0, 1.05, 0)
+			wedge(m, "Wing", V(0.08 * s, 0.7 * s, 0.45 * s), at(-0.7, 1.35, 0.1, 0, 0, 28), "#E9FBFF", E.Enum.Material.Glass)
+			wedge(m, "Wing", V(0.08 * s, 0.7 * s, 0.45 * s), at(0.7, 1.35, 0.1, 0, 0, -28), "#E9FBFF", E.Enum.Material.Glass)
+			ball(m, "Antenna", 0.16 * s, at(-0.18, 2.35, -1.05), "#2A241C")
+			ball(m, "Antenna", 0.16 * s, at(0.18, 2.35, -1.05), "#2A241C")
+		elseif style == "fish" then
+			cyl(m, "Bucket", 1.3 * s, 1.5 * s, at(0, 0.7, 0.1) * E.CFrame.Angles(0, 0, math.pi / 2), "#C9852A", E.Enum.Material.Wood)
+			e("Fin", 0.15, 0.45, 0.35, "#4E86A8", 0, 1.7, 0.35)
+		elseif style == "skunk" then
+			e("Stripe", 0.28, 0.2, 1.5, "#F7F4EF", 0, 1.45, 0.1)
+			e("Tail", 0.7, 0.7, 0.7, "#F7F4EF", 0, 1.15, 1.35)
+		elseif style == "coyote" then
+			e("Ear", 0.28, 0.7, 0.12, HC, -0.32, 2.35, -0.8)
+			e("Ear", 0.28, 0.7, 0.12, HC, 0.32, 2.35, -0.8)
+		elseif style == "owl" then
+			e("Tuft", 0.2, 0.4, 0.16, HC, -0.32, 2.35, -0.85)
+			e("Tuft", 0.2, 0.4, 0.16, HC, 0.32, 2.35, -0.85)
+			wedge(m, "Wing", V(0.12 * s, 0.7 * s, 0.45 * s), at(-0.75, 1.2, 0.05, 0, 0, 18), BC)
+			eyeSize = 1.15
+		elseif style == "bison" then
+			e("Hump", 1.1, 0.55, 0.8, BC, 0, 1.55, 0.15)
+			e("Horn", 0.45, 0.16, 0.16, "#F6F1E6", -0.45, 2.15, -0.95)
+			e("Horn", 0.45, 0.16, 0.16, "#F6F1E6", 0.45, 2.15, -0.95)
+		elseif style == "squirrel" then
+			e("Tail", 0.7, 0.85, 0.55, lighten(BC, 0.2), 0, 1.45, 1.15)
+		elseif style == "firefly" then
+			ball(m, "Glow", 0.45 * s, at(0, 1.15, 1.15), "#D6FF4A", E.Enum.Material.Neon)
+		elseif style == "otter" then
+			deco(m, "Whisker", V(0.4 * s, 0.04 * s, 0.04 * s), at(-0.4, 1.7, -1.25), "#F7F1E8")
+			deco(m, "Whisker", V(0.4 * s, 0.04 * s, 0.04 * s), at(0.4, 1.7, -1.25), "#F7F1E8")
+		elseif style == "heron" then
+			wedge(m, "Beak", V(0.16 * s, 0.12 * s, 0.85 * s), at(0, 1.7, -1.7), "#E6B15A")
+			cyl(m, "Leg", 0.9 * s, 0.08 * s, at(-0.15, 0.45, 0) * E.CFrame.Angles(0, 0, math.pi / 2), "#E6B15A")
+			cyl(m, "Leg", 0.9 * s, 0.08 * s, at(0.15, 0.45, 0) * E.CFrame.Angles(0, 0, math.pi / 2), "#E6B15A")
+		elseif style == "bobcat" then
+			e("Tuft", 0.16, 0.28, 0.1, "#2A241C", -0.32, 2.35, -0.8)
+			e("Spot", 0.22, 0.16, 0.1, "#2A241C", 0.25, 1.2, -0.7)
+		elseif style == "pony" then
+			wedge(m, "Mane", V(0.2 * s, 0.55 * s, 0.7 * s), at(0, 2.15, -0.55), "#2A241C")
+			e("Snout", 0.4, 0.28, 0.4, lighten(HC, 0.1), 0, 1.55, -1.45)
+		elseif style == "gator" then
+			wedge(m, "Snout", V(0.7 * s, 0.28 * s, 0.85 * s), at(0, 1.55, -1.55), lighten(HC, 0.05))
+			part(m, "Smile", V(0.55 * s, 0.06 * s, 0.06 * s), at(0, 1.45, -1.85), "#1A120E")
+		elseif style == "thunderbird" then
+			wedge(m, "Wing", V(0.12 * s, 1.1 * s, 0.7 * s), at(-0.9, 1.4, 0.1, 0, 0, 24), "#F2C14E")
+			wedge(m, "Wing", V(0.12 * s, 1.1 * s, 0.7 * s), at(0.9, 1.4, 0.1, 0, 0, -24), "#F2C14E")
+		elseif style == "sunfish" then
+			wedge(m, "Fin", V(0.1 * s, 0.55 * s, 0.4 * s), at(-0.85, 1.15, 0, 0, 0, 20), "#F0A020")
+			wedge(m, "Fin", V(0.1 * s, 0.55 * s, 0.4 * s), at(0.85, 1.15, 0, 0, 0, -20), "#F0A020")
+		elseif style == "comet" then
+			ball(m, "Star", 0.4 * s, at(0, 2.4, -0.7), "#FFF4B0", E.Enum.Material.Neon)
+		elseif style == "dragon" then
+			wedge(m, "Wing", V(0.1 * s, 0.7 * s, 0.5 * s), at(-0.8, 1.45, 0.05, 0, 0, 22), "#F0A070")
+			wedge(m, "Wing", V(0.1 * s, 0.7 * s, 0.5 * s), at(0.8, 1.45, 0.05, 0, 0, -22), "#F0A070")
+			e("Horn", 0.16, 0.32, 0.12, "#F6E2C4", -0.22, 2.3, -0.85)
+			e("Horn", 0.16, 0.32, 0.12, "#F6E2C4", 0.22, 2.3, -0.85)
+		elseif style == "sprite" then
+			ball(m, "Petal", 0.28 * s, at(0, 2.4, -0.75), "#3B6FD8", E.Enum.Material.Neon)
+			ball(m, "Petal", 0.18 * s, at(0, 2.4, -0.75), "#F7E27A")
+		end
 	else
 		body = e("Body", 1.8, 1.4, 2.2, BC, 0, 1.05, 0)
 		head = e("Head", 1.3, 1.15, 1.2, HC, 0, 2.05, -1.05)
@@ -935,6 +1027,143 @@ local function stall(parent, name, cf, title, awningA, awningB, promptKind, prom
 	return m, roof
 end
 
+local function hidden(p, minTier, shown)
+	p.Transparency = 1
+	p.CanCollide = false
+	p:SetAttribute("MinTier", minTier)
+	p:SetAttribute("ShownTransparency", shown or 0)
+end
+
+-- Ranch tier pieces start invisible. The server shows the ones the owner has built.
+-- They stay inside the pad so the extra ranches still don't overlap.
+function WorldBuilder.ranchBuild(plot, cf)
+	local root = model(plot, "RanchTiers")
+	streamTag(root, "RanchTier")
+	local stations = folder(plot, "CrewStations")
+	streamTag(stations, "CrewStation")
+	local spots = {
+		{ "Pit", "pit", 8, 12 },
+		{ "Grill", "grill", -8, 8 },
+		{ "Serve", "server", 4, 2 },
+		{ "Greet", "greeter", 0, -22 },
+	}
+	for _, spot in ipairs(spots) do
+		local pad = part(stations, spot[1], V(3, 0.2, 3), cf * E.CFrame.new(spot[3], 1.15, spot[4]), "#E7D3A1", E.Enum.Material.WoodPlanks, { Transparency = 1, CanCollide = false })
+		pad:SetAttribute("CrewStation", spot[2])
+		streamTag(pad, "CrewStation")
+	end
+
+	local function piece(name, minTier)
+		local m = model(root, name)
+		m:SetAttribute("MinTier", minTier)
+		streamTag(m, "RanchTier")
+		return m
+	end
+
+	local shed = piece("Shed", 2)
+	local shedBody = part(shed, "Body", V(6, 4.2, 5), cf * E.CFrame.new(20, 2.8, -16), "#8B5A2B", E.Enum.Material.WoodPlanks)
+	shedBody:SetAttribute("Solid", true)
+	hidden(shedBody, 2, 0)
+	local shedRoof = wedge(shed, "Roof", V(6.4, 1.6, 2.6), cf * E.CFrame.new(20, 5.4, -16), "#A33B32", E.Enum.Material.Wood)
+	hidden(shedRoof, 2, 0)
+	local shedSign = part(shed, "Sign", V(2.4, 0.8, 0.15), cf * E.CFrame.new(20, 3.4, -18.4), "#F4E1C1", E.Enum.Material.Wood)
+	hidden(shedSign, 2, 0)
+	surfaceText(shedSign, E.Enum.NormalId.Front, "PIT", "#5A2E1E", nil)
+
+	local lights = piece("Lights", 3)
+	local wire = part(lights, "Wire", V(28, 0.08, 0.08), cf * E.CFrame.new(0, 6.2, 8), "#3A2A1E", nil)
+	hidden(wire, 3, 0)
+	for i = -4, 4 do
+		local bulb = ball(lights, "Bulb", 0.45, cf * E.CFrame.new(i * 3, 5.9, 8), i % 2 == 0 and "#FFE9A8" or "#FFB347", E.Enum.Material.Neon)
+		hidden(bulb, 3, 0.05)
+	end
+
+	local pond = piece("Pond", 4)
+	local water = cyl(pond, "Water", 0.35, 8, cf * E.CFrame.new(-16, 1.05, -10) * E.CFrame.Angles(0, 0, math.pi / 2), "#3FA7D6", E.Enum.Material.Glass)
+	hidden(water, 4, 0.15)
+	local rim = cyl(pond, "Rim", 0.5, 9.2, cf * E.CFrame.new(-16, 0.95, -10) * E.CFrame.Angles(0, 0, math.pi / 2), "#7D8B5A", E.Enum.Material.Grass)
+	hidden(rim, 4, 0.05)
+
+	local barn = piece("Barn", 5)
+	local barnBody = part(barn, "Body", V(8, 5, 6), cf * E.CFrame.new(18, 3.4, 8), "#A33B32", E.Enum.Material.WoodPlanks)
+	barnBody:SetAttribute("Solid", true)
+	hidden(barnBody, 5, 0)
+	local barnDoor = part(barn, "Door", V(2.2, 3, 0.15), cf * E.CFrame.new(18, 2.6, 5.1), "#F4E1C1", E.Enum.Material.Wood)
+	hidden(barnDoor, 5, 0)
+	local barnRoof = wedge(barn, "Roof", V(8.4, 2.2, 3.2), cf * E.CFrame.new(18, 6.6, 8), "#6B4226", E.Enum.Material.Wood)
+	hidden(barnRoof, 5, 0)
+
+	local trailer = piece("Trailer", 6)
+	local box = part(trailer, "Box", V(7, 3.2, 3.2), cf * E.CFrame.new(-18, 2.6, 14), "#F4E1C1", E.Enum.Material.Metal)
+	box:SetAttribute("Solid", true)
+	hidden(box, 6, 0)
+	local stripe = part(trailer, "Stripe", V(7.05, 0.7, 3.25), cf * E.CFrame.new(-18, 3.3, 14), "#E07A3D", E.Enum.Material.Metal)
+	hidden(stripe, 6, 0)
+	surfaceText(box, E.Enum.NormalId.Front, "BBQ", "#5A2E1E", nil)
+	for _, wx in ipairs({ -2.2, 2.2 }) do
+		local wheel = cyl(trailer, "Wheel", 0.4, 1.3, cf * E.CFrame.new(-18 + wx, 1.3, 15.4) * E.CFrame.Angles(0, 0, math.pi / 2), "#2A2A2A", E.Enum.Material.Metal)
+		hidden(wheel, 6, 0)
+	end
+
+	local stage = piece("Stage", 7)
+	local deck = part(stage, "Deck", V(8, 0.6, 5), cf * E.CFrame.new(0, 1.5, 24), "#8B5A2B", E.Enum.Material.WoodPlanks)
+	deck:SetAttribute("Solid", true)
+	hidden(deck, 7, 0)
+	local curtain = part(stage, "Curtain", V(8, 3.2, 0.2), cf * E.CFrame.new(0, 3.4, 26.2), "#A33B32", E.Enum.Material.Fabric)
+	hidden(curtain, 7, 0)
+
+	local sign = piece("Sign", 8)
+	local neon = part(sign, "Neon", V(10, 2.4, 0.3), cf * E.CFrame.new(0, 8.2, 28), "#1A120E", E.Enum.Material.Neon)
+	hidden(neon, 8, 0)
+	local glow = surfaceText(neon, E.Enum.NormalId.Front, "ROCH'S PIT", "#FFC83C", nil)
+	glow.TextTransparency = 1
+	glow:SetAttribute("MinTier", 8)
+	return root
+end
+
+-- Boardwalk on the path in from the welcome arch, south of Temp and Big Bertha.
+-- That stretch is open sand between spawn and the sauce shacks, so the lineup
+-- is the first thing a new player walks up to, and nobody stands in it.
+function WorldBuilder.hiringLine(parent)
+	local line = model(parent, "HiringLine")
+	streamTag(line, "HiringLine")
+	local origin = E.CFrame.new(0, 0, -26)
+	local function here(x, y, z)
+		return origin * E.CFrame.new(x, y, z)
+	end
+	local deck = part(line, "Boardwalk", V(40, 0.35, 7), here(0, 0.9, 0), "#E7C89A", E.Enum.Material.WoodPlanks)
+	deck.CanCollide = true
+	for i = -2, 2 do
+		local plank = part(line, "Plank", V(0.35, 0.4, 7), here(i * 7, 1.12, 0), i % 2 == 0 and "#C9852A" or "#8B5A2B", E.Enum.Material.Wood)
+		plank.CanCollide = false
+	end
+	for _, side in ipairs({ -1, 1 }) do
+		part(line, "Rail", V(38, 0.25, 0.25), here(0, 2.3, side * 3.2), "#6B4226", E.Enum.Material.Wood).CanCollide = false
+		for post = -2, 2 do
+			part(line, "Post", V(0.35, 1.6, 0.35), here(post * 8, 1.7, side * 3.2), "#6B4226", E.Enum.Material.Wood).CanCollide = false
+		end
+	end
+	local colors = { "#E7E2DA", "#5AD2FF", "#7DCE6A", "#C58BFF", "#FFC83C", "#FF6B6B" }
+	for i, color in ipairs(colors) do
+		wedge(line, "Pennant", V(0.08, 0.7, 0.9), here(-16 + i * 2.6, 3.5, 0), color, E.Enum.Material.Fabric).CanCollide = false
+	end
+	local hire = part(line, "NowHiring", V(0.4, 5.5, 6), here(-21.2, 3.6, 0), "#E07A3D", E.Enum.Material.WoodPlanks)
+	surfaceText(hire, E.Enum.NormalId.Front, "NOW HIRING", "#FFF6E8", nil)
+	surfaceText(hire, E.Enum.NormalId.Back, "NOW HIRING", "#FFF6E8", nil)
+	prompt(hire, "ui:hire", "See the lineup", "Hiring Line", 0, 14)
+	local board = part(line, "RestockBoard", V(0.35, 3.2, 5), here(21.2, 2.8, 0), "#F4E1C1", E.Enum.Material.Wood)
+	local clock = surfaceText(board, E.Enum.NormalId.Front, "Next lineup", "#5A2E1E", nil)
+	clock.Name = "Clock"
+	surfaceText(board, E.Enum.NormalId.Back, "Coins only", "#5A2E1E", nil)
+	local pads = folder(line, "Pads")
+	for i = 1, 6 do
+		local x = -15 + (i - 1) * 6
+		local pad = part(pads, "Pad" .. i, V(2.6, 0.15, 2.6), here(x, 1.15, 0), "#F4E1C1", E.Enum.Material.Wood, { Transparency = 1, CanCollide = false })
+		pad:SetAttribute("Applicant", i)
+	end
+	return line
+end
+
 local function buildPlot(root, i, cfg)
 	local n = cfg.MAX_PLOTS
 	local angle = (i - 1) / n * math.pi * 2
@@ -1043,6 +1272,7 @@ local function buildPlot(root, i, cfg)
 	part(m, "ChairBack", V(2.2, 2.4, 0.3), cf * E.CFrame.new(26, 2.8, 11) * E.CFrame.Angles(math.rad(-15), 0, 0), "#2E8B57", E.Enum.Material.Fabric)
 	tree(m, (cf * E.CFrame.new(-27, 0.6, 27)).Position, 0.8)
 	tree(m, (cf * E.CFrame.new(27, 0.6, 27)).Position, 0.9)
+	WorldBuilder.ranchBuild(m, cf)
 	return m
 end
 
@@ -1056,6 +1286,7 @@ local function buildHub(root, cfg, content)
 		local mid = V(math.cos(a) * 85, 0.25, math.sin(a) * 85)
 		part(hub, "Road" .. i, V(8, 0.3, 66), lookAt(mid, V(0, 0.25, 0)), "#C2A878", E.Enum.Material.Sand)
 	end
+	WorldBuilder.hiringLine(hub)
 	local spawn = E.Instance.new("SpawnLocation")
 	spawn.Name = "HubSpawn"
 	spawn.Anchored = true

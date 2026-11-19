@@ -26,6 +26,7 @@ HudMenu.entries = {
 	{ id = "path", icon = "🗺️", label = "Path", panel = "path", order = 5 },
 	{ id = "upgrades", icon = "⬆️", label = "Upgrade", panel = "upgrades", order = 6 },
 	{ id = "crew", icon = "🍳", label = "Crew", panel = "crew", order = 7 },
+	{ id = "hire", icon = "🐾", label = "Hire", panel = "hire", order = 11 },
 	{ id = "daily", icon = "🎁", label = "Daily", panel = "daily", order = 8 },
 	{ id = "settings", icon = "⚙️", label = "Settings", panel = "settings", order = 9 },
 	{ id = "invite", icon = "👋", label = "Invite", panel = "invite", order = 10 },

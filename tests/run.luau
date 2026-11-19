@@ -1941,7 +1941,7 @@ local HUD_SRC = fs_read("src/client/Hud.luau")
 
 test("every left-menu button names a real panel, except Invite", function()
 	local seen: { [string]: boolean } = {}
-	eq(#HudMenu.entries, 10)
+	eq(#HudMenu.entries, 11)
 	for _, entry in ipairs(HudMenu.entries) do
 		truthy(not seen[entry.id], "duplicate " .. entry.id)
 		seen[entry.id] = true
@@ -3157,6 +3157,586 @@ test("Turkey Day toasts and the potluck announcement stay off the guide, goals a
 	local phoneLay = HudLayout.compute(390, 844, { left = 0, top = 0, right = 0, bottom = 34 }, { guide = true, goals = false, first = true })
 	local phoneNotes = HudLayout.notices(390, 844, { left = 0, top = 0, right = 0, bottom = 34 }, { guide = true, goals = false, first = true })
 	truthy(phoneNotes.toast.y >= phoneLay.guide.y + phoneLay.guide.h, "phone toast starts below the guide")
+end)
+
+print("Crew core loop")
+local Crew = require("../src/shared/Logic/Crew")
+local HiringLine = require("../src/shared/Logic/HiringLine")
+local Offline = require("../src/shared/Logic/Offline")
+local Migrate = require("../src/shared/Logic/Migrate")
+
+local function countSpecies()
+	local n, secret, by = 0, 0, {}
+	for _, row in ipairs(Config.CrewSpecies) do
+		n += 1
+		by[row.rarity] = (by[row.rarity] or 0) + 1
+		if row.secret then
+			secret += 1
+		end
+	end
+	return n, secret, by
+end
+
+test("about 30 species across 6 rarities, plus one secret Rex, with coin prices that scale", function()
+	local n, secret, by = countSpecies()
+	eq(n, 31)
+	eq(secret, 1)
+	for _, rarity in ipairs({ "common", "uncommon", "rare", "epic", "legendary", "mythic" }) do
+		eq(by[rarity], 5, rarity)
+	end
+	eq(by.secret, 1)
+	local floorRate = 0
+	for _, rarity in ipairs({ "common", "uncommon", "rare", "epic", "legendary", "mythic", "secret" }) do
+		local best = math.huge
+		for _, row in ipairs(Config.CrewSpecies) do
+			if row.rarity == rarity then
+				truthy(row.price == math.floor(row.price) and row.price > 0, row.id)
+				truthy(row.baseRate > 0, row.id)
+				truthy(row.price / row.baseRate >= floorRate - 1e-6, row.id .. " price scales with output")
+				best = math.min(best, row.price / row.baseRate)
+				truthy(string.find(string.lower(row.line .. row.name), "beer", 1, true) == nil, row.id)
+				truthy(string.find(string.lower(row.line .. row.name), "wine", 1, true) == nil, row.id)
+			end
+		end
+		floorRate = best
+	end
+	eq(Config.Founders.pip.species, "armadillo")
+	eq(Config.Founders.biscuit.species, "pup")
+	eq(Config.Founders.dottie.species, "hummingbird")
+	eq(Config.Founders.tumble.species, "roadrunner")
+	eq(Config.Founders.mango.species, "longhorn")
+end)
+
+test("ranch tiers add 2 crew slots, from 3 up to 19", function()
+	eq(Crew.slotCount(1, 0), 3)
+	eq(Crew.slotCount(2, 0), 5)
+	eq(Crew.slotCount(3, 0), 7)
+	eq(Crew.slotCount(8, 0), 17)
+	eq(Crew.slotCount(8, 1), 18)
+	eq(Crew.slotCount(8, 2), 19)
+	eq(Crew.slotCount(8, 9), 19, "the cap stays 19 before rebirth")
+	eq(Crew.slotCount(1, 2), 5)
+	eq(#Config.RanchTiers, 8)
+	eq(Config.RanchTiers[1].cost, 0)
+	truthy(Config.RanchTiers[2].cost > 0)
+	for i = 2, 7 do
+		truthy(Config.RanchTiers[i + 1].cost > Config.RanchTiers[i].cost, "tier " .. (i + 1))
+	end
+end)
+
+test("crew coins per second follow level, trait, rank, friends and the Fair Play cap", function()
+	eq(Crew.founderLevel(1, 1, 1), 1)
+	eq(Crew.founderLevel(5, 1, 3), 3)
+	eq(Crew.founderLevel(4, 5, 4), 4)
+	eq(Crew.founderLevel(5, 5, 4), 5)
+	eq(Crew.founderLevel(99, 99, 99), 10)
+	near(Crew.levelMult(1), 1)
+	near(Crew.levelMult(2), 1.15)
+	near(Crew.levelMult(10), 2.35)
+	near(Crew.rate(10, 1, "none", nil, true), 10)
+	near(Crew.rate(10, 2, "none", nil, true), 11.5)
+	near(Crew.rate(10, 1, "smoky", nil, true), 15)
+	near(Crew.rate(10, 1, "glazed", nil, true), 20)
+	near(Crew.rate(10, 1, "golden", nil, true), 30)
+	near(Crew.rate(10, 1, "meteorite", nil, true), 60)
+	local plain = Crew.rate(10, 1, "none", { rank = 1, friends = 0, tipPass = false }, false)
+	near(plain, 10)
+	near(Crew.rate(10, 1, "none", { rank = 3, friends = 0, tipPass = false }, false), 10 * (1 + Config.RANK_STEP * 2))
+	near(Crew.rate(10, 1, "none", { rank = 1, friends = 9, tipPass = false }, false), 10 * 1.3, 1e-6)
+	near(Crew.rate(10, 1, "none", { rank = 1, friends = 0, tipPass = true }, false), 15)
+	near(Crew.tipMult(true), math.min(Config.FairPlay.passTipMult, Config.FairPlay.passTipCap))
+	local owned = {
+		{ uid = 1, species = "armadillo", name = "Pip", level = 1, trait = "none", role = "pit" },
+		{ uid = 2, species = "pup", name = "Biscuit", level = 1, trait = "golden", role = "grill" },
+	}
+	near(Crew.totalRate(owned, 1, { rank = 1, friends = 0, tipPass = false }), 1)
+	near(Crew.totalRate(owned, 2, { rank = 1, friends = 0, tipPass = false }), 1 + 4 * 3)
+	local coins, bank = Crew.tickPay(1.5, 0)
+	eq(coins, 1)
+	near(bank, 0.5)
+	local coins2, bank2 = Crew.tickPay(1.5, bank)
+	eq(coins2, 2)
+	near(bank2, 0)
+	eq(Crew.greeterDelay(0), 1)
+	eq(Crew.greeterDelay(1), 0.92)
+	eq(Crew.greeterDelay(20), 0.6)
+end)
+
+test("hiring spends coins, merges a duplicate, and stops at the slot cap", function()
+	local data = { coins = 100, crew = { owned = {}, slots = 3, nextUid = 1, extra = 0 }, ranch = { tier = 1 }, offline = { lastTick = 0 } }
+	local applicant = { species = "armadillo", trait = "none", price = 25 }
+	local outcome = Crew.tryHire(data, applicant)
+	truthy(outcome.ok)
+	eq(outcome.cost, 25)
+	eq(outcome.coins, 75)
+	local member = Crew.applyHire(data, outcome)
+	eq(member.name, "Shellie")
+	eq(data.coins, 75)
+	eq(#data.crew.owned, 1)
+	local again = Crew.tryHire(data, applicant)
+	truthy(again.ok)
+	eq(again.mergeUid, member.uid)
+	Crew.applyHire(data, again)
+	eq(#data.crew.owned, 1, "a duplicate merges")
+	eq(data.crew.owned[1].level, 2)
+	eq(data.coins, 50)
+	local poor = Crew.tryHire(data, { species = "rex", trait = "none", price = 1200000 })
+	eq(poor.ok, false)
+	eq(poor.reason, "coins")
+	eq(data.coins, 50)
+	data.coins = 100000
+	data.crew.owned[1].level = 10
+	local turtle = Crew.tryHire(data, { species = "turtle", trait = "none", price = 50 })
+	truthy(turtle.ok)
+	Crew.applyHire(data, turtle)
+	data.crew.owned[2].level = 10
+	local toad = Crew.tryHire(data, { species = "hornedtoad", trait = "none", price = 55 })
+	truthy(toad.ok)
+	Crew.applyHire(data, toad)
+	data.crew.owned[3].level = 10
+	eq(data.crew.slots, 3)
+	local blocked = Crew.tryHire(data, { species = "pup", trait = "none", price = 180 })
+	eq(blocked.reason, "slots")
+	eq(#data.crew.owned, 3)
+	data.ranch.tier = 2
+	data.crew.slots = Crew.slotCount(2, 0)
+	local second = Crew.tryHire(data, { species = "pup", trait = "none", price = 180 })
+	truthy(second.ok)
+	Crew.applyHire(data, second)
+	eq(#data.crew.owned, 4)
+	eq(data.crew.owned[4].species, "pup")
+	local leveled = Crew.tryLevel(data, data.crew.owned[4].uid)
+	truthy(leveled.ok)
+	truthy(Crew.applyLevel(data, leveled))
+	eq(data.crew.owned[4].level, 2)
+	local built = Crew.tryTier(data)
+	truthy(built.ok)
+	eq(built.tier, 3)
+	truthy(Crew.applyTier(data, built))
+	eq(data.ranch.tier, 3)
+	eq(data.crew.slots, 7)
+end)
+
+test("the hiring line is deterministic, coin-priced, and the first claim wins", function()
+	local a = HiringLine.stock(42, 10, 1)
+	local b = HiringLine.stock(42, 10, 1)
+	eq(#a, 6)
+	eq(#b, 6)
+	for i = 1, 6 do
+		eq(a[i].species, b[i].species)
+		eq(a[i].price, b[i].price)
+		eq(a[i].trait, b[i].trait)
+		eq(a[i].rate, b[i].rate)
+		local species = Crew.byId(a[i].species)
+		local trait = Crew.traitDef(a[i].trait)
+		eq(a[i].price, math.max(1, math.floor(species.price * trait.mult + 0.5)))
+		near(a[i].rate, species.baseRate * trait.mult)
+	end
+	truthy(HiringLine.stock(42, 11, 1)[1].species ~= a[1].species or HiringLine.stock(42, 11, 1)[2].species ~= a[2].species or HiringLine.stock(7, 10, 1)[1].species ~= a[1].species)
+	local function rareShare(tier, windows)
+		local rare = 0
+		for w = 1, windows do
+			for _, row in ipairs(HiringLine.stock(99, w, tier)) do
+				if row.rarity ~= "common" and row.rarity ~= "uncommon" then
+					rare += 1
+				end
+			end
+		end
+		return rare / (windows * 6)
+	end
+	truthy(rareShare(8, 400) > rareShare(1, 400), "a higher ranch tier sees rarer applicants")
+	local rex = 0
+	local windows = 20000
+	for w = 1, windows do
+		local stock = HiringLine.stock(123, w, 4)
+		if stock[6].species == "rex" then
+			rex += 1
+		end
+	end
+	near(rex / windows, Config.Hiring.rexChance, 0.0015)
+	local taken = {}
+	truthy(HiringLine.tryTake(taken, 2, 100))
+	eq(taken[2], 100)
+	truthy(not HiringLine.tryTake(taken, 2, 200))
+	eq(taken[2], 100, "the first claim keeps the applicant")
+	truthy(not HiringLine.tryTake(taken, 0, 200))
+	truthy(not HiringLine.tryTake(taken, 7, 200))
+	local label = HiringLine.clockLabel(1_700_000_000, 300, -6)
+	truthy(string.find(label, "Next lineup:", 1, true) ~= nil)
+	truthy(string.find(label, "CT", 1, true) ~= nil)
+	truthy(string.find(label, "left", 1, true) == nil)
+	truthy(string.find(string.lower(label), "hurry", 1, true) == nil)
+	local src = fs_read("src/shared/Logic/HiringLine.luau")
+	truthy(string.find(src, "Robux", 1, true) == nil, "hire odds do not read Robux")
+	truthy(string.find(src, "Monetization", 1, true) == nil)
+	local crewSrc = fs_read("src/shared/Logic/Crew.luau")
+	truthy(string.find(crewSrc, "Monetization", 1, true) == nil)
+end)
+
+test("offline crew pay is the full rate, capped at 4 hours", function()
+	eq(Offline.cap(false), 4 * 3600)
+	eq(Offline.cap(true), 8 * 3600)
+	eq(Offline.awaySeconds(0, 10_000, Offline.CAP), 0)
+	eq(Offline.awaySeconds(100, 100, Offline.CAP), 0)
+	eq(Offline.awaySeconds(100, 50, Offline.CAP), 0)
+	eq(Offline.awaySeconds(1_000, 1_000 + 90, Offline.CAP), 90)
+	eq(Offline.awaySeconds(1_000, 1_000 + 5 * 3600, Offline.CAP), 4 * 3600)
+	eq(Offline.awaySeconds(1_000, 1_000 + 9 * 3600, Offline.cap(true)), 8 * 3600)
+	eq(Offline.coins(1.5, 10), 15)
+	eq(Offline.coins(2, 4 * 3600), 2 * 4 * 3600)
+	eq(Offline.coins(2, 0), 0)
+	local settled = Offline.settle(5_000, 5_000 + 5 * 3600, Offline.CAP, 3)
+	eq(settled.seconds, 4 * 3600)
+	eq(settled.coins, 3 * 4 * 3600)
+	eq(settled.lastTick, 5_000 + 5 * 3600)
+	local fresh = Offline.settle(0, 9_000, Offline.CAP, 10)
+	eq(fresh.coins, 0)
+	eq(fresh.seconds, 0)
+end)
+
+test("a v1 save keeps its coins and turns the five founders into crew", function()
+	local fresh = Reconcile.fill(nil, DefaultData)
+	eq(fresh.schema, 2)
+	truthy(not Migrate.apply(fresh, 50))
+	eq(#fresh.crew.owned, 0)
+	eq(fresh.coins, Config.START_COINS)
+	local v1 = {
+		schema = 1,
+		coins = 4321,
+		lifetimeCoins = 9000,
+		rank = 1,
+		pitLevel = 3,
+		smokerSlotsBought = 2,
+		grillSlotsBought = 1,
+		staff = {
+			roster = {
+				{ id = "pip", speed = 1, capacity = 1, quality = 1 },
+				{ id = "biscuit", speed = 2, capacity = 2, quality = 2 },
+				{ id = "dottie", speed = 5, capacity = 1, quality = 3 },
+				{ id = "tumble", speed = 4, capacity = 5, quality = 4 },
+				{ id = "mango", speed = 5, capacity = 5, quality = 4 },
+				{ id = "nope", speed = 3, capacity = 3, quality = 3 },
+			},
+		},
+		receipts = { ["abc"] = true },
+		purchases = { once = { StarterPitPack = true }, count = 2 },
+		owned = { hat_straw = true },
+		titles = {},
+		critters = { armadillo = 4 },
+		cuts = { wagyu = 1, tomahawk = 0 },
+		tutorial = { firstBrisket = true, done = false },
+		rookie = { claimed = 2, skipped = false },
+		guide = { step = 1, done = false },
+	}
+	local filled = Reconcile.fill(v1, DefaultData)
+	eq(filled.schema, 1, "fill does not bump a v1 schema")
+	truthy(Migrate.apply(filled, 1_700_000_000))
+	eq(filled.schema, 2)
+	eq(filled.coins, 4321 + Config.RookieFinish.coins, "the in-progress Rookie List pays its finish reward once")
+	eq(filled.lifetimeCoins, 9000)
+	eq(filled.rank, 1)
+	eq(filled.receipts.abc, true)
+	eq(filled.purchases.count, 2)
+	eq(filled.purchases.once.StarterPitPack, true)
+	eq(filled.owned.hat_straw, true)
+	eq(filled.owned[Config.RookieFinish.cosmetic], true)
+	eq(filled.titles[Config.RookieFinish.title], true)
+	eq(filled.critters.armadillo, 4)
+	eq(filled.cuts.wagyu, 1)
+	eq(#filled.staff.roster, 6, "the old roster stays in the save")
+	eq(#filled.crew.owned, 5)
+	eq(filled.crew.owned[1].name, "Pip")
+	eq(filled.crew.owned[1].species, "armadillo")
+	eq(filled.crew.owned[1].level, 1)
+	eq(filled.crew.owned[1].badge, "Founder")
+	eq(filled.crew.owned[1].trait, "none")
+	eq(filled.crew.owned[2].name, "Biscuit")
+	eq(filled.crew.owned[2].species, "pup")
+	eq(filled.crew.owned[2].level, 2)
+	eq(filled.crew.owned[3].name, "Dottie")
+	eq(filled.crew.owned[3].species, "hummingbird")
+	eq(filled.crew.owned[3].level, 3)
+	eq(filled.crew.owned[3].role, "server")
+	eq(filled.crew.owned[4].name, "Tumble")
+	eq(filled.crew.owned[4].species, "roadrunner")
+	eq(filled.crew.owned[4].level, 4)
+	eq(filled.crew.owned[5].name, "Mango")
+	eq(filled.crew.owned[5].species, "longhorn")
+	eq(filled.crew.owned[5].level, 5)
+	eq(filled.crew.owned[5].role, "pit")
+	eq(filled.ranch.tier, 3)
+	eq(filled.crew.extra, 2)
+	eq(filled.crew.slots, Crew.slotCount(3, 2))
+	eq(filled.onboard.done, true)
+	eq(filled.onboard.rookieReward, true)
+	eq(filled.offline.lastTick, 1_700_000_000)
+	eq(type(filled.index.traits), "table")
+	eq(filled.events.smokeShowWeek, -1)
+	local coinsAfter = filled.coins
+	truthy(not Migrate.apply(filled, 1_800_000_000))
+	eq(#filled.crew.owned, 5)
+	eq(filled.coins, coinsAfter, "a second migrate does not pay the rookie reward again")
+	eq(filled.offline.lastTick, 1_700_000_000)
+end)
+
+test("a veteran and a payer keep rank, receipts and coins", function()
+	local veteran = Reconcile.fill({
+		schema = 1,
+		coins = 50000,
+		lifetimeCoins = 800000,
+		rank = 3,
+		pitLevel = 5,
+		tutorial = { done = true, firstBrisket = true },
+		guide = { step = 4, done = true },
+		rookie = { claimed = 5 },
+		titles = { ["Rookie of the Ranch"] = true },
+		receipts = {},
+		staff = { roster = {} },
+	}, DefaultData)
+	truthy(Migrate.apply(veteran, 10))
+	eq(veteran.rank, 3)
+	eq(veteran.ranch.tier, 5)
+	eq(veteran.crew.slots, 11)
+	eq(veteran.coins, 50000, "a finished rookie list is not paid again")
+	eq(veteran.onboard.done, true)
+	eq(veteran.lifetimeCoins, 800000)
+	local payer = Reconcile.fill({
+		schema = 1,
+		coins = 77,
+		rank = 2,
+		pitLevel = 1,
+		receipts = { ["rcp-1"] = true, ["rcp-2"] = true },
+		purchases = { once = { StarterPitPack = true }, count = 4 },
+		cuts = { wagyu = 3, tomahawk = 2 },
+		staff = { roster = {} },
+		tutorial = { done = false, firstBrisket = false },
+		rookie = { claimed = 0 },
+		guide = { step = 1, done = false },
+	}, DefaultData)
+	truthy(Migrate.apply(payer, 10))
+	eq(payer.coins, 77)
+	eq(payer.rank, 2)
+	eq(payer.receipts["rcp-1"], true)
+	eq(payer.receipts["rcp-2"], true)
+	eq(payer.purchases.count, 4)
+	eq(payer.purchases.once.StarterPitPack, true)
+	eq(payer.cuts.wagyu, 3)
+	eq(#payer.crew.owned, 0)
+	eq(payer.onboard.done, false)
+	eq(payer.ranch.tier, 1)
+	eq(payer.crew.slots, 3)
+end)
+
+test("an unflipped burger pays full when the flip is not required, and the retired chores stay off", function()
+	local F = Config.Flip
+	eq(Economy.flipFactor(nil, false, F.perfectMult, F.goodMult, F.missMult, F.unflippedMult), 1)
+	eq(Economy.flipFactor(nil, true, F.perfectMult, F.goodMult, F.missMult, F.unflippedMult), F.unflippedMult)
+	eq(Economy.flipFactor("perfect", false, F.perfectMult, F.goodMult, F.missMult, F.unflippedMult), F.perfectMult)
+	eq(Config.Chores.lunchRush, false)
+	eq(Config.Chores.peekPenalty, false)
+	eq(Config.Chores.flipRequired, false)
+	eq(Config.Chores.legacyStaff, false)
+	eq(TimeUtil.clock(0, 0), "12:00 AM")
+	local game = fs_read("src/server/Services/GameService.luau")
+	truthy(string.find(game, "payCrew", 1, true) ~= nil)
+	truthy(string.find(game, "HireApplicant", 1, true) ~= nil)
+	local dataSrc = fs_read("src/server/Services/DataService.luau")
+	truthy(string.find(dataSrc, "Migrate.apply", 1, true) ~= nil)
+	eq(Monetization.Passes.DoubleTips.id, 2088839581)
+	eq(Monetization.Passes.AutoServe.id, 2089955594)
+end)
+
+test("the town square has a hiring boardwalk and each ranch has tier pieces and station slots", function()
+	local roblox = require("@lune/roblox")
+	local WorldBuilder = require("../src/shared/WorldBuilder")
+	local env = { Instance = roblox.Instance, Vector3 = roblox.Vector3, CFrame = roblox.CFrame, Color3 = roblox.Color3, Enum = roblox.Enum, UDim2 = roblox.UDim2, NumberSequence = roblox.NumberSequence, NumberRange = roblox.NumberRange, ColorSequence = roblox.ColorSequence, Vector2 = roblox.Vector2 }
+	local ws = roblox.Instance.new("Folder")
+	local map = WorldBuilder.build(env, ws, Config, Content)
+	local line = map.Hub:FindFirstChild("HiringLine")
+	truthy(line ~= nil)
+	truthy(line:FindFirstChild("NowHiring") ~= nil)
+	truthy(line:FindFirstChild("RestockBoard") ~= nil)
+	eq(#line.Pads:GetChildren(), 6)
+	local signText = ""
+	for _, d in ipairs(line.NowHiring:GetDescendants()) do
+		if d:IsA("TextLabel") then
+			signText ..= d.Text
+		end
+	end
+	truthy(string.find(signText, "NOW HIRING", 1, true) ~= nil)
+	for i = 1, Config.MAX_PLOTS do
+		local plot = map.Plots:FindFirstChild("Plot" .. i)
+		truthy(plot:FindFirstChild("RanchTiers") ~= nil, "plot " .. i)
+		truthy(plot.RanchTiers:FindFirstChild("Shed") ~= nil)
+		truthy(plot.RanchTiers:FindFirstChild("Sign") ~= nil)
+		eq(plot.CrewStations.Pit:GetAttribute("CrewStation"), "pit")
+		eq(plot.CrewStations.Grill:GetAttribute("CrewStation"), "grill")
+		eq(plot.CrewStations.Serve:GetAttribute("CrewStation"), "server")
+		eq(plot.CrewStations.Greet:GetAttribute("CrewStation"), "greeter")
+		truthy(plot.RanchTiers.Shed.Body.Transparency == 1, "tier pieces start hidden")
+	end
+	local function partsOf(style)
+		local m = WorldBuilder.critter(env, ws, { id = style, style = style, body = "#E07A3D", head = "#F6C7A1", scale = 0.9, staff = true }, roblox.CFrame.new())
+		local n = 0
+		local body = false
+		for _, d in ipairs(m:GetDescendants()) do
+			if d:IsA("BasePart") then
+				n += 1
+				if d.Name == "Body" then
+					body = true
+				end
+			end
+		end
+		return n, body
+	end
+	for _, style in ipairs({ "prairie", "turtle", "bee", "fish", "dragon", "sprite" }) do
+		local n, body = partsOf(style)
+		truthy(body, style)
+		truthy(n <= 40, style .. " part count " .. n)
+	end
+end)
+
+test("every lineup has two applicants a new player can afford, and Pip is free", function()
+	eq(Config.START_COINS, 50)
+	eq(Config.Hiring.cheapPrice, 50)
+	truthy(Config.Hiring.starterDelay + Config.Hiring.starterWalk <= 10)
+	truthy(Config.Hiring.starterDelay >= 0 and Config.Hiring.starterWalk > 0)
+	for seed = 1, 25 do
+		for tier = 1, 8, 3 do
+			for w = 1, 12 do
+				local stock = HiringLine.stock(seed, w, tier)
+				local cheap = 0
+				for _, applicant in ipairs(stock) do
+					if applicant.price <= Config.Hiring.cheapPrice then
+						cheap += 1
+					end
+				end
+				if cheap < 2 then
+					error(string.format("seed %d window %d tier %d has %d cheap applicants", seed, w, tier, cheap))
+				end
+			end
+		end
+	end
+	local fresh = {
+		coins = 50,
+		playSeconds = 0,
+		stats = { served = 0 },
+		tutorial = { done = false, firstBrisket = false },
+		guide = { done = false, skipped = false, step = 1 },
+		onboard = { done = false },
+		crew = { owned = {}, slots = 3, nextUid = 1, extra = 0 },
+		ranch = { tier = 1 },
+		offline = { lastTick = 0 },
+	}
+	truthy(Crew.needsStarter(fresh))
+	local pip = Crew.grantStarter(fresh)
+	truthy(pip)
+	eq(pip.name, "Pip")
+	eq(pip.species, "armadillo")
+	eq(fresh.coins, 50, "Pip does not cost coins")
+	eq(#fresh.crew.owned, 1)
+	truthy(not Crew.needsStarter(fresh))
+	eq(Crew.grantStarter(fresh), nil)
+	local veteran = {
+		coins = 5000,
+		playSeconds = 0,
+		stats = { served = 0 },
+		tutorial = { done = true },
+		guide = { done = true },
+		onboard = { done = true },
+		crew = { owned = {}, slots = 3, nextUid = 1, extra = 0 },
+		ranch = { tier = 1 },
+	}
+	truthy(not Crew.needsStarter(veteran))
+	local crewSrc = fs_read("src/server/Services/CrewService.luau")
+	truthy(string.find(crewSrc, "Game.act", 1, true) ~= nil, "the world hire prompt uses the action pipeline")
+	truthy(string.find(crewSrc, "hireApplicant", 1, true) == nil, "the prompt does not call hire directly")
+	truthy(string.find(crewSrc, "Heartbeat", 1, true) == nil, "the server does not animate crew")
+	local client = fs_read("src/client/CrewAnim.luau")
+	truthy(string.find(client, "GetServerTimeNow", 1, true) ~= nil)
+	truthy(string.find(client, "PivotTo", 1, true) ~= nil)
+	local main = fs_read("src/client/Main.client.luau")
+	truthy(string.find(main, "CrewAnim", 1, true) ~= nil)
+	local game = fs_read("src/server/Services/GameService.luau")
+	truthy(string.find(game, "function GameService.act", 1, true) ~= nil)
+	truthy(string.find(game, "grantStarter", 1, true) ~= nil)
+end)
+
+test("the Hiring Line does not overlap the rest of the town square", function()
+	local roblox = require("@lune/roblox")
+	local WorldBuilder = require("../src/shared/WorldBuilder")
+	local V3 = roblox.Vector3
+	local dm = roblox.Instance.new("DataModel")
+	local ws = dm:GetService("Workspace")
+	local env = { Instance = roblox.Instance, Vector3 = V3, CFrame = roblox.CFrame, Color3 = roblox.Color3, Enum = roblox.Enum, UDim2 = roblox.UDim2, NumberSequence = roblox.NumberSequence, NumberRange = roblox.NumberRange, ColorSequence = roblox.ColorSequence, Vector2 = roblox.Vector2 }
+	local map = WorldBuilder.build(env, ws, Config, Content)
+	local line = map.Hub.HiringLine
+	local function axes(cf)
+		return { cf.RightVector, cf.UpVector, -cf.LookVector }
+	end
+	local function boxes(root, skip)
+		local out = {}
+		for _, d in ipairs(root:GetDescendants()) do
+			if d:IsA("BasePart") and d.Transparency < 1 and not (skip and skip(d)) then
+				local cf = d.CFrame
+				table.insert(out, { pos = cf.Position, size = d.Size, ax = axes(cf), name = d:GetFullName() })
+			end
+		end
+		return out
+	end
+	local function extent(b, axis)
+		local e = b.size * 0.5
+		return e.X * math.abs(b.ax[1]:Dot(axis)) + e.Y * math.abs(b.ax[2]:Dot(axis)) + e.Z * math.abs(b.ax[3]:Dot(axis))
+	end
+	local function hit(a, b)
+		local delta = b.pos - a.pos
+		local function sep(axis)
+			if axis.Magnitude < 1e-6 then
+				return false
+			end
+			local n = axis.Unit
+			return math.abs(delta:Dot(n)) > extent(a, n) + extent(b, n) + 0.05
+		end
+		for axis = 1, 3 do
+			if sep(a.ax[axis]) or sep(b.ax[axis]) then
+				return false
+			end
+			for other = 1, 3 do
+				if sep(a.ax[axis]:Cross(b.ax[other])) then
+					return false
+				end
+			end
+		end
+		return true
+	end
+	local lineBoxes = boxes(line)
+	truthy(#lineBoxes > 8, "the boardwalk is actually built")
+	local others = {}
+	for _, b in ipairs(boxes(map.Hub, function(d)
+		return d:IsDescendantOf(line)
+	end)) do
+		table.insert(others, b)
+	end
+	local decor = map.Scenery and map.Scenery:FindFirstChild("HubDecor")
+	if decor then
+		for _, b in ipairs(boxes(decor)) do
+			table.insert(others, b)
+		end
+	end
+	for _, a in ipairs(lineBoxes) do
+		for _, b in ipairs(others) do
+			truthy(not hit(a, b), a.name .. " overlaps " .. b.name)
+		end
+	end
+	-- The walk in from the arch and the roads stay outside the boardwalk.
+	local arch = map.Hub.WelcomeArch.Beam
+	local spawn = map.Hub.HubSpawn
+	for _, landmark in ipairs({ arch, spawn }) do
+		local box = { pos = landmark.CFrame.Position, size = landmark.Size, ax = axes(landmark.CFrame), name = landmark.Name }
+		for _, a in ipairs(lineBoxes) do
+			truthy(not hit(a, box), "Hiring Line overlaps " .. landmark.Name)
+		end
+	end
 end)
 
 print("Ranch load")

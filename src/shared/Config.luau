@@ -22,6 +22,14 @@ Config.RESTOCK_SECONDS = 300 -- sauce shop restocks every 5 minutes
 Config.BURGER_BURN_GRACE = 15 -- seconds a finished burger can sit before it burns (only while you're online)
 Config.PEEK_PENALTY_FRACTION = 0.10 -- "If you're lookin', you ain't cookin'"
 Config.PEEK_PENALTY_MIN = 10
+-- Retired for one release. The code stays; these switches keep it from running.
+-- Flip is still an optional show-off at the grill. It is not required to earn a full plate.
+Config.Chores = {
+	lunchRush = false,
+	peekPenalty = false,
+	flipRequired = false,
+	legacyStaff = false,
+}
 Config.PLAYTIME_NUDGE_MINUTES = 60
 Config.CUSTOMER_SPOTS = 3
 Config.CUSTOMER_SPAWN_SECONDS = 9
@@ -495,7 +503,103 @@ Config.FairPlay = { passTipMult = 1.5, passTipCap = 1.5, showerMinutes = 5, show
 Config.DinnerBell = { window = 20, need = 3, cooldown = 600, minutes = 5, tipBonus = 0.25, ringCooldown = 30 } -- ringCooldown: a player's ring counts once per 30 s (anti-mash)
 
 -- Lunch Rush: every 150 s window, serve 4 plates for +50% of what those plates earned.
+-- Kept for one release. Config.Chores.lunchRush turns the payout and the HUD line off.
 Config.Rush = { period = 150, need = 4, bonusFrac = 0.5 }
+
+-- Crew core loop. Coin prices are fixed per species (and per visible trait). Nothing here is a Robux roll.
+-- Tier 2 is priced so one 1 coin/s hire reaches it in about two minutes from the starting purse.
+-- Tier 8 is a long ranch goal: a few hours once the lineup has gotten rarer.
+Config.Hiring = {
+	period = 300, -- shared lineup, same 5-minute cadence as the sauce shack
+	count = 6,
+	rexChance = 0.002, -- about 0.2% of lineups include the secret Rex
+	levelBonus = 0.15, -- +15% of base coins/s per level above 1
+	maxLevel = 10,
+	startSlots = 3,
+	slotsPerTier = 2, -- tier 1 is 3 slots, each tier after adds 2, tier 8 is 17
+	maxSlots = 19, -- tier 8 plus one slot from an old smoker purchase and one from an old grill purchase
+	workSeconds = 8,
+	cheapPrice = 50, -- every lineup keeps at least two applicants at or under the starting purse
+	cheapCount = 2,
+	starterDelay = 2, -- seconds before Pip starts walking over
+	starterWalk = 6, -- he is on the ranch by starterDelay + starterWalk (under 10s)
+}
+Config.CrewRarities = {
+	{ id = "common", name = "Common", color = "#E7E2DA", order = 1 },
+	{ id = "uncommon", name = "Uncommon", color = "#5AD2FF", order = 2 },
+	{ id = "rare", name = "Rare", color = "#7DCE6A", order = 3 },
+	{ id = "epic", name = "Epic", color = "#C58BFF", order = 4 },
+	{ id = "legendary", name = "Legendary", color = "#FFC83C", order = 5 },
+	{ id = "mythic", name = "Mythic", color = "#FF6B6B", order = 6 },
+	{ id = "secret", name = "Secret", color = "#6CC24A", order = 7 },
+}
+-- A critter holds one trait. A better trait replaces a worse one. None of these odds are for sale.
+Config.CrewTraits = {
+	{ id = "none", name = "None", mult = 1, order = 0, weight = 82 },
+	{ id = "smoky", name = "Smoky", mult = 1.5, order = 1, weight = 12 },
+	{ id = "glazed", name = "Glazed", mult = 2, order = 2, weight = 4 },
+	{ id = "golden", name = "Golden", mult = 3, order = 3, weight = 1.5 },
+	{ id = "meteorite", name = "Meteorite", mult = 6, order = 4, weight = 0.5 },
+}
+Config.CrewRoles = {
+	pit = { name = "Pit hand", prop = "mop" },
+	grill = { name = "Grill hand", prop = "tongs" },
+	server = { name = "Server", prop = "tray" },
+	greeter = { name = "Greeter", prop = "flag" },
+}
+-- The five named hands from the old crew tab. Level becomes the rounded average of speed, carry and quality.
+Config.Founders = {
+	pip = { species = "armadillo", name = "Pip" },
+	biscuit = { species = "pup", name = "Biscuit" },
+	dottie = { species = "hummingbird", name = "Dottie" },
+	tumble = { species = "roadrunner", name = "Tumble" },
+	mango = { species = "longhorn", name = "Mango" },
+}
+-- About 30 species across 6 rarities, plus the secret Rex. `model` is the critter builder id.
+-- `price` is the coin cost of the plain (no trait) applicant. A visible trait multiplies price and coins/s together.
+Config.CrewSpecies = {
+	{ id = "armadillo", name = "Shellie", rarity = "common", role = "pit", baseRate = 1, price = 25, model = "armadillo", body = "#9C8A7A", head = "#8A7868", scale = 0.92, line = "I mop the brisket. The brisket mops back." },
+	{ id = "prairiedog", name = "Poppy", rarity = "common", role = "greeter", baseRate = 1, price = 30, model = "prairiedog", style = "prairie", body = "#C4A574", head = "#E8C99A", scale = 0.85, line = "Howdy! Table for everyone." },
+	{ id = "turtle", name = "Pebble", rarity = "common", role = "server", baseRate = 2, price = 50, model = "turtle", style = "turtle", body = "#3E8F6E", head = "#F0E2B6", scale = 0.9, line = "Plates are ready. I am also ready. Slowly." },
+	{ id = "hornedtoad", name = "Spud", rarity = "common", role = "pit", baseRate = 2, price = 55, model = "hornedtoad", body = "#C2A36B", head = "#B08F55", scale = 0.7, line = "Spikes out. Sauce on." },
+	{ id = "jackrabbit", name = "Hopper", rarity = "common", role = "greeter", baseRate = 2, price = 60, model = "jackrabbit", style = "rabbit", body = "#C9B59A", head = "#E7D7C3", scale = 0.9, line = "I can seat a whole family before the beans cool." },
+	{ id = "pup", name = "Noodle", rarity = "uncommon", role = "grill", baseRate = 4, price = 180, model = "bellyrubpup", body = "#E8D3B9", head = "#E8D3B9", scale = 0.9, line = "Burgers first. Belly rubs are a benefit." },
+	{ id = "possum", name = "Pippin", rarity = "uncommon", role = "server", baseRate = 5, price = 230, model = "possum", style = "possum", body = "#C9C1B6", head = "#F4EFE8", scale = 0.88, line = "Playing possum is not on the menu." },
+	{ id = "clapcat", name = "Cleo", rarity = "uncommon", role = "server", baseRate = 5, price = 250, model = "clapcat", body = "#151515", head = "#1E1E1E", scale = 0.85, line = "Order up. I clapped for it." },
+	{ id = "bee", name = "Bonnie", rarity = "uncommon", role = "greeter", baseRate = 6, price = 280, model = "bee", style = "bee", body = "#F6C445", head = "#2A241C", scale = 0.75, line = "Bluebonnets in my pockets. Guests at the gate." },
+	{ id = "catfish", name = "Bub", rarity = "uncommon", role = "grill", baseRate = 7, price = 320, model = "catfish", style = "fish", body = "#6FA8C4", head = "#8EC4DC", scale = 0.9, line = "I brought my own bucket. The grill is yours." },
+	{ id = "hummingbird", name = "Zip", rarity = "rare", role = "server", baseRate = 12, price = 780, model = "hummingbird", body = "#2E8B57", head = "#C2185B", scale = 0.6, line = "Plates delivered. I was already back." },
+	{ id = "roadrunner", name = "Dash", rarity = "rare", role = "grill", baseRate = 14, price = 910, model = "roadrunner", body = "#6B5B4B", head = "#3A6EA5", scale = 0.9, line = "Burgers. Fast. Still juicy." },
+	{ id = "raccoon", name = "Rascal", rarity = "rare", role = "pit", baseRate = 15, price = 980, model = "raccoon", body = "#7D7D7D", head = "#505050", scale = 0.92, line = "The pit is tidy. My pockets are not." },
+	{ id = "skunk", name = "Petunia", rarity = "rare", role = "pit", baseRate = 16, price = 1100, model = "skunk", style = "skunk", body = "#2B2B2B", head = "#F7F4EF", scale = 0.9, line = "Smoke only. I left the other stuff at home." },
+	{ id = "coyote", name = "Yip", rarity = "rare", role = "grill", baseRate = 18, price = 1200, model = "coyote", style = "coyote", body = "#C49A6C", head = "#E6C8A0", scale = 0.88, line = "I mind the patties. I do not mind the compliments." },
+	{ id = "longhorn", name = "Moony", rarity = "epic", role = "pit", baseRate = 32, price = 3200, model = "longhorn", body = "#C46A2F", head = "#E0B080", scale = 1.05, line = "Low and slow. My horns do the waving." },
+	{ id = "owl", name = "Hoot", rarity = "epic", role = "greeter", baseRate = 38, price = 4000, model = "owl", style = "owl", body = "#8D6E4A", head = "#F3E6C8", scale = 0.9, line = "I can see the whole line from here." },
+	{ id = "bison", name = "Bean", rarity = "epic", role = "pit", baseRate = 44, price = 4800, model = "bison", style = "bison", body = "#6B4A32", head = "#3E2A1E", scale = 1.05, line = "Small calf. Big smoke." },
+	{ id = "squirrel", name = "Nib", rarity = "epic", role = "server", baseRate = 50, price = 5600, model = "squirrel", style = "squirrel", body = "#A86B3C", head = "#E8C9A0", scale = 0.8, line = "Pecans are for later. Plates are for now." },
+	{ id = "firefly", name = "Flicker", rarity = "epic", role = "greeter", baseRate = 58, price = 6400, model = "firefly", style = "firefly", body = "#2F3B2C", head = "#3E4A38", scale = 0.7, line = "Follow my light to an open table." },
+	{ id = "otter", name = "Otto", rarity = "legendary", role = "server", baseRate = 90, price = 14000, model = "otter", style = "otter", body = "#8A5A3A", head = "#E7C7A8", scale = 0.9, line = "Creek-fresh plates, coming through." },
+	{ id = "heron", name = "Wader", rarity = "legendary", role = "greeter", baseRate = 110, price = 18000, model = "heron", style = "heron", body = "#6E8CA0", head = "#F7F1E4", scale = 1.0, line = "I saved you a spot by the pond." },
+	{ id = "bobcat", name = "Socks", rarity = "legendary", role = "grill", baseRate = 140, price = 23000, model = "bobcat", style = "bobcat", body = "#C4A06A", head = "#E8D2A8", scale = 0.95, line = "Tongs up. Tail in." },
+	{ id = "pony", name = "Pinto", rarity = "legendary", role = "greeter", baseRate = 170, price = 28000, model = "pony", style = "pony", body = "#F4F1EA", head = "#E7D8C4", scale = 1.05, line = "I walk guests in. I do not walk off with the buns." },
+	{ id = "gator", name = "Gummy", rarity = "legendary", role = "pit", baseRate = 210, price = 36000, model = "gator", style = "gator", body = "#3E8F4A", head = "#DCE8C0", scale = 1.0, line = "Smile on. Lid closed. That's the job." },
+	{ id = "thunderbird", name = "Sunny", rarity = "mythic", role = "greeter", baseRate = 320, price = 80000, model = "thunderbird", style = "thunderbird", body = "#F2C14E", head = "#FFF6D8", scale = 0.95, line = "The gate's open and the sky showed up." },
+	{ id = "sunfish", name = "Goldie", rarity = "mythic", role = "server", baseRate = 400, price = 110000, model = "sunfish", style = "sunfish", body = "#F0A020", head = "#FFE08A", scale = 0.85, line = "Round plate, round me, happy table." },
+	{ id = "comet", name = "Comet", rarity = "mythic", role = "grill", baseRate = 500, price = 140000, model = "comet", style = "comet", body = "#3A2A6A", head = "#6A5AC8", scale = 0.9, line = "Burgers with a little sky on them." },
+	{ id = "dragon", name = "Ember", rarity = "mythic", role = "pit", baseRate = 640, price = 190000, model = "dragon", style = "dragon", body = "#E07A3D", head = "#F6C7A1", scale = 0.95, line = "I breathe on the coals. Gently." },
+	{ id = "sprite", name = "Blu", rarity = "mythic", role = "server", baseRate = 800, price = 240000, model = "sprite", style = "sprite", body = "#7EB6FF", head = "#EAF3FF", scale = 0.72, line = "Bluebonnets on the tray. Seconds on the house." },
+	{ id = "rex", name = "Rex", rarity = "secret", role = "pit", baseRate = 2400, price = 1200000, model = "rex", body = "#6CC24A", head = "#7BD35A", scale = 1.05, secret = true, line = "RAWR means I got the job." },
+}
+Config.RanchTiers = {
+	{ tier = 1, name = "Open yard", piece = "yard", cost = 0, blurb = "Grass, a pit, and room for 3 critters." },
+	{ tier = 2, name = "Fence and shed", piece = "shed", cost = 150, blurb = "A little shed beside the pit, and 2 more crew slots." },
+	{ tier = 3, name = "String-light patio", piece = "lights", cost = 900, blurb = "String lights over the patio, and 2 more crew slots." },
+	{ tier = 4, name = "Creek pond", piece = "pond", cost = 4500, blurb = "A pond for the turtles, and 2 more crew slots." },
+	{ tier = 5, name = "Barn kitchen", piece = "barn", cost = 18000, blurb = "A barn kitchen, and 2 more crew slots." },
+	{ tier = 6, name = "BBQ trailer", piece = "trailer", cost = 70000, blurb = "A BBQ trailer on the grass, and 2 more crew slots." },
+	{ tier = 7, name = "Cookout stage", piece = "stage", cost = 260000, blurb = "A little stage, and 2 more crew slots." },
+	{ tier = 8, name = "Roch's Pit", piece = "sign", cost = 1000000, blurb = "A neon ROCH'S PIT sign, and 2 more crew slots." },
+}
 
 -- Turkey Day Smokeout: Thanksgiving week (Mon-Sun around the 4th Thursday of November, Texas time).
 -- Smoke a Harvest Turkey Leg and share it at the potluck table: once a day you get coins, and the first
