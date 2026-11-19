@@ -215,6 +215,48 @@ function HiringLine.stock(seed: number, window: number, tier: number, list: { an
 		local traitId = pickKey(rnd, traitKeys, traitWeight)
 		out[Config.Hiring.count] = toApplicant(Config.Hiring.count, rex, traitId)
 	end
+	-- A brand-new purse is 50 coins. At least two applicants stay at or under that,
+	-- so a lineup is never only critters the new player cannot buy.
+	local cheap = {}
+	for _, row in ipairs(species) do
+		if row.secret ~= true and row.price <= Config.Hiring.cheapPrice then
+			table.insert(cheap, row)
+		end
+	end
+	table.sort(cheap, function(p, q)
+		if p.price ~= q.price then
+			return p.price < q.price
+		end
+		return p.id < q.id
+	end)
+	local function affordable(): number
+		local n = 0
+		for _, applicant in ipairs(out) do
+			if applicant.secret ~= true and applicant.price <= Config.Hiring.cheapPrice then
+				n += 1
+			end
+		end
+		return n
+	end
+	local pick = 1
+	local guard = 0
+	while affordable() < Config.Hiring.cheapCount and #cheap > 0 and guard < 8 do
+		guard += 1
+		local worst = 1
+		local worstPrice = -1
+		for i, applicant in ipairs(out) do
+			if applicant.secret ~= true and applicant.price > Config.Hiring.cheapPrice and applicant.price > worstPrice then
+				worst = i
+				worstPrice = applicant.price
+			end
+		end
+		if worstPrice < 0 then
+			break
+		end
+		local speciesPick = cheap[((pick - 1) % #cheap) + 1]
+		pick += 1
+		out[worst] = toApplicant(worst, speciesPick, "none")
+	end
 	return out
 end
 

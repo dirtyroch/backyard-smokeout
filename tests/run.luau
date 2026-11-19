@@ -3596,6 +3596,149 @@ test("the town square has a hiring boardwalk and each ranch has tier pieces and 
 	end
 end)
 
+test("every lineup has two applicants a new player can afford, and Pip is free", function()
+	eq(Config.START_COINS, 50)
+	eq(Config.Hiring.cheapPrice, 50)
+	truthy(Config.Hiring.starterDelay + Config.Hiring.starterWalk <= 10)
+	truthy(Config.Hiring.starterDelay >= 0 and Config.Hiring.starterWalk > 0)
+	for seed = 1, 25 do
+		for tier = 1, 8, 3 do
+			for w = 1, 12 do
+				local stock = HiringLine.stock(seed, w, tier)
+				local cheap = 0
+				for _, applicant in ipairs(stock) do
+					if applicant.price <= Config.Hiring.cheapPrice then
+						cheap += 1
+					end
+				end
+				if cheap < 2 then
+					error(string.format("seed %d window %d tier %d has %d cheap applicants", seed, w, tier, cheap))
+				end
+			end
+		end
+	end
+	local fresh = {
+		coins = 50,
+		playSeconds = 0,
+		stats = { served = 0 },
+		tutorial = { done = false, firstBrisket = false },
+		guide = { done = false, skipped = false, step = 1 },
+		onboard = { done = false },
+		crew = { owned = {}, slots = 3, nextUid = 1, extra = 0 },
+		ranch = { tier = 1 },
+		offline = { lastTick = 0 },
+	}
+	truthy(Crew.needsStarter(fresh))
+	local pip = Crew.grantStarter(fresh)
+	truthy(pip)
+	eq(pip.name, "Pip")
+	eq(pip.species, "armadillo")
+	eq(fresh.coins, 50, "Pip does not cost coins")
+	eq(#fresh.crew.owned, 1)
+	truthy(not Crew.needsStarter(fresh))
+	eq(Crew.grantStarter(fresh), nil)
+	local veteran = {
+		coins = 5000,
+		playSeconds = 0,
+		stats = { served = 0 },
+		tutorial = { done = true },
+		guide = { done = true },
+		onboard = { done = true },
+		crew = { owned = {}, slots = 3, nextUid = 1, extra = 0 },
+		ranch = { tier = 1 },
+	}
+	truthy(not Crew.needsStarter(veteran))
+	local crewSrc = fs_read("src/server/Services/CrewService.luau")
+	truthy(string.find(crewSrc, "Game.act", 1, true) ~= nil, "the world hire prompt uses the action pipeline")
+	truthy(string.find(crewSrc, "hireApplicant", 1, true) == nil, "the prompt does not call hire directly")
+	truthy(string.find(crewSrc, "Heartbeat", 1, true) == nil, "the server does not animate crew")
+	local client = fs_read("src/client/CrewAnim.luau")
+	truthy(string.find(client, "GetServerTimeNow", 1, true) ~= nil)
+	truthy(string.find(client, "PivotTo", 1, true) ~= nil)
+	local main = fs_read("src/client/Main.client.luau")
+	truthy(string.find(main, "CrewAnim", 1, true) ~= nil)
+	local game = fs_read("src/server/Services/GameService.luau")
+	truthy(string.find(game, "function GameService.act", 1, true) ~= nil)
+	truthy(string.find(game, "grantStarter", 1, true) ~= nil)
+end)
+
+test("the Hiring Line does not overlap the rest of the town square", function()
+	local roblox = require("@lune/roblox")
+	local WorldBuilder = require("../src/shared/WorldBuilder")
+	local V3 = roblox.Vector3
+	local dm = roblox.Instance.new("DataModel")
+	local ws = dm:GetService("Workspace")
+	local env = { Instance = roblox.Instance, Vector3 = V3, CFrame = roblox.CFrame, Color3 = roblox.Color3, Enum = roblox.Enum, UDim2 = roblox.UDim2, NumberSequence = roblox.NumberSequence, NumberRange = roblox.NumberRange, ColorSequence = roblox.ColorSequence, Vector2 = roblox.Vector2 }
+	local map = WorldBuilder.build(env, ws, Config, Content)
+	local line = map.Hub.HiringLine
+	local function axes(cf)
+		return { cf.RightVector, cf.UpVector, -cf.LookVector }
+	end
+	local function boxes(root, skip)
+		local out = {}
+		for _, d in ipairs(root:GetDescendants()) do
+			if d:IsA("BasePart") and d.Transparency < 1 and not (skip and skip(d)) then
+				local cf = d.CFrame
+				table.insert(out, { pos = cf.Position, size = d.Size, ax = axes(cf), name = d:GetFullName() })
+			end
+		end
+		return out
+	end
+	local function extent(b, axis)
+		local e = b.size * 0.5
+		return e.X * math.abs(b.ax[1]:Dot(axis)) + e.Y * math.abs(b.ax[2]:Dot(axis)) + e.Z * math.abs(b.ax[3]:Dot(axis))
+	end
+	local function hit(a, b)
+		local delta = b.pos - a.pos
+		local function sep(axis)
+			if axis.Magnitude < 1e-6 then
+				return false
+			end
+			local n = axis.Unit
+			return math.abs(delta:Dot(n)) > extent(a, n) + extent(b, n) + 0.05
+		end
+		for axis = 1, 3 do
+			if sep(a.ax[axis]) or sep(b.ax[axis]) then
+				return false
+			end
+			for other = 1, 3 do
+				if sep(a.ax[axis]:Cross(b.ax[other])) then
+					return false
+				end
+			end
+		end
+		return true
+	end
+	local lineBoxes = boxes(line)
+	truthy(#lineBoxes > 8, "the boardwalk is actually built")
+	local others = {}
+	for _, b in ipairs(boxes(map.Hub, function(d)
+		return d:IsDescendantOf(line)
+	end)) do
+		table.insert(others, b)
+	end
+	local decor = map.Scenery and map.Scenery:FindFirstChild("HubDecor")
+	if decor then
+		for _, b in ipairs(boxes(decor)) do
+			table.insert(others, b)
+		end
+	end
+	for _, a in ipairs(lineBoxes) do
+		for _, b in ipairs(others) do
+			truthy(not hit(a, b), a.name .. " overlaps " .. b.name)
+		end
+	end
+	-- The walk in from the arch and the roads stay outside the boardwalk.
+	local arch = map.Hub.WelcomeArch.Beam
+	local spawn = map.Hub.HubSpawn
+	for _, landmark in ipairs({ arch, spawn }) do
+		local box = { pos = landmark.CFrame.Position, size = landmark.Size, ax = axes(landmark.CFrame), name = landmark.Name }
+		for _, a in ipairs(lineBoxes) do
+			truthy(not hit(a, box), "Hiring Line overlaps " .. landmark.Name)
+		end
+	end
+end)
+
 print("Ranch load")
 require("./ranch_load")(test, eq, truthy)
 

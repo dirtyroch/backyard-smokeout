@@ -1121,38 +1121,44 @@ function WorldBuilder.ranchBuild(plot, cf)
 	return root
 end
 
--- Boardwalk through the town square. Critters are spawned on the pads when the server is running.
+-- Boardwalk on the path in from the welcome arch, south of Temp and Big Bertha.
+-- That stretch is open sand between spawn and the sauce shacks, so the lineup
+-- is the first thing a new player walks up to, and nobody stands in it.
 function WorldBuilder.hiringLine(parent)
 	local line = model(parent, "HiringLine")
 	streamTag(line, "HiringLine")
-	local deck = part(line, "Boardwalk", V(62, 0.35, 8), E.CFrame.new(0, 0.72, -4), "#E7C89A", E.Enum.Material.WoodPlanks)
+	local origin = E.CFrame.new(0, 0, -26)
+	local function here(x, y, z)
+		return origin * E.CFrame.new(x, y, z)
+	end
+	local deck = part(line, "Boardwalk", V(40, 0.35, 7), here(0, 0.9, 0), "#E7C89A", E.Enum.Material.WoodPlanks)
 	deck.CanCollide = true
-	for i = -3, 3 do
-		local plank = part(line, "Plank", V(0.35, 0.4, 8), E.CFrame.new(i * 8, 0.95, -4), i % 2 == 0 and "#C9852A" or "#8B5A2B", E.Enum.Material.Wood)
+	for i = -2, 2 do
+		local plank = part(line, "Plank", V(0.35, 0.4, 7), here(i * 7, 1.12, 0), i % 2 == 0 and "#C9852A" or "#8B5A2B", E.Enum.Material.Wood)
 		plank.CanCollide = false
 	end
 	for _, side in ipairs({ -1, 1 }) do
-		part(line, "Rail", V(60, 0.25, 0.25), E.CFrame.new(0, 2.1, -4 + side * 3.6), "#6B4226", E.Enum.Material.Wood).CanCollide = false
-		for post = -3, 3 do
-			part(line, "Post", V(0.35, 1.6, 0.35), E.CFrame.new(post * 9, 1.5, -4 + side * 3.6), "#6B4226", E.Enum.Material.Wood).CanCollide = false
+		part(line, "Rail", V(38, 0.25, 0.25), here(0, 2.3, side * 3.2), "#6B4226", E.Enum.Material.Wood).CanCollide = false
+		for post = -2, 2 do
+			part(line, "Post", V(0.35, 1.6, 0.35), here(post * 8, 1.7, side * 3.2), "#6B4226", E.Enum.Material.Wood).CanCollide = false
 		end
 	end
 	local colors = { "#E7E2DA", "#5AD2FF", "#7DCE6A", "#C58BFF", "#FFC83C", "#FF6B6B" }
 	for i, color in ipairs(colors) do
-		wedge(line, "Pennant", V(0.08, 0.7, 0.9), E.CFrame.new(-24 + i * 3.2, 3.3, -4), color, E.Enum.Material.Fabric).CanCollide = false
+		wedge(line, "Pennant", V(0.08, 0.7, 0.9), here(-16 + i * 2.6, 3.5, 0), color, E.Enum.Material.Fabric).CanCollide = false
 	end
-	local hire = part(line, "NowHiring", V(0.4, 5.5, 7), E.CFrame.new(-32.5, 3.6, -4), "#E07A3D", E.Enum.Material.WoodPlanks)
+	local hire = part(line, "NowHiring", V(0.4, 5.5, 6), here(-21.2, 3.6, 0), "#E07A3D", E.Enum.Material.WoodPlanks)
 	surfaceText(hire, E.Enum.NormalId.Front, "NOW HIRING", "#FFF6E8", nil)
 	surfaceText(hire, E.Enum.NormalId.Back, "NOW HIRING", "#FFF6E8", nil)
 	prompt(hire, "ui:hire", "See the lineup", "Hiring Line", 0, 14)
-	local board = part(line, "RestockBoard", V(0.35, 3.2, 5.5), E.CFrame.new(32.2, 2.8, -4), "#F4E1C1", E.Enum.Material.Wood)
+	local board = part(line, "RestockBoard", V(0.35, 3.2, 5), here(21.2, 2.8, 0), "#F4E1C1", E.Enum.Material.Wood)
 	local clock = surfaceText(board, E.Enum.NormalId.Front, "Next lineup", "#5A2E1E", nil)
 	clock.Name = "Clock"
 	surfaceText(board, E.Enum.NormalId.Back, "Coins only", "#5A2E1E", nil)
 	local pads = folder(line, "Pads")
 	for i = 1, 6 do
-		local x = -22 + (i - 1) * 8.4
-		local pad = part(pads, "Pad" .. i, V(3.2, 0.15, 3.2), E.CFrame.new(x, 1.0, -4), "#F4E1C1", E.Enum.Material.Wood, { Transparency = 1, CanCollide = false })
+		local x = -15 + (i - 1) * 6
+		local pad = part(pads, "Pad" .. i, V(2.6, 0.15, 2.6), here(x, 1.15, 0), "#F4E1C1", E.Enum.Material.Wood, { Transparency = 1, CanCollide = false })
 		pad:SetAttribute("Applicant", i)
 	end
 	return line

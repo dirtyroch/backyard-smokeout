@@ -4,7 +4,6 @@
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
@@ -29,17 +28,6 @@ local ENV = {
 	Vector2 = Vector2,
 }
 
-type Walker = {
-	model: Model,
-	points: { Vector3 },
-	index: number,
-	from: Vector3,
-	to: Vector3,
-	dist: number,
-	walked: number,
-	bob: number,
-}
-
 local lineState = {
 	seed = 1,
 	window = -1,
@@ -48,13 +36,9 @@ local lineState = {
 	taken = {} :: { [number]: number },
 }
 local lineSig = ""
-local applicantWalkers: { Walker } = {}
-local homeWalkers: { Walker } = {}
-local crewWalkers: { [Player]: { Walker } } = {}
 local crewSig: { [Player]: string } = {}
 local tierSig: { [Player]: number } = {}
-local CREW_STEP = 1 / 15
-local crewAcc = 0
+local starters: { [Player]: Model } = {}
 
 local function mapModel(): any
 	return workspace:FindFirstChild("Map")
@@ -187,50 +171,31 @@ local function quiet(model: Model)
 	end
 end
 
-local function walkerFrom(model: Model, points: { Vector3 }, startAt: number): Walker?
-	if #points < 2 then
-		return nil
-	end
-	local lift = model:GetPivot().Position.Y
-	local lifted = {}
-	for _, p in ipairs(points) do
-		table.insert(lifted, p + Vector3.new(0, lift, 0))
-	end
-	local a = ((startAt - 1) % #lifted) + 1
-	local b = a % #lifted + 1
-	model:PivotTo(CFrame.lookAt(lifted[a], lifted[b]))
-	return {
-		model = model,
-		points = lifted,
-		index = b,
-		from = lifted[a],
-		to = lifted[b],
-		dist = (lifted[b] - lifted[a]).Magnitude,
-		walked = 0,
-		bob = startAt,
-	}
-end
-
-local function stepWalker(w: Walker, dt: number, speed: number)
-	if not w.model.Parent then
+-- Clients read these attributes and move the model themselves. The server leaves it put,
+-- so a full ranch of critters does not replicate a new pose every frame.
+local function tagAnim(model: Model, ground: { Vector3 }, kind: string, speed: number, phase: number)
+	if #ground < 2 then
 		return
 	end
-	w.walked += speed * dt
-	local span = math.max(w.dist, 0.05)
-	local a = math.clamp(w.walked / span, 0, 1)
-	local pos = w.from:Lerp(w.to, a)
-	local bob = math.abs(math.sin(os.clock() * 8 + w.bob)) * 0.28
-	local flat = Vector3.new(w.to.X - w.from.X, 0, w.to.Z - w.from.Z)
-	local face = if flat.Magnitude > 0.05 then flat.Unit else Vector3.new(0, 0, -1)
-	local at = pos + Vector3.new(0, bob, 0)
-	w.model:PivotTo(CFrame.lookAt(at, at + face))
-	if a >= 1 then
-		w.index = w.index % #w.points + 1
-		w.from = w.to
-		w.to = w.points[w.index]
-		w.dist = (w.to - w.from).Magnitude
-		w.walked = 0
+	local lift = model:GetPivot().Position.Y
+	local bits = {}
+	for _, p in ipairs(ground) do
+		local at = p + Vector3.new(0, lift, 0)
+		table.insert(bits, string.format("%.2f,%.2f,%.2f", at.X, at.Y, at.Z))
 	end
+	model:SetAttribute("CrewAnim", kind)
+	model:SetAttribute("AnimSpeed", speed)
+	model:SetAttribute("AnimPhase", phase)
+	model:SetAttribute("AnimPoints", table.concat(bits, "|"))
+	if kind == "once" then
+		model:SetAttribute("AnimStart", workspace:GetServerTimeNow())
+	end
+	local first = ground[1] + Vector3.new(0, lift, 0)
+	local nextPoint = ground[math.min(2, #ground)] + Vector3.new(0, lift, 0)
+	if (nextPoint - first).Magnitude < 0.05 then
+		nextPoint = first + Vector3.new(0, 0, -1)
+	end
+	model:PivotTo(CFrame.lookAt(first, nextPoint))
 end
 
 local function hiringFolder(): Folder?
@@ -273,7 +238,6 @@ local function spawnApplicants()
 		return
 	end
 	folder:ClearAllChildren()
-	table.clear(applicantWalkers)
 	local points = padPoints()
 	if #points < 2 then
 		return
@@ -296,10 +260,7 @@ local function spawnApplicants()
 				local prompt = WorldBuilder.prompt(body, "hire", "Hire", applicant.name, 0, 12)
 				prompt:SetAttribute("Applicant", applicant.index)
 			end
-			local walker = walkerFrom(model, points, applicant.index)
-			if walker then
-				table.insert(applicantWalkers, walker)
-			end
+			tagAnim(model, points, "loop", 5.5, applicant.index)
 		end
 	end
 end
@@ -393,15 +354,11 @@ local function showTiers(plot: any, tier: number)
 end
 
 local function clearCrew(player: Player)
-	local list = crewWalkers[player]
-	if list then
-		for _, w in ipairs(list) do
-			if w.model then
-				w.model:Destroy()
-			end
-		end
+	local plot = ctx.World.plotModel(player)
+	local folder = plot and plot:FindFirstChild("RanchCrew")
+	if folder then
+		folder:ClearAllChildren()
 	end
-	crewWalkers[player] = nil
 	crewSig[player] = nil
 end
 
@@ -427,7 +384,8 @@ local function refreshCrew(player: Player)
 		table.insert(parts, string.format("%d:%d:%s:%.2f", member.uid, member.level, member.trait, member.earn))
 	end
 	local sig = table.concat(parts, "|")
-	if crewSig[player] == sig and crewWalkers[player] then
+	local existing = plot:FindFirstChild("RanchCrew")
+	if crewSig[player] == sig and existing and #existing:GetChildren() > 0 then
 		return
 	end
 	clearCrew(player)
@@ -440,7 +398,6 @@ local function refreshCrew(player: Player)
 	else
 		folder:ClearAllChildren()
 	end
-	local list: { Walker } = {}
 	local n = 0
 	for i, member in ipairs(view.owned) do
 		if i > view.slots then
@@ -484,57 +441,100 @@ local function refreshCrew(player: Player)
 			for p = 1, #points do
 				points[p] = points[p] + Vector3.new(side, 0, row)
 			end
-			local walker = walkerFrom(model, points, n)
-			if walker then
-				table.insert(list, walker)
-			end
+			tagAnim(model, points, "loop", 3.2, n)
 		end
 	end
-	crewWalkers[player] = list
 end
 
 function CrewService.walkHome(player: Player, index: number)
-	local walker: Walker? = nil
-	for i, w in ipairs(applicantWalkers) do
-		local at = w.model:GetAttribute("Applicant")
-		if at == index then
-			walker = w
-			table.remove(applicantWalkers, i)
-			break
+	local folder = hiringFolder()
+	local model: Model? = nil
+	if folder then
+		for _, child in ipairs(folder:GetChildren()) do
+			if child:IsA("Model") and child:GetAttribute("Applicant") == index then
+				model = child
+				break
+			end
 		end
 	end
-	if not walker then
+	if not model then
 		return
 	end
 	local plot = ctx.World.plotModel(player)
 	local greet = plot and plot:FindFirstChild("CrewStations")
 	local pad = greet and greet:FindFirstChild("Greet")
 	if not pad or not pad:IsA("BasePart") then
-		walker.model:Destroy()
+		model:Destroy()
 		return
 	end
 	local home = Instance.new("Folder")
 	home.Name = "WalkingHome"
 	home.Parent = mapModel() or workspace
-	walker.model.Parent = home
-	local from = walker.model:GetPivot().Position
+	model.Parent = home
+	local from = model:GetPivot().Position
 	local goal = Vector3.new(pad.Position.X, from.Y, pad.Position.Z)
-	walker.from = from
-	walker.to = goal
-	walker.points = { from, goal }
-	walker.index = 2
-	walker.dist = (goal - from).Magnitude
-	walker.walked = 0
-	table.insert(homeWalkers, walker)
-	task.delay(7, function()
-		if walker.model then
-			walker.model:Destroy()
+	-- Points are already at pivot height. tagAnim adds the pivot Y again, so pass ground-level Y.
+	local groundY = from.Y - model:GetPivot().Position.Y
+	tagAnim(model, { Vector3.new(from.X, groundY, from.Z), Vector3.new(goal.X, groundY, goal.Z) }, "once", 14, 0)
+	task.delay(8, function()
+		if model then
+			model:Destroy()
+		end
+	end)
+end
+
+function CrewService.cancelStarter(player: Player)
+	local model = starters[player]
+	if model then
+		model:Destroy()
+		starters[player] = nil
+	end
+end
+
+function CrewService.walkStarter(player: Player)
+	CrewService.cancelStarter(player)
+	local folder = hiringFolder()
+	local points = padPoints()
+	if not folder or #points < 1 then
+		return
+	end
+	local species = Crew.byId("armadillo")
+	if not species then
+		return
+	end
+	local model = WorldBuilder.critter(ENV, folder, appearance(species, true), CFrame.new())
+	model.Name = "StarterPip"
+	quiet(model)
+	addProp(model, species.role)
+	local head = model:FindFirstChild("Head")
+	local adornee = if head and head:IsA("BasePart") then head else model.PrimaryPart
+	if adornee then
+		WorldBuilder.billboard(adornee, "NameTag", "Pip", 2.2, 90, "#FFF6E0", 160, 28, { 4.5, 0.7, 80, 16 })
+		WorldBuilder.billboard(adornee, "Offer", "First hire's on the house!", 3.2, 90, "#7DCE6A", 260, 32, { 7, 0.8, 110, 16 })
+	end
+	local plot = ctx.World.plotModel(player)
+	local greet = plot and plot:FindFirstChild("CrewStations")
+	local pad = greet and greet:FindFirstChild("Greet")
+	local start = points[1]
+	if pad and pad:IsA("BasePart") then
+		local dist = (Vector3.new(pad.Position.X, start.Y, pad.Position.Z) - start).Magnitude
+		local speed = dist / math.max(Config.Hiring.starterWalk, 0.5)
+		tagAnim(model, { start, Vector3.new(pad.Position.X, start.Y, pad.Position.Z) }, "once", speed, 0)
+	else
+		tagAnim(model, { start, start + Vector3.new(0, 0, 4) }, "once", 4, 0)
+	end
+	starters[player] = model
+	task.delay(Config.Hiring.starterWalk + 1.5, function()
+		if starters[player] == model then
+			model:Destroy()
+			starters[player] = nil
 		end
 	end)
 end
 
 function CrewService.onPlayerGone(player: Player)
 	clearCrew(player)
+	CrewService.cancelStarter(player)
 	tierSig[player] = nil
 end
 
@@ -567,32 +567,10 @@ function CrewService.start()
 		if type(index) ~= "number" then
 			return
 		end
-		ctx.Game.hireApplicant(player, index)
-	end)
-	RunService.Heartbeat:Connect(function(dt)
-		for _, w in ipairs(applicantWalkers) do
-			stepWalker(w, dt, 5.5)
-		end
-		local stillHome = {}
-		for _, w in ipairs(homeWalkers) do
-			if w.model.Parent then
-				stepWalker(w, dt, 14)
-				table.insert(stillHome, w)
-			end
-		end
-		homeWalkers = stillHome
-		-- Ranch crew can reach 10 players x 19 critters (about 5,000 parts). Moving them every
-		-- frame on the server costs ~9 ms of CPU and replicates every part each frame, so they
-		-- step at 15 Hz. They stroll slowly, so the steps stay small.
-		crewAcc += dt
-		if crewAcc >= CREW_STEP then
-			local step = math.min(crewAcc, 0.5)
-			crewAcc = 0
-			for _, list in pairs(crewWalkers) do
-				for _, w in ipairs(list) do
-					stepWalker(w, step, 3.2)
-				end
-			end
+		-- Same pipeline as the Hire panel: rate limit, guide update, and a save.
+		local ok, msg = ctx.Game.act(player, "HireApplicant", index)
+		if not ok and type(msg) == "string" and msg ~= "" then
+			ctx.Game.toast(player, msg, "warn")
 		end
 	end)
 	task.spawn(function()

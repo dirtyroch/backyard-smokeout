@@ -45,6 +45,7 @@ local Hud = tryRequire(script.Parent.Hud, "Hud")
 local Panels = tryRequire(script.Parent.Panels, "Panels")
 local WorldClient = tryRequire(script.Parent.WorldClient, "WorldClient")
 local Ambient = tryRequire(script.Parent.Ambient, "Ambient")
+local CrewAnim = tryRequire(script.Parent.CrewAnim, "CrewAnim")
 local Sfx = tryRequire(script.Parent.Sfx, "Sfx")
 local Music = tryRequire(script.Parent.Music, "Music")
 local RookieGuide = tryRequire(script.Parent.RookieGuide, "RookieGuide")
@@ -148,6 +149,14 @@ if Ambient then
 		local okAmbient, errAmbient = xpcall(Ambient.start, debug.traceback)
 		if not okAmbient then
 			warn("[Client] Ambient.start failed:\n" .. tostring(errAmbient))
+		end
+	end)
+end
+if CrewAnim and CrewAnim.start then
+	task.spawn(function()
+		local okCrew, errCrew = xpcall(CrewAnim.start, debug.traceback)
+		if not okCrew then
+			warn("[Client] CrewAnim.start failed:\n" .. tostring(errCrew))
 		end
 	end)
 end

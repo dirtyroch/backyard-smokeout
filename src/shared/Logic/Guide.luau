@@ -110,6 +110,10 @@ function Guide.signals(data: any): Signals
 			end
 		end
 	end
+	local owned = data.crew and data.crew.owned
+	if not crew and type(owned) == "table" and #owned > 0 then
+		crew = true
+	end
 	local nextAt = data.freeGift and data.freeGift.nextAt
 	local gift = type(nextAt) == "number" and nextAt == nextAt and nextAt > 0
 	local served = data.stats and data.stats.served or 0

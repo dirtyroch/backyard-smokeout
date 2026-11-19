@@ -519,6 +519,10 @@ Config.Hiring = {
 	slotsPerTier = 2, -- tier 1 is 3 slots, each tier after adds 2, tier 8 is 17
 	maxSlots = 19, -- tier 8 plus one slot from an old smoker purchase and one from an old grill purchase
 	workSeconds = 8,
+	cheapPrice = 50, -- every lineup keeps at least two applicants at or under the starting purse
+	cheapCount = 2,
+	starterDelay = 2, -- seconds before Pip starts walking over
+	starterWalk = 6, -- he is on the ranch by starterDelay + starterWalk (under 10s)
 }
 Config.CrewRarities = {
 	{ id = "common", name = "Common", color = "#E7E2DA", order = 1 },

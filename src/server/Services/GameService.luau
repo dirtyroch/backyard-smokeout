@@ -1663,6 +1663,44 @@ local function onLoaded(player: Player, profile: any, isNew: boolean)
 			GameService.toast(player, "Roblox save servers didn't answer, so this visit won't be saved. Your real ranch is untouched. Try rejoining in a minute.", "warn")
 		end
 	end)
+	-- Free Pip for a brand-new ranch. He walks over and is on the crew in under 10 seconds.
+	task.delay(Config.Hiring.starterDelay, function()
+		if not player.Parent or GameService.runtime[player] ~= r then
+			return
+		end
+		local live = profileOf(player)
+		if not live or not Crew.needsStarter(live) then
+			return
+		end
+		if ctx.Crew and ctx.Crew.walkStarter then
+			ctx.Crew.walkStarter(player)
+		end
+		task.delay(Config.Hiring.starterWalk, function()
+			if not player.Parent or GameService.runtime[player] ~= r then
+				return
+			end
+			local still = profileOf(player)
+			if not still or not Crew.needsStarter(still) then
+				if ctx.Crew and ctx.Crew.cancelStarter then
+					ctx.Crew.cancelStarter(player)
+				end
+				return
+			end
+			local pip = Crew.grantStarter(still)
+			if not pip then
+				return
+			end
+			if ctx.Crew and ctx.Crew.cancelStarter then
+				ctx.Crew.cancelStarter(player)
+			end
+			GameService.toast(player, "First hire's on the house! Pip is on the ranch.", "good")
+			GameService.fx(player, "hired", { name = "Pip", title = "Pit hand" })
+			if type(still.guide) == "table" then
+				Guide.sync(still.guide, Guide.signals(still))
+			end
+			GameService.markDirty(player)
+		end)
+	end)
 end
 
 local function onRemoving(player: Player)
@@ -1763,6 +1801,10 @@ local function handle(player: Player, action: any, a: any, b: any, c: any): (boo
 	end
 	GameService.markDirty(player)
 	return res, msg
+end
+
+function GameService.act(player: Player, action: string, a: any, b: any, c: any): (boolean, string?)
+	return handle(player, action, a, b, c)
 end
 
 function GameService.init(c: any)

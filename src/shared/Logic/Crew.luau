@@ -453,6 +453,58 @@ function Crew.job(role: string): string
 	return "greet"
 end
 
+-- A brand-new ranch with nobody hired yet. Veterans (onboarding finished, or they already
+-- cooked and served) do not get a second free Pip.
+function Crew.needsStarter(data: any): boolean
+	local crew = Crew.ensure(data)
+	if crew.starterGranted == true or #crew.owned > 0 then
+		return false
+	end
+	if type(data.onboard) == "table" and data.onboard.done == true then
+		return false
+	end
+	if type(data.tutorial) == "table" and data.tutorial.done == true then
+		return false
+	end
+	if type(data.guide) == "table" and (data.guide.done == true or data.guide.skipped == true) then
+		return false
+	end
+	local served = data.stats and data.stats.served or 0
+	if type(served) == "number" and served > 0 then
+		return false
+	end
+	local played = data.playSeconds or 0
+	if type(played) == "number" and played > 90 then
+		return false
+	end
+	return true
+end
+
+-- Free Pip. Does not spend coins and does not take a Hiring Line applicant.
+function Crew.grantStarter(data: any): Member?
+	if not Crew.needsStarter(data) then
+		return nil
+	end
+	local species = Crew.byId("armadillo")
+	if not species then
+		return nil
+	end
+	local crew = data.crew
+	local member: Member = {
+		uid = crew.nextUid,
+		species = species.id,
+		name = "Pip",
+		level = 1,
+		trait = "none",
+		badge = nil,
+		role = species.role,
+	}
+	table.insert(crew.owned, member)
+	crew.nextUid = member.uid + 1
+	crew.starterGranted = true
+	return member
+end
+
 function Crew.view(data: any, mults: Mults?): any
 	local crew = Crew.ensure(data)
 	local owned = {}
