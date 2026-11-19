@@ -577,6 +577,10 @@ local function refreshCrew(player: Player)
 			crewOutfit(model, if type(data.crew) == "table" then data.crew.outfit else nil)
 		end
 	end
+	local oldBeam = plot:FindFirstChild("WelcomeBeam")
+	if oldBeam and ((data.playSeconds or 0) >= 20 or Onboard.skip(data)) then
+		oldBeam:Destroy()
+	end
 	if (data.playSeconds or 0) < 20 and not Onboard.skip(data) and not plot:FindFirstChild("WelcomeBeam") then
 		local pad = plot:FindFirstChild("Pad")
 		if pad and pad:IsA("BasePart") then

@@ -16,6 +16,7 @@ local ctx: any = nil
 local seed = 1
 local rolled: { [string]: boolean } = {}
 local stormIndex = -1
+local litFor = false -- WorldService sets the calm look at boot
 
 function WeatherService.state(): any
 	local now = os.time()
@@ -140,9 +141,13 @@ function WeatherService.start()
 				stormIndex = storm.index
 				table.clear(rolled)
 			end
-			pcall(function()
-				WorldBuilder.lighting(game:GetService("Lighting"), storm.active or show)
-			end)
+			local lit = storm.active or show
+			if lit ~= litFor then
+				litFor = lit
+				pcall(function()
+					WorldBuilder.lighting(game:GetService("Lighting"), lit)
+				end)
+			end
 			if storm.active or show then
 				local week = TimeUtil.weekNumber(now, TimeUtil.centralOffset(now))
 				local key = if show then "show:" .. tostring(week) else "storm:" .. tostring(storm.index)

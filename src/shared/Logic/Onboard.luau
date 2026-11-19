@@ -108,7 +108,7 @@ function Onboard.card(step: number, playSeconds: number): Card?
 	if step < 3 then
 		return { step = step, total = 7, title = "Pip is on the way", body = "First hire's on the house. He'll mop the pit, and coins start ticking.", target = "hire" }
 	elseif step < 4 then
-		return { step = step, total = 7, title = "Hire your 2nd critter", body = string.format("A %d coin critter is on the Hiring Line. Your coins already cover it.", Config.Onboarding.hireCost), target = "hire" }
+		return { step = step, total = 7, title = "Hire your 2nd critter", body = "Pick one on the Hiring Line. The cheapest ones cost what you already have.", target = "hire" }
 	elseif step < 5 then
 		return { step = step, total = 7, title = "Build Ranch Tier 2", body = "The fence and shed add 2 crew slots.", target = "ranchbuild" }
 	end

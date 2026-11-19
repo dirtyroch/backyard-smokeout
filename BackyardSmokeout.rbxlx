@@ -5003,7 +5003,7 @@ function Onboard.card(step: number, playSeconds: number): Card?
 	if step < 3 then
 		return { step = step, total = 7, title = "Pip is on the way", body = "First hire's on the house. He'll mop the pit, and coins start ticking.", target = "hire" }
 	elseif step < 4 then
-		return { step = step, total = 7, title = "Hire your 2nd critter", body = string.format("A %d coin critter is on the Hiring Line. Your coins already cover it.", Config.Onboarding.hireCost), target = "hire" }
+		return { step = step, total = 7, title = "Hire your 2nd critter", body = "Pick one on the Hiring Line. The cheapest ones cost what you already have.", target = "hire" }
 	elseif step < 5 then
 		return { step = step, total = 7, title = "Build Ranch Tier 2", body = "The fence and shed add 2 crew slots.", target = "ranchbuild" }
 	end
@@ -11045,6 +11045,10 @@ local function refreshCrew(player: Player)
 			crewOutfit(model, if type(data.crew) == "table" then data.crew.outfit else nil)
 		end
 	end
+	local oldBeam = plot:FindFirstChild("WelcomeBeam")
+	if oldBeam and ((data.playSeconds or 0) >= 20 or Onboard.skip(data)) then
+		oldBeam:Destroy()
+	end
 	if (data.playSeconds or 0) < 20 and not Onboard.skip(data) and not plot:FindFirstChild("WelcomeBeam") then
 		local pad = plot:FindFirstChild("Pad")
 		if pad and pad:IsA("BasePart") then
@@ -12804,6 +12808,7 @@ GameService.runtime = {} :: { [Player]: Runtime }
 
 local globalLimiter = RateLimiter.new(25, 12) -- any action: burst 25, 12/sec sustained
 local actionLimiter = RateLimiter.new(6, 3) -- per (player, action)
+local codeLimiter = RateLimiter.new(5, 0.1) -- code guesses: burst 5, then one every 10 seconds
 local acting: { [Player]: boolean } = {} -- blocks a second remote while the first is yielding
 
 local function T(): number
@@ -14546,6 +14551,7 @@ local function onRemoving(player: Player)
 	ctx.Social.onLeave(player)
 	ctx.World.releasePlot(player)
 	globalLimiter:forget(player)
+	codeLimiter:forget(player)
 	acting[player] = nil
 	local uid = tostring(player.UserId)
 	for name in pairs(Actions) do
@@ -14854,7 +14860,13 @@ Actions.FamilyRanch = function(player, data, on)
 	return true, nil
 end
 
-Actions.RedeemCode = function(_player, data, raw)
+Actions.RedeemCode = function(player, data, raw)
+	if type(raw) ~= "string" or #raw > 32 then
+		return false, "That code isn't one we know."
+	end
+	if not codeLimiter:allow(player, os.clock()) then
+		return false, "Give it a few seconds before the next code."
+	end
 	local result = Codes.redeem(data, raw, os.time(), Config.CodesLikesLive)
 	return result.ok, result.message
 end
@@ -16067,6 +16079,9 @@ function PurchaseService.promptGift(player: Player, key: string, recipientUserId
 	if not data then
 		return false, "Still loading..."
 	end
+	if not Onboard.allowPurchase(data.playSeconds or 0, Onboard.skip(data)) then
+		return false, "Have a look around first. The shop is here when you want it."
+	end
 	local p = Monetization.Products[key]
 	if not p then
 		return false, "Not found."
@@ -16757,6 +16772,7 @@ local ctx: any = nil
 local seed = 1
 local rolled: { [string]: boolean } = {}
 local stormIndex = -1
+local litFor = false -- WorldService sets the calm look at boot
 
 function WeatherService.state(): any
 	local now = os.time()
@@ -16881,9 +16897,13 @@ function WeatherService.start()
 				stormIndex = storm.index
 				table.clear(rolled)
 			end
-			pcall(function()
-				WorldBuilder.lighting(game:GetService("Lighting"), storm.active or show)
-			end)
+			local lit = storm.active or show
+			if lit ~= litFor then
+				litFor = lit
+				pcall(function()
+					WorldBuilder.lighting(game:GetService("Lighting"), lit)
+				end)
+			end
 			if storm.active or show then
 				local week = TimeUtil.weekNumber(now, TimeUtil.centralOffset(now))
 				local key = if show then "show:" .. tostring(week) else "storm:" .. tostring(storm.index)

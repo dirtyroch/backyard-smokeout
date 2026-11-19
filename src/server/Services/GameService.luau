@@ -82,6 +82,7 @@ GameService.runtime = {} :: { [Player]: Runtime }
 
 local globalLimiter = RateLimiter.new(25, 12) -- any action: burst 25, 12/sec sustained
 local actionLimiter = RateLimiter.new(6, 3) -- per (player, action)
+local codeLimiter = RateLimiter.new(5, 0.1) -- code guesses: burst 5, then one every 10 seconds
 local acting: { [Player]: boolean } = {} -- blocks a second remote while the first is yielding
 
 local function T(): number
@@ -1824,6 +1825,7 @@ local function onRemoving(player: Player)
 	ctx.Social.onLeave(player)
 	ctx.World.releasePlot(player)
 	globalLimiter:forget(player)
+	codeLimiter:forget(player)
 	acting[player] = nil
 	local uid = tostring(player.UserId)
 	for name in pairs(Actions) do
@@ -2132,7 +2134,13 @@ Actions.FamilyRanch = function(player, data, on)
 	return true, nil
 end
 
-Actions.RedeemCode = function(_player, data, raw)
+Actions.RedeemCode = function(player, data, raw)
+	if type(raw) ~= "string" or #raw > 32 then
+		return false, "That code isn't one we know."
+	end
+	if not codeLimiter:allow(player, os.clock()) then
+		return false, "Give it a few seconds before the next code."
+	end
 	local result = Codes.redeem(data, raw, os.time(), Config.CodesLikesLive)
 	return result.ok, result.message
 end

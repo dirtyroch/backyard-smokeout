@@ -330,6 +330,9 @@ function PurchaseService.promptGift(player: Player, key: string, recipientUserId
 	if not data then
 		return false, "Still loading..."
 	end
+	if not Onboard.allowPurchase(data.playSeconds or 0, Onboard.skip(data)) then
+		return false, "Have a look around first. The shop is here when you want it."
+	end
 	local p = Monetization.Products[key]
 	if not p then
 		return false, "Not found."
